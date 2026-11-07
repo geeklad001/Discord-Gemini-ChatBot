@@ -54,16 +54,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(bot_instance_name)
 
-# 初始化生活助理資料庫、RPG 引擎與單字卡 (SQLite，自動依 DB_NAME 環境變數隔離資料庫)
-assistant_db.init_db()
-rpg_engine.init_rpg_tables()
-flashcard_engine.init_flashcard_tables()
-
-logger.info(f"🚀 已成功載入設定檔: {env_file} (實例: {bot_instance_name} | 資料庫: {assistant_db.get_db_path().name})")
-
 ENABLE_JAPANESE_MODE = os.getenv("ENABLE_JAPANESE_MODE", "true").strip().lower() not in ("false", "0", "no")
 if not ENABLE_JAPANESE_MODE:
     logger.info("🌐 日語教學模式已關閉，機器人將以繁體中文日常助理與 TRPG 冒險模式運作。")
+
+ENABLE_FLASHCARD_MODE = os.getenv("ENABLE_FLASHCARD_MODE", "true").strip().lower() not in ("false", "0", "no")
+if not ENABLE_FLASHCARD_MODE:
+    logger.info("🎴 單字卡與搶答測驗功能已關閉。")
+
+# 初始化生活助理資料庫、RPG 引擎與單字卡 (SQLite，自動依 DB_NAME 環境變數隔離資料庫)
+assistant_db.init_db()
+rpg_engine.init_rpg_tables()
+if ENABLE_FLASHCARD_MODE:
+    flashcard_engine.init_flashcard_tables()
+
+# 依開關動態配置 Gemini 工具清單
+CURRENT_TOOLS = assistant_tools.get_assistant_tools(enable_flashcards=ENABLE_FLASHCARD_MODE)
+
+logger.info(f"🚀 已成功載入設定檔: {env_file} (實例: {bot_instance_name} | 資料庫: {assistant_db.get_db_path().name})")
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -1681,6 +1689,10 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
     if not is_target_channel(ctx.channel):
         return
 
+    if not ENABLE_FLASHCARD_MODE:
+        await ctx.send("⚠️ 此伺服器未啟用單字卡與搶答測驗功能喔！")
+        return
+
     sub = (subcmd or "").strip().lower()
 
     # 1. 查看所有牌組清單 (!card decks)
@@ -2006,6 +2018,10 @@ async def quiz_command(ctx: commands.Context, deck_or_count: Optional[str] = Non
     if not is_target_channel(ctx.channel):
         return
 
+    if not ENABLE_FLASHCARD_MODE:
+        await ctx.send("⚠️ 此伺服器未啟用單字卡與搶答測驗功能喔！")
+        return
+
     cid = ctx.channel.id
     if cid in active_quiz_channels:
         await ctx.send("⚠️ 這個頻道已經有正在進行中的搶答測驗囉！請先完成當前測驗。")
@@ -2169,19 +2185,20 @@ async def help_command(ctx: commands.Context):
         ),
         inline=False
     )
-    embed.add_field(
-        name="🌸 日語單字卡與 Kotoba 搶答 (!card / !quiz)",
-        value=(
-            "• `!card`：開啟互動式翻面單字卡（支援語音朗讀、AI 家教解說、一鍵換牌組）\n"
-            "• `!card add <單字>`：新增單字（AI 自動補完讀音與例句）\n"
-            "• `!card import [牌組名]`：夾帶 `.apkg` (Anki) 或 `.txt/.csv` 匯入牌組\n"
-            "• `!card decks` (或 `!decks`)：查看所有牌組與卡片數量\n"
-            "• `!card deck <牌組名>`：切換個人預設收集牌組\n"
-            "• `!card generate <主題> [數量]`：由 AI 打造專屬主題單字庫\n"
-            "• `!quiz [牌組名] [題數]` (或 `!搶答` / `!kotoba`)：Kotoba 風格多人限時搶答測驗"
-        ),
-        inline=False
-    )
+    if ENABLE_FLASHCARD_MODE:
+        embed.add_field(
+            name="🌸 日語單字卡與 Kotoba 搶答 (!card / !quiz)",
+            value=(
+                "• `!card`：開啟互動式翻面單字卡（支援語音朗讀、AI 家教解說、一鍵換牌組）\n"
+                "• `!card add <單字>`：新增單字（AI 自動補完讀音與例句）\n"
+                "• `!card import [牌組名]`：夾帶 `.apkg` (Anki) 或 `.txt/.csv` 匯入牌組\n"
+                "• `!card decks` (或 `!decks`)：查看所有牌組與卡片數量\n"
+                "• `!card deck <牌組名>`：切換個人預設收集牌組\n"
+                "• `!card generate <主題> [數量]`：由 AI 打造專屬主題單字庫\n"
+                "• `!quiz [牌組名] [題數]` (或 `!搶答` / `!kotoba`)：Kotoba 風格多人限時搶答測驗"
+            ),
+            inline=False
+        )
     embed.add_field(
         name="🧠 長期記憶庫 (!memory)",
         value=(
@@ -2215,7 +2232,7 @@ async def handle_general_chat(message: discord.Message):
                 system_instruction=get_current_general_prompt(message),
                 thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 temperature=0.8,
-                tools=assistant_tools.ASSISTANT_TOOLS,
+                tools=CURRENT_TOOLS,
                 safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
 
@@ -2309,7 +2326,7 @@ async def handle_japanese_learning_chat(message: discord.Message):
                 system_instruction=get_current_system_prompt(message),
                 thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 temperature=0.7,
-                tools=assistant_tools.ASSISTANT_TOOLS,
+                tools=CURRENT_TOOLS,
                 safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
 

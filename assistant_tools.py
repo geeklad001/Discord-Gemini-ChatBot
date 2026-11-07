@@ -178,18 +178,25 @@ def add_flashcard_card(
     )
 
 
-# 工具函式列表，供 google-genai SDK 註冊
-ASSISTANT_TOOLS = [
-    record_memory,
-    create_todo,
-    finish_todo,
-    query_todos,
-    set_reminder,
-    add_flashcard_card,
-    rpg_engine.rpg_roll_check,
-    rpg_engine.rpg_update_state,
-    rpg_engine.rpg_record_lore,
-    rpg_engine.rpg_batch_record_lore,
-    rpg_engine.rpg_record_story_clue,
-    rpg_engine.rpg_import_character_sheet
-]
+# 工具函式清單建立函式，支援依模式切換 (例如社群版可停用單字卡)
+def get_assistant_tools(enable_flashcards: bool = True) -> list:
+    tools = [
+        record_memory,
+        create_todo,
+        finish_todo,
+        query_todos,
+        set_reminder,
+        rpg_engine.rpg_roll_check,
+        rpg_engine.rpg_update_state,
+        rpg_engine.rpg_record_lore,
+        rpg_engine.rpg_batch_record_lore,
+        rpg_engine.rpg_record_story_clue,
+        rpg_engine.rpg_import_character_sheet
+    ]
+    if enable_flashcards:
+        tools.append(add_flashcard_card)
+    return tools
+
+
+# 預設工具函式列表，供 google-genai SDK 註冊 (向下相容)
+ASSISTANT_TOOLS = get_assistant_tools(enable_flashcards=True)

@@ -19,13 +19,8 @@ import assistant_tools
 import rpg_engine
 import flashcard_engine
 
-# 初始化生活助理資料庫、RPG 引擎與單字卡 (SQLite)
-assistant_db.init_db()
-rpg_engine.init_rpg_tables()
-flashcard_engine.init_flashcard_tables()
-
 # -------------------------------------------------------------
-# 1. 基礎設定與環境變數載入
+# 1. 基礎設定與環境變數載入 (支援 Profile 與自訂 .env)
 # -------------------------------------------------------------
 # 在 Windows CP950 控制台下強制以 UTF-8 輸出，避免 Emoji 導致 UnicodeEncodeError
 if sys.platform == "win32":
@@ -37,14 +32,38 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# 支援命令列指定設定檔：python bot.py --profile=community 或 --env=.env.community
+env_file = os.getenv("BOT_ENV_FILE")
+for arg in sys.argv[1:]:
+    if arg.startswith("--profile="):
+        prof = arg.split("=", 1)[1].strip()
+        env_file = f".env.{prof}"
+    elif arg.startswith("--env="):
+        env_file = arg.split("=", 1)[1].strip()
+
+if not env_file:
+    env_file = ".env"
+
+load_dotenv(dotenv_path=env_file)
+
+bot_instance_name = os.getenv("BOT_INSTANCE_NAME", "DiscordGeminiBot")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
-logger = logging.getLogger("DiscordGeminiBot")
+logger = logging.getLogger(bot_instance_name)
 
-load_dotenv()
+# 初始化生活助理資料庫、RPG 引擎與單字卡 (SQLite，自動依 DB_NAME 環境變數隔離資料庫)
+assistant_db.init_db()
+rpg_engine.init_rpg_tables()
+flashcard_engine.init_flashcard_tables()
+
+logger.info(f"🚀 已成功載入設定檔: {env_file} (實例: {bot_instance_name} | 資料庫: {assistant_db.get_db_path().name})")
+
+ENABLE_JAPANESE_MODE = os.getenv("ENABLE_JAPANESE_MODE", "true").strip().lower() not in ("false", "0", "no")
+if not ENABLE_JAPANESE_MODE:
+    logger.info("🌐 日語教學模式已關閉，機器人將以繁體中文日常助理與 TRPG 冒險模式運作。")
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -79,8 +98,9 @@ if GENERAL_CHANNEL_ID_RAW and GENERAL_CHANNEL_ID_RAW.strip():
         logger.warning("⚠️ GENERAL_CHANNEL_ID 格式不正確。")
 
 def get_current_system_prompt(message: Optional[discord.Message] = None) -> str:
-    """動態讀取日語教學提示詞 system_prompt.txt 並注入時間與長期記憶"""
-    prompt_path = Path(__file__).parent / "system_prompt.txt"
+    """動態讀取日語教學提示詞 (預設 system_prompt.txt) 並注入時間與長期記憶"""
+    p_name = os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt").strip()
+    prompt_path = Path(__file__).parent / p_name
     base_prompt = ""
     if prompt_path.exists():
         try:
@@ -106,8 +126,9 @@ def get_current_system_prompt(message: Optional[discord.Message] = None) -> str:
 
 
 def get_current_general_prompt(message: Optional[discord.Message] = None) -> str:
-    """動態讀取日常群聊提示詞 general_prompt.txt 並注入時間、長期記憶、權威 RPG 狀態與世界觀 Lorebook"""
-    prompt_path = Path(__file__).parent / "general_prompt.txt"
+    """動態讀取日常群聊提示詞 (預設 general_prompt.txt) 並注入時間、長期記憶、權威 RPG 狀態與世界觀 Lorebook"""
+    p_name = os.getenv("GENERAL_PROMPT_FILE", "general_prompt.txt").strip()
+    prompt_path = Path(__file__).parent / p_name
     base_prompt = ""
     if prompt_path.exists():
         try:
@@ -116,7 +137,7 @@ def get_current_general_prompt(message: Optional[discord.Message] = None) -> str
         except Exception:
             pass
     if not base_prompt:
-        base_prompt = "你是 Discord 私人群聊裡的一位普通朋友，跟群裡這對情侶一起隨意閒聊。"
+        base_prompt = "你是 Discord 群聊裡的一位普通朋友，跟大家一起隨意閒聊或玩 TRPG 冒險。"
 
     now_str = datetime.now(assistant_db.TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     time_info = f"\n\n【當前時間資訊】\n台北時間 (UTC+8)：{now_str}。若使用者要求提醒，請據此換算為未來的 ISO 8601 時間字串。"
@@ -2352,6 +2373,11 @@ async def on_message(message: discord.Message):
 
     # 忽略既無文字又無附件的純空白訊息
     if not message.content.strip() and not message.attachments:
+        return
+
+    # 判斷是否開啟日語學習模式 (社群版若 ENABLE_JAPANESE_MODE=false 則全頻繁中聊天與冒險)
+    if not ENABLE_JAPANESE_MODE:
+        await handle_general_chat(message)
         return
 
     # 判斷是否屬於「一般日常群聊頻道」

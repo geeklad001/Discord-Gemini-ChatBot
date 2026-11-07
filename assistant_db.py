@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import contextvars
 from pathlib import Path
@@ -8,7 +9,16 @@ import discord
 # 台灣時區 (UTC+8)
 TZ_TAIPEI = timezone(timedelta(hours=8))
 DB_DIR = Path(__file__).parent / "data"
-DB_PATH = DB_DIR / "assistant.db"
+
+
+def get_db_path() -> Path:
+    """依環境變數 DB_NAME 動態取得資料庫路徑，預設為 assistant.db (支援不同社群/實例資料隔離)"""
+    db_name = os.getenv("DB_NAME", "assistant.db").strip()
+    return DB_DIR / db_name
+
+
+# 舊版向下相容變數
+DB_PATH = get_db_path()
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = contextvars.ContextVar("current_discord_msg", default=None)
@@ -16,7 +26,7 @@ current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = context
 
 def get_conn() -> sqlite3.Connection:
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

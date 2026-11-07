@@ -2147,49 +2147,61 @@ async def help_command(ctx: commands.Context):
     if not is_target_channel(ctx.channel):
         return
 
-    embed = discord.Embed(
-        title="📖 GeminiBot 生活管家、文字冒險與共學指令手冊",
-        description="除了直接用自然口語跟機器人聊天（支援看圖、網址摘要、自然呼叫管家），你也可以使用下列快捷指令：",
-        color=0x48CAE4
-    )
+    if ENABLE_JAPANESE_MODE:
+        embed = discord.Embed(
+            title="📖 GeminiBot 生活管家、文字冒險與共學指令手冊",
+            description="除了直接用自然口語跟機器人聊天（支援看圖、網址摘要、自然呼叫管家），你也可以使用下列快捷指令：",
+            color=0x48CAE4
+        )
+        embed.add_field(
+            name="📋 待辦事項 (!todo)",
+            value=(
+                "• `!todo`：列出所有未完成事項\n"
+                "• `!todo add <內容>`：新增待辦事項\n"
+                "• `!todo done <編號/關鍵字>`：標記為已完成\n"
+                "• `!todo del <編號>`：刪除待辦事項\n"
+                "• `!todo all`：查看歷史紀錄"
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="⏰ 定時提醒 (!remind)",
+            value=(
+                "• `!remind 10m 關火`：10 分鐘後提醒\n"
+                "• `!remind 18:30 倒垃圾`：今天 18:30 提醒\n"
+                "• `!reminds`：查看預約中的提醒清單\n"
+                "• `!remind del <編號>`：取消提醒"
+            ),
+            inline=False
+        )
+    else:
+        # 社群專屬版本：非管家、非共學，主打群聊互動與 TRPG 冒險
+        embed = discord.Embed(
+            title=f"⚔️ {bot_instance_name} 社群群聊與 TRPG 冒險指令手冊",
+            description="你可以直接在頻道用自然口語聊天（支援看圖、網址摘要），也可以隨時發起 TRPG 冒險跑團！常用快捷指令如下：",
+            color=0x7289DA
+        )
+
     embed.add_field(
-        name="📋 待辦事項 (!todo)",
+        name="🗡️ RPG 文字冒險與組隊 (!rpg / !party / !sheet / !roll)",
         value=(
-            "• `!todo`：列出所有未完成事項\n"
-            "• `!todo add <內容>`：新增待辦事項\n"
-            "• `!todo done <編號/關鍵字>`：標記為已完成\n"
-            "• `!todo del <編號>`：刪除待辦事項\n"
-            "• `!todo all`：查看歷史紀錄"
-        ),
-        inline=False
-    )
-    embed.add_field(
-        name="⏰ 定時提醒 (!remind)",
-        value=(
-            "• `!remind 10m 關火`：10 分鐘後提醒\n"
-            "• `!remind 18:30 倒垃圾`：今天 18:30 提醒\n"
-            "• `!reminds`：查看預約中的提醒清單\n"
-            "• `!remind del <編號>`：取消提醒"
-        ),
-        inline=False
-    )
-    embed.add_field(
-        name="🗡️ RPG 文字冒險與存檔 (!rpg / !party / !save / !load)",
-        value=(
-            "• `!rpg start [主題]`：自動建立專屬冒險討論串\n"
-            "• `!rpg`：查看個人冒險狀態卡 (HP、背包裝備、地點、目標)\n"
-            "• `!party`：查看冒險小隊全員狀態與血量（多人/雙人組隊）\n"
+            "• `!rpg start [主題]`：自動建立專屬獨立討論串開局\n"
+            "• `!rpg`：查看個人冒險狀態卡 (血量、裝備背包、地點、目標)\n"
+            "• `!party`：查看冒險小隊全員名冊與血量（多人組隊面板）\n"
+            "• `!sheet`：查看個人極詳細角色卡\n"
+            "• `!sheet <卡片文字或附檔>`：批次匯入/更新角色卡\n"
             "• `!save <存檔名>`：保存冒險進度與全隊快照\n"
-            "• `!load <存檔名>`：載入存檔（小隊角色與手記一併還原）\n"
-            "• `!saves`：查看所有冒險存檔清單\n"
-            "• `!note <線索>`：記錄重要線索至本趟冒險手記\n"
+            "• `!load <存檔名>`：載入存檔（小隊全員與手記一併還原）\n"
+            "• `!saves`：查看所有保存的存檔清單\n"
+            "• `!note <線索>`：手動記錄冒險線索至本趟手記\n"
             "• `!journal`：查看本趟冒險的所有線索與手記\n"
-            "• `!roll [表達式]`：TRPG 擲骰 (如 `!roll`、`!roll 2d6`)\n"
+            "• `!roll [表達式]`：TRPG 擲骰檢定 (如 `!roll`、`!roll 2d6`)\n"
             "• `!lore`：查看世界觀設定 (!lore import 批次匯入)\n"
             "• `!rpg reset`：重置當前頻道冒險開新局"
         ),
         inline=False
     )
+
     if ENABLE_FLASHCARD_MODE:
         embed.add_field(
             name="🌸 日語單字卡與 Kotoba 搶答 (!card / !quiz)",
@@ -2204,21 +2216,39 @@ async def help_command(ctx: commands.Context):
             ),
             inline=False
         )
+
+    mem_title = "🧠 長期記憶庫 (!memory)" if ENABLE_JAPANESE_MODE else "🧠 社群知識庫 (!memory)"
     embed.add_field(
-        name="🧠 長期記憶庫 (!memory)",
+        name=mem_title,
         value=(
-            "• `!memory`：查看所有保存的事實與喜好\n"
-            "• `!remember <事實>`：直接存入長期記憶\n"
+            "• `!memory`：查看所有保存的事實與設定\n"
+            "• `!remember <內容>`：記錄新設定或共識\n"
             "• `!forget <編號>`：刪除某一條記憶"
         ),
         inline=False
     )
+
+    if not ENABLE_JAPANESE_MODE:
+        embed.add_field(
+            name="📋 社群待辦與排程 (!todo / !remind)",
+            value=(
+                "• `!todo`：查看待辦事項（`!todo add <內容>` 新增、`!todo done <編號>` 完成）\n"
+                "• `!remind 10m <內容>`：設定排程定時提醒（`!reminds` 查看清單）"
+            ),
+            inline=False
+        )
+
     embed.add_field(
         name="🧹 話題重設 (!reset)",
         value="• `!reset`：封存當前頻道的聊天上下文，乾淨開啟新話題",
         inline=False
     )
-    embed.set_footer(text="💡 口語直呼：也可以直接說「我想玩文字冒險！」或「15分鐘後提醒我收衣服」！")
+
+    if ENABLE_JAPANESE_MODE:
+        embed.set_footer(text="💡 口語直呼：也可以直接說「我想玩文字冒險！」或「15分鐘後提醒我收衣服」！")
+    else:
+        embed.set_footer(text="💡 隨時暢聊：直接在聊天室發話聊天，或說「我想展開文字冒險！」即可立即開局！")
+
     await ctx.send(embed=embed)
 
 

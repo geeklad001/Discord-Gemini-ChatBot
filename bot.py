@@ -1656,12 +1656,14 @@ class FlashcardStudyView(discord.ui.View):
 
     def update_components(self):
         self.clear_items()
+        tts_label = "🔊 真人發音" if self.card.get("audio_filename") else "🔊 發音朗讀"
+
         if not self.is_flipped:
             btn_flip = discord.ui.Button(label="👁️ 翻面查看", style=discord.ButtonStyle.primary, custom_id="fc_flip", row=0)
             btn_flip.callback = self.on_flip
             self.add_item(btn_flip)
 
-            btn_tts = discord.ui.Button(label="🔊 發音朗讀", style=discord.ButtonStyle.secondary, custom_id="fc_tts", row=0)
+            btn_tts = discord.ui.Button(label=tts_label, style=discord.ButtonStyle.secondary, custom_id="fc_tts", row=0)
             btn_tts.callback = self.on_tts
             self.add_item(btn_tts)
 
@@ -1681,7 +1683,7 @@ class FlashcardStudyView(discord.ui.View):
             btn_good.callback = self.on_good
             self.add_item(btn_good)
 
-            btn_tts = discord.ui.Button(label="🔊 發音朗讀", style=discord.ButtonStyle.secondary, custom_id="fc_tts", row=0)
+            btn_tts = discord.ui.Button(label=tts_label, style=discord.ButtonStyle.secondary, custom_id="fc_tts", row=0)
             btn_tts.callback = self.on_tts
             self.add_item(btn_tts)
 
@@ -1731,23 +1733,37 @@ class FlashcardStudyView(discord.ui.View):
             rev_cnt = row[1] if row else 0
 
         if not self.is_flipped:
+            desc = f"# {self.card['front']}\n"
+            if self.card.get("pos"):
+                desc += f"*{self.card['pos']}*\n"
+            desc += "\n點擊下方「👁️ 翻面查看」確認假名讀音與中文意思。"
+
             embed = discord.Embed(
                 title=f"📖 日語單字卡 ｜ {deck_name}",
-                description=f"# {self.card['front']}\n\n點擊下方「👁️ 翻面查看」確認假名讀音與中文意思。",
+                description=desc,
                 color=0x5865F2
             )
             if self.card.get("notes"):
                 embed.add_field(name="💡 提示", value=self.card["notes"], inline=False)
             embed.set_footer(text=f"卡片 ID: #{self.card['id']} ｜ 熟練度: 📦 箱子 {box_lvl} ｜ 複習次數: {rev_cnt}")
+            if self.card.get("image_filename"):
+                img_path = flashcard_engine.MEDIA_DIR / self.card["image_filename"]
+                if img_path.is_file():
+                    embed.set_image(url=f"attachment://{img_path.name}")
             return embed
         else:
+            desc = f"# {self.card['front']}\n\n"
+            reading_line = f"**讀音**：{('【' + self.card['reading'] + '】') if self.card.get('reading') else '（無）'}"
+            if self.card.get("pitch"):
+                reading_line += f"  *(音調：{self.card['pitch']})*"
+            desc += reading_line + "\n"
+            if self.card.get("pos"):
+                desc += f"**詞性**：{self.card['pos']}\n"
+            desc += f"**意思**：{self.card['back']}"
+
             embed = discord.Embed(
                 title=f"📖 日語單字卡 ｜ {deck_name}",
-                description=(
-                    f"# {self.card['front']}\n\n"
-                    f"**讀音**：{('【' + self.card['reading'] + '】') if self.card.get('reading') else '（無）'}\n"
-                    f"**意思**：{self.card['back']}"
-                ),
+                description=desc,
                 color=0x57F287
             )
             if self.card.get("example_jp"):
@@ -1756,8 +1772,12 @@ class FlashcardStudyView(discord.ui.View):
                     ex_text += f"\n> *{self.card['example_zh']}*"
                 embed.add_field(name="📝 例句", value=ex_text, inline=False)
             if self.card.get("notes"):
-                embed.add_field(name="💡 備註", value=self.card["notes"], inline=False)
+                embed.add_field(name="💡 備註/補語", value=self.card["notes"], inline=False)
             embed.set_footer(text=f"卡片 ID: #{self.card['id']} ｜ 熟練度: 📦 箱子 {box_lvl} ｜ 複習次數: {rev_cnt}")
+            if self.card.get("image_filename"):
+                img_path = flashcard_engine.MEDIA_DIR / self.card["image_filename"]
+                if img_path.is_file():
+                    embed.set_image(url=f"attachment://{img_path.name}")
             return embed
 
     async def on_flip(self, interaction: discord.Interaction):
@@ -1766,20 +1786,35 @@ class FlashcardStudyView(discord.ui.View):
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def on_tts(self, interaction: discord.Interaction):
+        audio_filename = self.card.get("audio_filename")
+        if audio_filename:
+            audio_path = flashcard_engine.MEDIA_DIR / audio_filename
+            if audio_path.is_file():
+                try:
+                    await interaction.response.send_message(
+                        content=f"🔊 **{self.card['front']}** 的真人原音：",
+                        file=discord.File(str(audio_path), filename=audio_path.name),
+                        ephemeral=True
+                    )
+                    return
+                except Exception as e:
+                    logger.warning(f"發送原生音訊失敗: {e}")
+
+        # 若無內建音檔，則 Fallback 至 HornBot TTS 頻道朗讀
         text_to_speak = self.card.get("reading") or self.card.get("front")
         tts_ch = bot.get_channel(TTS_CHANNEL_ID) if TTS_CHANNEL_ID else None
         if tts_ch:
             try:
                 await tts_ch.send(text_to_speak)
                 await interaction.response.send_message(
-                    f"🔊 已傳送「**{text_to_speak}**」至朗讀頻道！",
+                    f"🔊 已傳送「**{text_to_speak}**」至 HornBot 朗讀頻道！",
                     ephemeral=True
                 )
             except Exception as e:
                 await interaction.response.send_message(f"⚠️ 朗讀發送失敗：{e}", ephemeral=True)
         else:
             await interaction.response.send_message(
-                f"🔊 朗讀發音：`{text_to_speak}`\n（目前未設置獨立 TTS 專用頻道）",
+                f"🔊 朗讀發音：`{text_to_speak}`\n（目前無內建音檔且未設置獨立 TTS 專用頻道）",
                 ephemeral=True
             )
 
@@ -1824,7 +1859,13 @@ class FlashcardStudyView(discord.ui.View):
         self.card = next_c
         self.is_flipped = False
         self.update_components()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        new_embed = self.build_embed()
+        new_attachments = []
+        if self.card.get("image_filename"):
+            img_path = flashcard_engine.MEDIA_DIR / self.card["image_filename"]
+            if img_path.is_file():
+                new_attachments.append(discord.File(str(img_path), filename=img_path.name))
+        await interaction.response.edit_message(embed=new_embed, view=self, attachments=new_attachments)
 
     async def on_good(self, interaction: discord.Interaction):
         flashcard_engine.record_review_result(interaction.user.id, self.card["id"], is_good=True)
@@ -1835,7 +1876,13 @@ class FlashcardStudyView(discord.ui.View):
         self.card = next_c
         self.is_flipped = False
         self.update_components()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        new_embed = self.build_embed()
+        new_attachments = []
+        if self.card.get("image_filename"):
+            img_path = flashcard_engine.MEDIA_DIR / self.card["image_filename"]
+            if img_path.is_file():
+                new_attachments.append(discord.File(str(img_path), filename=img_path.name))
+        await interaction.response.edit_message(embed=new_embed, view=self, attachments=new_attachments)
 
     async def on_next(self, interaction: discord.Interaction):
         next_c = flashcard_engine.get_random_card_from_deck(self.deck_id)
@@ -1845,7 +1892,13 @@ class FlashcardStudyView(discord.ui.View):
         self.card = next_c
         self.is_flipped = False
         self.update_components()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        new_embed = self.build_embed()
+        new_attachments = []
+        if self.card.get("image_filename"):
+            img_path = flashcard_engine.MEDIA_DIR / self.card["image_filename"]
+            if img_path.is_file():
+                new_attachments.append(discord.File(str(img_path), filename=img_path.name))
+        await interaction.response.edit_message(embed=new_embed, view=self, attachments=new_attachments)
 
     async def on_select_deck(self, interaction: discord.Interaction):
         target_deck_id = int(interaction.data["values"][0])
@@ -1990,24 +2043,42 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                 await ctx.send(f"❌ 文字匯入失敗：{res.get('error', '未解析出有效單字行')}")
             return
 
-        # 情況 B：使用者沒有上傳 Discord 附件，但指定了本機 data/imports/ 下的檔案名稱
-        # 例如：!card import N5.apkg [自訂牌組名]
+        # 情況 B：使用者沒有上傳 Discord 附件，但指定了本機 data/imports/ 下的檔案名稱或子牌組篩選
+        # 例如：!card import eggrolls-JLPT10k-v3.5.apkg N3高頻
+        # 或是：!card import N3高頻（當 data/imports 內有 .apkg 時智慧匹配）
         if not ctx.message.attachments and raw_arg:
-            parts = raw_arg.split(maxsplit=1)
+            parts = raw_arg.split()
             candidate_file = Path(parts[0]).name
-            custom_deck_name = parts[1].strip() if len(parts) > 1 else None
             local_path = flashcard_engine.IMPORTS_DIR / candidate_file
 
+            subdeck_filter = None
+            custom_deck_name = None
+
             if local_path.is_file():
+                if len(parts) > 1:
+                    subdeck_filter = parts[1]
+                if len(parts) > 2:
+                    custom_deck_name = " ".join(parts[2:])
+            else:
+                # 檢查 data/imports/ 內是否有可用的 .apkg 檔案
+                apkg_files = [p for p in flashcard_engine.IMPORTS_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".apkg"]
+                if apkg_files:
+                    local_path = apkg_files[0]
+                    subdeck_filter = parts[0]
+                    if len(parts) > 1:
+                        custom_deck_name = " ".join(parts[1:])
+
+            if local_path and local_path.is_file():
                 fname = local_path.name.lower()
                 async with ctx.channel.typing():
                     try:
                         if fname.endswith(".apkg"):
-                            file_bytes = local_path.read_bytes()
-                            res = flashcard_engine.import_anki_apkg_bytes(
-                                file_bytes,
+                            res = flashcard_engine.import_anki_apkg(
+                                file_path=local_path,
+                                subdeck_filter=subdeck_filter,
                                 target_deck_name=custom_deck_name,
-                                user_name=ctx.author.display_name
+                                user_name=ctx.author.display_name,
+                                extract_media=True
                             )
                         elif fname.endswith((".txt", ".tsv", ".csv")):
                             text_content = local_path.read_text(encoding="utf-8", errors="ignore")
@@ -2022,8 +2093,9 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                             return
 
                         if res.get("success"):
+                            media_info = f"（已同時提取 **{res.get('media_count', 0)}** 個真人原音/圖檔）" if res.get("media_count") else ""
                             await ctx.send(
-                                f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{res['imported_count']}** 張單字卡！\n"
+                                f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{res['imported_count']}** 張單字卡！{media_info}\n"
                                 f"📚 牌組名稱：`{res['deck_name']}`\n"
                                 f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
                             )
@@ -2037,10 +2109,24 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
         # 若既無 Discord 附件、也不是多行文字、也沒匹配到本機檔案 ➔ 顯示 3 種超直覺匯入教學與本機可用檔案清單
         if not ctx.message.attachments:
             local_files = flashcard_engine.list_local_import_files()
+            local_lines = []
+            for p in local_files[:10]:
+                if p.suffix.lower() == ".apkg":
+                    subdecks = flashcard_engine.get_anki_subdecks(p)
+                    if subdecks:
+                        subdeck_sample = "、".join(s["title"].replace("🌸 JLPT ", "").replace("單字", "") for s in subdecks[:6])
+                        if len(subdecks) > 6:
+                            subdeck_sample += f" 等 {len(subdecks)} 個等級"
+                        local_lines.append(f"• `{p.name}`\n  └ 內含等級子牌組：{subdeck_sample}\n  └ 範例：`!card import {p.name} N3高頻` 或 `!card import N5`")
+                    else:
+                        local_lines.append(f"• `{p.name}` ➔ 直接輸入 `!card import {p.name}` 即可匯入！")
+                else:
+                    local_lines.append(f"• `{p.name}` ➔ 直接輸入 `!card import {p.name}` 即可匯入！")
+
             local_hint = (
                 "📂 **目前偵測到 `data/imports/` 資料夾內可直接匯入的檔案：**\n"
-                + "\n".join(f"• `{p.name}` ➔ 直接輸入 `!card import {p.name}` 即可匯入！" for p in local_files[:10])
-                if local_files
+                + "\n".join(local_lines)
+                if local_lines
                 else "📂 *(目前本機 `data/imports/` 資料夾內尚無檔案，你隨時可以把 `.apkg` 或 `.txt` 丟進去)*"
             )
             guide_embed = discord.Embed(
@@ -2049,12 +2135,11 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                     "支援 **3 種超方便的匯入方式**，不一定要在 Discord 傳檔案喔！\n\n"
                     "**方式 1️⃣：直接在聊天室貼上多行文字（最簡單免檔案！）**\n"
                     "```text\n!card import 日本旅行\n桜 - さくら - 櫻花\n美味しい - おいしい - 好吃的\n乾杯 - かんぱい - 乾杯\n```\n"
-                    "**方式 2️⃣：把檔案放進電腦的 `data/imports/` 資料夾**\n"
-                    "直接把 Anki `.apkg` 或 `.txt`/`.csv` 丟進專案的 `data/imports/` 資料夾，然後打：\n"
-                    "`!card import 檔名.apkg [自訂牌組名]`\n\n"
+                    "**方式 2️⃣：把檔案放進電腦的 `data/imports/` 資料夾（支援指定等級與原生發音！）**\n"
+                    "直接把 Anki `.apkg` 丟進 `data/imports/` 資料夾，然後打：\n"
+                    "`!card import 檔名.apkg [等級/子牌組名]`（例如 `!card import NEW-JLPT.apkg N3高頻`）\n\n"
                     "**方式 3️⃣：在 Discord 拖曳上傳檔案**\n"
-                    "按聊天框左邊的 `➕` 上傳 `.apkg` 或 `.txt`/`.csv` 檔案，並在發送留言打：\n"
-                    "`!card import [自訂牌組名]`\n\n"
+                    "按聊天框左邊的 `➕` 上傳檔案，並在發送留言打：`!card import [自訂牌組名]`\n\n"
                     f"{local_hint}"
                 ),
                 color=0x5865F2
@@ -2297,7 +2382,16 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
         return
 
     view = FlashcardStudyView(user_id=ctx.author.id, deck_id=target_deck["id"], card=card)
-    await ctx.send(embed=view.build_embed(), view=view)
+    img_filename = card.get("image_filename")
+    discord_file = None
+    if img_filename:
+        img_path = flashcard_engine.MEDIA_DIR / img_filename
+        if img_path.is_file():
+            discord_file = discord.File(str(img_path), filename=img_path.name)
+    if discord_file:
+        await ctx.send(embed=view.build_embed(), view=view, file=discord_file)
+    else:
+        await ctx.send(embed=view.build_embed(), view=view)
 
 
 @bot.command(name="decks", aliases=["牌組清單", "卡組"])
@@ -2503,9 +2597,9 @@ async def help_command(ctx: commands.Context):
         embed.add_field(
             name="🌸 日語單字卡與 Kotoba 搶答 (!card / !quiz)",
             value=(
-                "• `!card`：開啟互動式翻面單字卡（支援語音朗讀、AI 家教解說、一鍵換牌組）\n"
+                "• `!card`：開啟互動式翻面單字卡（支援真人原音/朗讀、圖卡顯示、AI 家教解說、一鍵換牌組）\n"
                 "• `!card add <單字>`：新增單字（AI 自動補完讀音與例句）\n"
-                "• `!card import [牌組名]`：夾帶 `.apkg` (Anki) 或 `.txt/.csv` 匯入牌組\n"
+                "• `!card import [檔名/子牌組]`：讀取 `data/imports/`（支援指定如 `N3高頻`）或上傳匯入\n"
                 "• `!card decks` (或 `!decks`)：查看所有牌組與卡片數量\n"
                 "• `!card deck <牌組名>`：切換個人預設收集牌組\n"
                 "• `!card generate <主題> [數量]`：由 AI 打造專屬主題單字庫\n"

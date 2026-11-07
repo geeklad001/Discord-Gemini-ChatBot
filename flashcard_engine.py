@@ -5,6 +5,8 @@ import json
 import re
 import os
 import random
+import urllib.parse
+import io
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -12,6 +14,7 @@ from typing import Optional
 from assistant_db import get_conn, get_db_path, TZ_TAIPEI
 
 IMPORTS_DIR = Path(__file__).parent / "data" / "imports"
+MEDIA_DIR = Path(__file__).parent / "data" / "media"
 _initialized_dbs: set[str] = set()
 
 
@@ -21,6 +24,7 @@ def init_flashcard_tables():
     if db_key in _initialized_dbs:
         return
     IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         cursor = conn.cursor()
         # 1. 牌組資料表
@@ -33,7 +37,7 @@ def init_flashcard_tables():
                 created_at TEXT NOT NULL
             )
         """)
-        # 2. 單字卡片資料表
+        # 2. 單字卡片資料表（含圖檔支援）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS flashcard_cards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,10 +48,36 @@ def init_flashcard_tables():
                 example_jp TEXT DEFAULT '',
                 example_zh TEXT DEFAULT '',
                 notes TEXT DEFAULT '',
+                image_filename TEXT DEFAULT '',
+                image_side TEXT DEFAULT 'both',
+                audio_filename TEXT DEFAULT '',
+                pos TEXT DEFAULT '',
+                pitch TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (deck_id) REFERENCES flashcard_decks(id) ON DELETE CASCADE
             )
         """)
+        # 舊版資料庫欄位遷移
+        try:
+            cursor.execute("ALTER TABLE flashcard_cards ADD COLUMN image_filename TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE flashcard_cards ADD COLUMN image_side TEXT DEFAULT 'both'")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE flashcard_cards ADD COLUMN audio_filename TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE flashcard_cards ADD COLUMN pos TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE flashcard_cards ADD COLUMN pitch TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
         # 3. 個人學習進度表 (SRS / 間隔記憶)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS flashcard_progress (
@@ -228,10 +258,20 @@ def get_deck(deck_identifier: str) -> Optional[dict]:
 
 
 def delete_deck(deck_id: int) -> bool:
-    """刪除指定牌組與其底下的所有卡片"""
+    """刪除指定牌組與其底下的所有卡片（連帶清理關聯媒體圖檔）"""
     init_flashcard_tables()
     with get_conn() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT image_filename FROM flashcard_cards WHERE deck_id = ? AND image_filename != ''", (deck_id,))
+        for row in cursor.fetchall():
+            fn = row["image_filename"]
+            if fn:
+                p = MEDIA_DIR / fn
+                if p.is_file():
+                    try:
+                        p.unlink()
+                    except Exception:
+                        pass
         cursor.execute("DELETE FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
         cursor.execute("DELETE FROM flashcard_decks WHERE id = ?", (deck_id,))
         conn.commit()
@@ -284,9 +324,14 @@ def add_card(
     back: str = "",
     example_jp: str = "",
     example_zh: str = "",
-    notes: str = ""
+    notes: str = "",
+    image_filename: str = "",
+    image_side: str = "both",
+    audio_filename: str = "",
+    pos: str = "",
+    pitch: str = ""
 ) -> dict:
-    """在指定牌組中新增一張單字卡"""
+    """在指定牌組中新增一張單字卡（支援圖檔、真人語音檔、詞性與音調）"""
     init_flashcard_tables()
     now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     front_clean = front.strip()
@@ -304,9 +349,23 @@ def add_card(
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO flashcard_cards
-               (deck_id, front, reading, back, example_jp, example_zh, notes, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (deck_id, front_clean, reading_clean, back_clean, example_jp.strip(), example_zh.strip(), notes.strip(), now_str)
+               (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                deck_id,
+                front_clean,
+                reading_clean,
+                back_clean,
+                example_jp.strip(),
+                example_zh.strip(),
+                notes.strip(),
+                image_filename.strip(),
+                image_side.strip(),
+                audio_filename.strip(),
+                pos.strip(),
+                pitch.strip(),
+                now_str
+            )
         )
         conn.commit()
         return {
@@ -318,6 +377,11 @@ def add_card(
             "example_jp": example_jp.strip(),
             "example_zh": example_zh.strip(),
             "notes": notes.strip(),
+            "image_filename": image_filename.strip(),
+            "image_side": image_side.strip(),
+            "audio_filename": audio_filename.strip(),
+            "pos": pos.strip(),
+            "pitch": pitch.strip(),
             "created_at": now_str
         }
 
@@ -458,103 +522,325 @@ def list_local_import_files() -> list[Path]:
     return sorted([p for p in IMPORTS_DIR.iterdir() if p.is_file() and p.suffix.lower() in valid_exts])
 
 
-def import_anki_apkg_bytes(apkg_bytes: bytes, target_deck_name: Optional[str] = None, user_name: str = "User") -> dict:
+def clean_anki_html(html_text: str) -> str:
+    """將 Anki 卡片欄位內的 HTML 樣式轉換為 Discord Markdown 粗體、斜體與換行，並清理雜訊"""
+    if not html_text:
+        return ""
+    text = html_text
+    # 換行轉換
+    text = re.sub(r"<\s*br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    # 粗體轉換 <b> / <strong> -> **...**
+    text = re.sub(r"<\s*(b|strong)\s*>(.*?)<\s*/\s*\1\s*>", r"**\2**", text, flags=re.IGNORECASE | re.DOTALL)
+    # 斜體轉換 <i> / <em> -> *...*
+    text = re.sub(r"<\s*(i|em)\s*>(.*?)<\s*/\s*\1\s*>", r"*\2*", text, flags=re.IGNORECASE | re.DOTALL)
+    # 底線轉換 <u> -> __...__
+    text = re.sub(r"<\s*u\s*>(.*?)<\s*/\s*u\s*>", r"__\1__", text, flags=re.IGNORECASE | re.DOTALL)
+    # 高亮 class 轉換 <span class="highlight"> -> **...**
+    text = re.sub(r'<\s*span\s+[^>]*class=["\']?[^"\'>]*highlight[^"\'>]*["\']?[^>]*>(.*?)<\s*/\s*span\s*>', r"**\1**", text, flags=re.IGNORECASE | re.DOTALL)
+    # 移除 [sound:...] 標籤
+    text = re.sub(r"\[sound:[^\]]+\]", "", text)
+    # 清理所有剩餘 HTML 標籤
+    text = re.sub(r"<[^>]+>", "", text)
+    # 實體符號轉換
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
+    return re.sub(r"[ \t]+", " ", text).strip()
+
+
+def normalize_subdeck_query(s: str) -> str:
+    """正規化子牌組查詢字串（簡繁轉換與去標點）"""
+    s = s.lower()
+    s = s.replace("高頻", "高频").replace("中頻", "中频").replace("低頻", "低频")
+    return s
+
+
+def match_subdeck(query: str, deck_name: str) -> bool:
+    """比對查詢字詞是否符合 Anki 子牌組名稱"""
+    q_norm = normalize_subdeck_query(query)
+    d_norm = normalize_subdeck_query(deck_name)
+    if q_norm in d_norm:
+        return True
+    tokens = re.findall(r"[a-z0-9]+|[\u4e00-\u9fa5]+", q_norm)
+    if tokens and all(t in d_norm for t in tokens):
+        return True
+    return False
+
+
+def clean_deck_title(raw_name: str) -> str:
+    """美化 Anki 子牌組名稱為易讀之牌組標題"""
+    name = raw_name
+    m = re.search(r"(\d?-?N[1-5])(?:::(\d-?[高空中低]+频?))?", name, re.IGNORECASE)
+    if m:
+        lvl = m.group(1)
+        lvl_clean = re.sub(r"^\d-?", "", lvl).upper()
+        freq = m.group(2) or ""
+        freq_clean = re.sub(r"^\d-?", "", freq).replace("高频", "高頻").replace("中频", "中頻").replace("低频", "低頻")
+        if freq_clean:
+            return f"🌸 JLPT {lvl_clean} {freq_clean}單字"
+        return f"🌸 JLPT {lvl_clean} 核心單字"
+    parts = [p for p in name.split("::") if p and p != "Default"]
+    return f"🌸 {parts[-1]}" if parts else name
+
+
+def get_anki_subdecks(apkg_path: Path) -> list[dict]:
+    """快速掃描本機 .apkg 檔案內的可用子牌組與卡片數"""
+    if not apkg_path.is_file():
+        return []
+    try:
+        with zipfile.ZipFile(apkg_path, "r") as zf:
+            namelist = set(zf.namelist())
+            db_name = "collection.anki21" if "collection.anki21" in namelist else "collection.anki2"
+            if db_name not in namelist:
+                return []
+            with tempfile.TemporaryDirectory() as tmpdir:
+                zf.extract(db_name, tmpdir)
+                db_path = os.path.join(tmpdir, db_name)
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
+                try:
+                    cur.execute("SELECT decks FROM col LIMIT 1")
+                    row = cur.fetchone()
+                    if not row or not row["decks"]:
+                        return []
+                    decks = json.loads(row["decks"])
+                    cur.execute("SELECT did, count(*) as cnt FROM cards GROUP BY did")
+                    card_counts = {r["did"]: r["cnt"] for r in cur.fetchall()}
+                    results = []
+                    for did_str, d in decks.items():
+                        did = int(did_str)
+                        dname = d.get("name", "")
+                        if dname == "Default" or did not in card_counts:
+                            continue
+                        results.append({
+                            "did": did,
+                            "raw_name": dname,
+                            "title": clean_deck_title(dname),
+                            "card_count": card_counts.get(did, 0)
+                        })
+                    return sorted(results, key=lambda x: x["raw_name"])
+                finally:
+                    cur.close()
+                    conn.close()
+    except Exception:
+        return []
+
+
+def import_anki_apkg(
+    file_path: Optional[Path] = None,
+    apkg_bytes: Optional[bytes] = None,
+    subdeck_filter: Optional[str] = None,
+    target_deck_name: Optional[str] = None,
+    user_name: str = "User",
+    extract_media: bool = True
+) -> dict:
     """
-    從 Anki .apkg 檔案二進位資料中直接解壓縮並提取卡片，存入本地 SQLite。
-    回傳：{"success": bool, "deck_name": str, "deck_id": int, "imported_count": int, "imported_cards": int}
+    從 Anki .apkg 檔案（本機檔案路徑或二進位資料）中解析卡片，支援子牌組/等級篩選與真人音訊/圖檔提取。
+    回傳：{"success": bool, "deck_name": str, "deck_id": int, "imported_count": int, "imported_cards": int, "media_count": int}
     """
     init_flashcard_tables()
-    if len(apkg_bytes) > MAX_APKG_BYTES:
-        return {"success": False, "error": f"檔案過大（超過 {MAX_APKG_BYTES // (1024 * 1024)} MB 上限）。"}
+    if apkg_bytes and len(apkg_bytes) > MAX_APKG_BYTES:
+        return {"success": False, "error": f"檔案過大（超過 {MAX_APKG_BYTES // (1024 * 1024)} MB 上限）。建議放入本機 data/imports/ 目錄。"}
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_zip = os.path.join(tmpdir, "deck.apkg")
-        with open(tmp_zip, "wb") as f:
-            f.write(apkg_bytes)
+    try:
+        if file_path:
+            zf = zipfile.ZipFile(file_path, "r")
+        elif apkg_bytes:
+            zf = zipfile.ZipFile(io.BytesIO(apkg_bytes), "r")
+        else:
+            return {"success": False, "error": "未提供有效之 .apkg 檔案路徑或資料。"}
+    except Exception as e:
+        return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
 
-        with zipfile.ZipFile(tmp_zip, "r") as zf:
-            namelist = zf.namelist()
-            db_name = None
-            for cand in ["collection.anki21", "collection.anki2"]:
-                if cand in namelist:
-                    db_name = cand
-                    break
-            if not db_name:
-                return {"success": False, "error": "未在該 .apkg 檔案中找到 collection.anki2 / anki21 資料庫。"}
+    with zf:
+        namelist = set(zf.namelist())
+        db_name = None
+        for cand in ["collection.anki21", "collection.anki2"]:
+            if cand in namelist:
+                db_name = cand
+                break
+        if not db_name:
+            return {"success": False, "error": "未在該 .apkg 檔案中找到 collection.anki2 / anki21 資料庫。"}
 
-            # 防範 Zip Bomb：檢查解壓縮後檔案大小
-            info = zf.getinfo(db_name)
-            if info.file_size > MAX_UNCOMPRESSED_DB_BYTES:
-                return {"success": False, "error": "壓縮檔內部資料庫過大，已拒絕解壓縮（Zip Bomb 防護）。"}
+        # 讀取 media 映射表
+        name_to_entry = {}
+        if "media" in namelist:
+            try:
+                media_dict = json.loads(zf.read("media").decode("utf-8"))
+                name_to_entry = {v: k for k, v in media_dict.items()}
+            except Exception:
+                pass
 
+        with tempfile.TemporaryDirectory() as tmpdir:
             zf.extract(db_name, tmpdir)
             db_path = os.path.join(tmpdir, db_name)
 
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
-
-            resolved_deck_name = target_deck_name.strip() if target_deck_name else None
-            if not resolved_deck_name:
-                try:
-                    cur.execute("SELECT decks FROM col LIMIT 1")
-                    row = cur.fetchone()
-                    if row and row["decks"]:
-                        decks_dict = json.loads(row["decks"])
-                        names = [d["name"] for d in decks_dict.values() if d.get("name") and d.get("name") != "Default"]
-                        if names:
-                            resolved_deck_name = names[0]
-                except Exception:
-                    pass
-
-            if not resolved_deck_name:
-                resolved_deck_name = f"Anki 匯入牌組_{datetime.now(TZ_TAIPEI).strftime('%m%d')}"
-
-            # 建立或取得牌組
-            deck = get_or_create_deck(resolved_deck_name, description=f"由 {user_name} 匯入之 Anki 牌組", created_by=user_name)
-            deck_id = deck["id"]
-
-            imported_cards = []
             try:
-                cur.execute("SELECT flds FROM notes")
-                for r in cur.fetchall():
+                cur.execute("SELECT decks, models FROM col LIMIT 1")
+                col_row = cur.fetchone()
+                if not col_row:
+                    return {"success": False, "error": "Anki 資料庫格式異常（遺失 col 資料表）。"}
+
+                decks = json.loads(col_row["decks"]) if col_row["decks"] else {}
+                models = json.loads(col_row["models"]) if col_row["models"] else {}
+
+                # 判定子牌組篩選
+                matched_dids = []
+                matched_deck_names = []
+                if subdeck_filter:
+                    for did_str, d in decks.items():
+                        dname = d.get("name", "")
+                        if dname == "Default":
+                            continue
+                        if match_subdeck(subdeck_filter, dname):
+                            matched_dids.append(int(did_str))
+                            matched_deck_names.append(dname)
+
+                # 決定牌組名稱與欲抓取之卡片
+                if matched_dids:
+                    cur.execute(f"SELECT DISTINCT nid FROM cards WHERE did IN ({','.join('?'*len(matched_dids))})", matched_dids)
+                    nids = [r[0] for r in cur.fetchall()]
+                    if target_deck_name:
+                        resolved_deck_name = target_deck_name.strip()
+                    elif len(matched_deck_names) == 1:
+                        resolved_deck_name = clean_deck_title(matched_deck_names[0])
+                    else:
+                        resolved_deck_name = f"🌸 JLPT {subdeck_filter.strip()} 單字"
+                else:
+                    cur.execute("SELECT DISTINCT nid FROM cards")
+                    nids = [r[0] for r in cur.fetchall()]
+                    if target_deck_name:
+                        resolved_deck_name = target_deck_name.strip()
+                    else:
+                        names = [d["name"] for d in decks.values() if d.get("name") and d.get("name") != "Default"]
+                        resolved_deck_name = clean_deck_title(names[0]) if names else f"Anki 匯入牌組_{datetime.now(TZ_TAIPEI).strftime('%m%d')}"
+
+                if not nids:
+                    return {"success": False, "error": f"未在牌組中找到符合「{subdeck_filter or '所有'}」條件的卡片。"}
+
+                # 建立目標牌組
+                deck = get_or_create_deck(resolved_deck_name, description=f"由 {user_name} 匯入之 Anki 牌組", created_by=user_name)
+                deck_id = deck["id"]
+
+                imported_cards = []
+                media_count = 0
+
+                # 分批讀取 notes，避免 SQLite 參數上限
+                all_notes = []
+                chunk_size = 500
+                for i in range(0, len(nids), chunk_size):
+                    chunk = nids[i:i + chunk_size]
+                    cur.execute(f"SELECT id, mid, flds, tags FROM notes WHERE id IN ({','.join('?' * len(chunk))})", chunk)
+                    all_notes.extend(cur.fetchall())
+
+                for r in all_notes:
                     flds = r["flds"].split("\x1f")
-                    # 清除 HTML 與 sound 標籤
-                    clean_flds = [re.sub(r"<[^>]+>|\[sound:[^\]]+\]", "", f).replace("&nbsp;", " ").strip() for f in flds]
-                    if not clean_flds or not clean_flds[0]:
-                        continue
+                    mid = str(r["mid"])
+                    m = models.get(mid, {})
+                    fld_names = [f["name"] for f in m.get("flds", [])]
+                    card_dict = dict(zip(fld_names, flds)) if fld_names else {}
 
-                    front = clean_flds[0]
-                    reading = clean_flds[1] if len(clean_flds) > 1 else ""
-                    back = clean_flds[2] if len(clean_flds) > 2 else ""
-                    ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
-                    ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
+                    # 針對 eggrolls-JLPT10k 豐富欄位之專屬解析
+                    if "VocabKanji" in card_dict and "VocabFurigana" in card_dict:
+                        front = card_dict.get("VocabKanji") or card_dict.get("VocabFurigana", "")
+                        reading = card_dict.get("VocabFurigana", "")
+                        pitch = card_dict.get("VocabPitch", "")
+                        pos = card_dict.get("VocabPoS", "")
+                        back = card_dict.get("VocabDefTC") or card_dict.get("VocabDefSC", "")
+                        ex_jp = clean_anki_html(card_dict.get("SentFurigana1") or card_dict.get("SentKanji1", ""))
+                        ex_zh = card_dict.get("SentDefTC1") or card_dict.get("SentDefSC1", "")
+                        notes = clean_anki_html(card_dict.get("VocabPlus", ""))
+                        audio_raw = card_dict.get("VocabAudio", "")
+                    else:
+                        # 通用型 Anki 筆記解析
+                        clean_flds = [clean_anki_html(f) for f in flds]
+                        if not clean_flds or not clean_flds[0]:
+                            continue
+                        front = clean_flds[0]
+                        reading = clean_flds[1] if len(clean_flds) > 1 else ""
+                        back = clean_flds[2] if len(clean_flds) > 2 else ""
+                        ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
+                        ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
+                        if len(clean_flds) == 2:
+                            back = clean_flds[1]
+                            reading = ""
+                        pitch = ""
+                        pos = ""
+                        notes = ""
+                        audio_raw = r["flds"]
 
-                    if len(clean_flds) == 2:
-                        back = clean_flds[1]
-                        reading = ""
+                    # 提取真人發音音訊檔 (.mp3)
+                    audio_filename = ""
+                    if extract_media and name_to_entry:
+                        m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
+                        if m_sound:
+                            sound_ref = m_sound.group(1).strip()
+                            entry_name = name_to_entry.get(sound_ref)
+                            if entry_name and entry_name in namelist:
+                                safe_audio = f"audio_{deck_id}_{r['id']}.mp3"
+                                out_audio_path = MEDIA_DIR / safe_audio
+                                if not out_audio_path.is_file():
+                                    try:
+                                        out_audio_path.write_bytes(zf.read(entry_name))
+                                        media_count += 1
+                                    except Exception:
+                                        pass
+                                audio_filename = safe_audio
 
-                    # 解析 front 內的假名注音（例如 桜[さくら]）
-                    m_furi = re.match(r"^([^\[（]+)[\[（]([^\]）]+)[\]）]$", front)
-                    if m_furi and not reading:
-                        front = m_furi.group(1).strip()
-                        reading = m_furi.group(2).strip()
+                    # 提取圖片檔 (.png, .jpg, .webp)
+                    image_filename = ""
+                    if extract_media and name_to_entry:
+                        m_img = re.search(r'<img[^>]+src=["\']?([^"\'>]+)["\']?', r["flds"], re.IGNORECASE)
+                        if m_img:
+                            img_ref = urllib.parse.unquote(m_img.group(1).strip())
+                            entry_name = name_to_entry.get(img_ref)
+                            if entry_name and entry_name in namelist:
+                                ext = Path(img_ref).suffix.lower() or ".png"
+                                safe_img = f"img_{deck_id}_{r['id']}{ext}"
+                                out_img_path = MEDIA_DIR / safe_img
+                                if not out_img_path.is_file():
+                                    try:
+                                        out_img_path.write_bytes(zf.read(entry_name))
+                                        media_count += 1
+                                    except Exception:
+                                        pass
+                                image_filename = safe_img
 
-                    if front and back:
-                        card = add_card(deck_id, front=front, reading=reading, back=back, example_jp=ex_jp, example_zh=ex_zh)
+                    if front and (back or reading):
+                        card = add_card(
+                            deck_id,
+                            front=front,
+                            reading=reading,
+                            back=back,
+                            example_jp=ex_jp,
+                            example_zh=ex_zh,
+                            notes=notes,
+                            image_filename=image_filename,
+                            audio_filename=audio_filename,
+                            pos=pos,
+                            pitch=pitch
+                        )
                         imported_cards.append(card)
             finally:
                 cur.close()
                 conn.close()
 
-            count = len(imported_cards)
-            return {
-                "success": True,
-                "deck_name": resolved_deck_name,
-                "deck_id": deck_id,
-                "imported_count": count,
-                "imported_cards": count
-            }
+    count = len(imported_cards)
+    return {
+        "success": True,
+        "deck_name": resolved_deck_name,
+        "deck_id": deck_id,
+        "imported_count": count,
+        "imported_cards": count,
+        "media_count": media_count
+    }
+
+
+def import_anki_apkg_bytes(apkg_bytes: bytes, target_deck_name: Optional[str] = None, user_name: str = "User") -> dict:
+    """從 Anki .apkg 檔案二進位資料中直接解壓縮並提取卡片（向下相容介面）"""
+    return import_anki_apkg(apkg_bytes=apkg_bytes, target_deck_name=target_deck_name, user_name=user_name)
 
 
 def import_text_cards(text_content: str, target_deck_name: str, user_name: str = "User") -> dict:

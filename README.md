@@ -37,8 +37,8 @@
 * **動態世界觀設定集（Lorebook）**：按需關鍵字注入，零額外 Token 浪費。
 
 ### 7. 🌸 日語單字卡與 Kotoba 多人搶答測驗（`!card` / `!quiz`）
-* **互動式 SRS 單字卡（`!card`）**：支援按鈕翻面、HornBot 發音朗讀、AI 家教解說、Leitner 箱體記憶熟練度與一鍵切換牌組。
-* **三合一超直覺匯入（`!card import`）**：支援直接在聊天室貼上多行單字文字、從本機 `data/imports/` 資料夾直接讀取 `.apkg` / `.txt` / `.csv`、或在 Discord 拖曳上傳檔案匯入。
+* **互動式 SRS 單字卡（`!card`）**：支援按鈕翻面、母語者真人原音/HornBot 朗讀、圖卡顯示、AI 家教解說、Leitner 箱體記憶熟練度與一鍵切換牌組。
+* **三合一超直覺匯入（`!card import`）**：支援直接在聊天室貼上多行單字文字、從本機 `data/imports/` 直接讀取大型 Anki 牌組（支援 N1~N5 子牌組與高低頻篩選匯入、保留繁體釋義、重點粗體高亮與真人音訊）、或在 Discord 拖曳上傳檔案匯入。
 * **Kotoba 限時搶答（`!quiz`）**：多人拼刀限時搶答假名讀音或中文意思，附即時排行榜結算。
 
 ### 8. 🌐 多實例雙開架構（情侶共學版 vs. 社群跑團版）
@@ -73,7 +73,7 @@
 | `!lore del <編號>` | 刪除世界設定 | `!lore del 1` |
 | `!card [牌組名]` / `!decks` | 開啟互動式單字卡學習 / 查看所有牌組 | `!card`、`!decks` |
 | `!card add <單字>` | 新增單字（僅打單字時由 AI 自動補齊讀音與例句） | `!card add 桜` |
-| `!card import [牌組/檔名]` | 貼上多行文字、讀取 `data/imports/` 或上傳 `.apkg` 匯入 | `!card import` |
+| `!card import [檔名/子牌組]` | 貼上文字、讀取 `data/imports/`（支援指定如 `N3高頻`）或上傳匯入 | `!card import`、`!card import N3高頻` |
 | `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |

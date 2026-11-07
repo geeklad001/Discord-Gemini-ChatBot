@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import random
 import re
@@ -6,11 +7,16 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from assistant_db import get_conn, TZ_TAIPEI, current_discord_msg
+from assistant_db import get_conn, get_db_path, TZ_TAIPEI, current_discord_msg
+
+_initialized_rpg_dbs: set[str] = set()
 
 
 def init_rpg_tables():
-    """初始化 RPG 狀態機、Lorebook 世界設定集、旅程手記與存檔資料表"""
+    """初始化 RPG 狀態機、Lorebook 世界設定集、旅程手記與存檔資料表（每個資料庫實例僅執行一次）"""
+    db_key = str(get_db_path())
+    if db_key in _initialized_rpg_dbs:
+        return
     with get_conn() as conn:
         cursor = conn.cursor()
         # 1. 冒險角色與狀態機 (權威狀態 Authoritative State)
@@ -88,7 +94,45 @@ def init_rpg_tables():
             cursor.execute("ALTER TABLE rpg_characters ADD COLUMN profile_json TEXT DEFAULT '{}'")
         except sqlite3.OperationalError:
             pass
+        # 5. 活躍冒險會話標記表 (Active RPG Sessions)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rpg_active_sessions (
+                channel_id INTEGER PRIMARY KEY,
+                is_active INTEGER DEFAULT 1,
+                started_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
+    _initialized_rpg_dbs.add(db_key)
+
+
+def set_rpg_session_active(channel_id: int, is_active: bool = True):
+    """標記指定頻道或討論串當前是否正處於活躍的 TRPG 冒險中"""
+    init_rpg_tables()
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO rpg_active_sessions (channel_id, is_active, started_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(channel_id) DO UPDATE SET
+                is_active = excluded.is_active,
+                updated_at = excluded.updated_at
+        """, (channel_id, 1 if is_active else 0, now_str, now_str))
+        conn.commit()
+
+
+def is_rpg_session_active(channel_id: int) -> bool:
+    """查詢指定頻道或討論串是否為活躍的冒險會話"""
+    init_rpg_tables()
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_active FROM rpg_active_sessions WHERE channel_id = ?", (channel_id,))
+        row = cursor.fetchone()
+        if row:
+            return bool(row[0])
+    return False
 
 
 # -------------------------------------------------------------
@@ -849,8 +893,9 @@ def list_saves(user_id: Optional[int] = None) -> list[dict]:
 
 
 def delete_save(save_name: str, user_id: Optional[int] = None) -> bool:
-    """刪除指定存檔"""
+    """刪除指定存檔（社群模式下僅允許存檔建立者本人刪除，情侶模式下可共同管理）"""
     init_rpg_tables()
+    is_jp_mode = os.getenv("ENABLE_JAPANESE_MODE", "true").strip().lower() not in ("false", "0", "no")
     with get_conn() as conn:
         cursor = conn.cursor()
         if user_id:
@@ -858,6 +903,9 @@ def delete_save(save_name: str, user_id: Optional[int] = None) -> bool:
             if cursor.rowcount > 0:
                 conn.commit()
                 return True
+            if not is_jp_mode:
+                # 社群模式下禁止刪除他人建立的存檔
+                return False
         cursor.execute("DELETE FROM rpg_saves WHERE save_name = ?", (save_name.strip(),))
         conn.commit()
         return cursor.rowcount > 0
@@ -953,7 +1001,8 @@ def rpg_update_state(
     return (
         f"✅ 已同步更新【{updated['char_name']} ({updated['user_name']})】遊戲狀態：\n"
         f"❤️ 血量：{updated['hp']}/{updated['max_hp']} | 🎒 背包：{inv_display}\n"
-        f"📍 地點：{updated['location']} | 🎯 目標：{updated['current_quest']}"
+        f"📍 地點：{updated['location']} | 🎯 目標：{updated['current_quest']}\n"
+        f"⚡【權威狀態覆蓋提示】：本回合狀態已更新！請直接以此最新數值與物品覆蓋 System Prompt 中的舊狀態快照進行敘事，切勿引用舊數值！"
     )
 
 
@@ -1250,7 +1299,7 @@ def rpg_import_character_sheet(sheet_text: str) -> str:
     info_lines.append(f"🎒 隨身裝備/法寶：{inv_str}")
     if prof.get("backstory"):
         info_lines.append(f"📜 背景設定：{prof['backstory']}")
-    info_lines.append("👉 AI DM 請確認收到，並以符合該世界觀風格的主持人口吻歡迎這位角色加入旅程！")
+    info_lines.append("⚡【權威狀態覆蓋提示】：角色卡已寫入資料庫！請直接以此最新角色設定覆蓋 System Prompt 中的舊狀態，並以符合該世界觀風格的主持人口吻歡迎這位角色加入旅程！")
 
     return "\n".join(info_lines)
 

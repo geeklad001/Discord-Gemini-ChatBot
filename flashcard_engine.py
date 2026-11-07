@@ -9,11 +9,18 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from assistant_db import get_conn, TZ_TAIPEI
+from assistant_db import get_conn, get_db_path, TZ_TAIPEI
+
+IMPORTS_DIR = Path(__file__).parent / "data" / "imports"
+_initialized_dbs: set[str] = set()
 
 
 def init_flashcard_tables():
-    """初始化單字卡 (Flashcard)、牌組 (Decks) 與學習進度資料表"""
+    """初始化單字卡 (Flashcard)、牌組 (Decks) 與學習進度資料表（每個資料庫實例僅執行一次）"""
+    db_key = str(get_db_path())
+    if db_key in _initialized_dbs:
+        return
+    IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         cursor = conn.cursor()
         # 1. 牌組資料表
@@ -67,6 +74,7 @@ def init_flashcard_tables():
 
     # 自動建立預設收集箱與內建基礎牌組
     _seed_default_and_starter_decks()
+    _initialized_dbs.add(db_key)
 
 
 def _seed_default_and_starter_decks():
@@ -439,12 +447,26 @@ def record_review_result(user_id: int, card_id: int, is_good: bool) -> dict:
 # -------------------------------------------------------------
 # 3. Anki (.apkg) 與純文字批次匯入引擎 (Import Engine)
 # -------------------------------------------------------------
+MAX_APKG_BYTES = 25 * 1024 * 1024  # 25 MB 上限
+MAX_UNCOMPRESSED_DB_BYTES = 50 * 1024 * 1024  # 解壓後 SQLite 上限 50 MB
+
+
+def list_local_import_files() -> list[Path]:
+    """列出本機 data/imports/ 資料夾下可供匯入的單字檔 (.apkg, .txt, .tsv, .csv)"""
+    IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    valid_exts = {".apkg", ".txt", ".tsv", ".csv"}
+    return sorted([p for p in IMPORTS_DIR.iterdir() if p.is_file() and p.suffix.lower() in valid_exts])
+
+
 def import_anki_apkg_bytes(apkg_bytes: bytes, target_deck_name: Optional[str] = None, user_name: str = "User") -> dict:
     """
     從 Anki .apkg 檔案二進位資料中直接解壓縮並提取卡片，存入本地 SQLite。
-    回傳：{"deck_name": str, "deck_id": int, "imported_count": int}
+    回傳：{"success": bool, "deck_name": str, "deck_id": int, "imported_count": int, "imported_cards": int}
     """
     init_flashcard_tables()
+    if len(apkg_bytes) > MAX_APKG_BYTES:
+        return {"success": False, "error": f"檔案過大（超過 {MAX_APKG_BYTES // (1024 * 1024)} MB 上限）。"}
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_zip = os.path.join(tmpdir, "deck.apkg")
         with open(tmp_zip, "wb") as f:
@@ -453,12 +475,17 @@ def import_anki_apkg_bytes(apkg_bytes: bytes, target_deck_name: Optional[str] = 
         with zipfile.ZipFile(tmp_zip, "r") as zf:
             namelist = zf.namelist()
             db_name = None
-            for cand in ["collection.anki2", "collection.anki21"]:
+            for cand in ["collection.anki21", "collection.anki2"]:
                 if cand in namelist:
                     db_name = cand
                     break
             if not db_name:
-                raise ValueError("未在該 .apkg 檔案中找到 collection.anki2 資料庫。")
+                return {"success": False, "error": "未在該 .apkg 檔案中找到 collection.anki2 / anki21 資料庫。"}
+
+            # 防範 Zip Bomb：檢查解壓縮後檔案大小
+            info = zf.getinfo(db_name)
+            if info.file_size > MAX_UNCOMPRESSED_DB_BYTES:
+                return {"success": False, "error": "壓縮檔內部資料庫過大，已拒絕解壓縮（Zip Bomb 防護）。"}
 
             zf.extract(db_name, tmpdir)
             db_path = os.path.join(tmpdir, db_name)
@@ -517,12 +544,16 @@ def import_anki_apkg_bytes(apkg_bytes: bytes, target_deck_name: Optional[str] = 
                         card = add_card(deck_id, front=front, reading=reading, back=back, example_jp=ex_jp, example_zh=ex_zh)
                         imported_cards.append(card)
             finally:
+                cur.close()
                 conn.close()
 
+            count = len(imported_cards)
             return {
+                "success": True,
                 "deck_name": resolved_deck_name,
                 "deck_id": deck_id,
-                "imported_count": len(imported_cards)
+                "imported_count": count,
+                "imported_cards": count
             }
 
 
@@ -583,7 +614,10 @@ def import_text_cards(text_content: str, target_deck_name: str, user_name: str =
         count += 1
 
     return {
+        "success": count > 0,
         "deck_name": target_deck_name,
         "deck_id": deck_id,
-        "imported_count": count
+        "imported_count": count,
+        "imported_cards": count,
+        "error": None if count > 0 else "未解析出任何有效的單字行。"
     }

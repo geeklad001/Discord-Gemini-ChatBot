@@ -32,9 +32,18 @@
 
 ### 6. 🗡️ TRPG 跑團與文字冒險引擎（輕量化本機狀態機）
 * **本機權威狀態（Authoritative State）**：SQLite 資料庫嚴格管理血量（HP）、背包道具、當前任務與地點，AI 絕不幻覺、不憑空捏造物品。
+* **全宇宙自適應角色卡（`!sheet`）**：支援修仙、賽博龐克、克蘇魯 CoC、D&D 與任意自由劇本，支援多人組隊面板（`!party`）、全隊存讀檔（`!save` / `!load`）與旅程獨立手記（`!note` / `!journal`）。
 * **D20 擲骰與難度檢定（Dice Checks）**：行動具備真實隨機性，支援大成功與大失敗，劇情充滿張力與意外！
 * **動態世界觀設定集（Lorebook）**：按需關鍵字注入，零額外 Token 浪費。
-* **零額外 API 消耗**：擲骰與狀態全由本機 Python 計算，單次回覆一次完成，完全不浪費免費額度！
+
+### 7. 🌸 日語單字卡與 Kotoba 多人搶答測驗（`!card` / `!quiz`）
+* **互動式 SRS 單字卡（`!card`）**：支援按鈕翻面、HornBot 發音朗讀、AI 家教解說、Leitner 箱體記憶熟練度與一鍵切換牌組。
+* **三合一超直覺匯入（`!card import`）**：支援直接在聊天室貼上多行單字文字、從本機 `data/imports/` 資料夾直接讀取 `.apkg` / `.txt` / `.csv`、或在 Discord 拖曳上傳檔案匯入。
+* **Kotoba 限時搶答（`!quiz`）**：多人拼刀限時搶答假名讀音或中文意思，附即時排行榜結算。
+
+### 8. 🌐 多實例雙開架構（情侶共學版 vs. 社群跑團版）
+* **情侶版（`start_bot.bat` / `.env`）**：開啟日語雙頻道與單字卡，連結 `data/assistant.db`。
+* **社群版（`start_community_bot.bat` / `.env.community`）**：關閉日語與單字卡，化身為熱情且親切的社群助手與新人招待，日常暢聊並隨選提供 TRPG 跑團服務，獨立連結 `data/community.db`，100% 資料隔離！
 
 ---
 
@@ -51,12 +60,22 @@
 | `!remind <時間> <內容>` | 設定定時提醒 | `!remind 10m 關火`、`!remind 18:30 倒垃圾` |
 | `!reminds` | 查看所有尚未觸發的預約提醒 | `!reminds` |
 | `!remind del <編號>` | 取消某個預約提醒 | `!remind del 1` |
-| `!rpg` | 查看當前冒險角色卡 (HP、背包道具、任務) | `!rpg` |
+| `!rpg start [主題]` | 自動建立專屬獨立討論串開啟冒險 | `!rpg start 迷霧森林遺跡` |
+| `!rpg` / `!party` | 查看個人冒險狀態卡 / 冒險小隊全員面板 | `!rpg`、`!party` |
+| `!sheet [文字/檔名/附檔]` | 查看或匯入自適應角色卡 | `!sheet`、`!sheet char.txt` |
+| `!save <名>` / `!load <名>` | 保存或載入全隊冒險快照與手記 | `!save 第一章`、`!load 第一章` |
+| `!saves` / `!rpg delsave <名>` | 查看或刪除冒險存檔 | `!saves` |
+| `!note <線索>` / `!journal` | 記錄或查看當前冒險旅程手記 | `!note 守衛怕老鼠`、`!journal` |
 | `!rpg reset` | 重置冒險狀態，回到初始存檔 | `!rpg reset` |
 | `!roll [表達式]` | TRPG 擲骰子 | `!roll`、`!roll 2d6`、`!roll 1d20+3` |
-| `!lore` | 查看世界設定集 (Lorebook) | `!lore` |
-| `!lore add <詞> \| <內容>` | 新增世界設定 | `!lore add 星露草 \| 深山發光解毒藥草` |
+| `!lore` / `!lore import` | 查看或批次匯入世界設定集 (Lorebook) | `!lore`、`!lore import` |
+| `!lore add <詞> \| <內容>` | 新增單筆世界設定 | `!lore add 星露草 \| 深山發光解毒藥草` |
 | `!lore del <編號>` | 刪除世界設定 | `!lore del 1` |
+| `!card [牌組名]` / `!decks` | 開啟互動式單字卡學習 / 查看所有牌組 | `!card`、`!decks` |
+| `!card add <單字>` | 新增單字（僅打單字時由 AI 自動補齊讀音與例句） | `!card add 桜` |
+| `!card import [牌組/檔名]` | 貼上多行文字、讀取 `data/imports/` 或上傳 `.apkg` 匯入 | `!card import` |
+| `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
+| `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |
 | `!remember <事實>` | 直接寫入長期記憶庫 | `!remember 女友對花生過敏` |
 | `!forget <編號>` | 刪除某一條長期記憶 | `!forget 1` |
@@ -66,4 +85,5 @@
 
 ## 🚀 快速啟動
 
-雙擊專案目錄下的 **`start_bot.bat`** 即可一鍵啟動！
+* **情侶共學與管家實例**：雙擊 **`start_bot.bat`**
+* **社群跑團與群聊實例**：雙擊 **`start_community_bot.bat`**

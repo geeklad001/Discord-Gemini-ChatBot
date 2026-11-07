@@ -14,9 +14,9 @@ current_discord_msg = assistant_db.current_discord_msg
 
 def record_memory(content: str) -> str:
     """
-    記錄重要事情、個人喜好、習慣、紀念日或約定到情侶長期記憶庫中。即使聊天記憶重設，此記憶仍會永久保存。
+    記錄重要事情、個人喜好、習慣、重要日期、群組共識或約定到長期記憶庫中。即使聊天記憶重設，此記憶仍會永久保存。
     參數:
-      content: 欲記錄的事實、喜好或備忘內容（例如：「妖貓喜歡抹茶」、「交往紀念日是 10 月 15 日」）。
+      content: 欲記錄的事實、喜好、設定或備忘內容（例如：「某成員喜歡抹茶」、「重要紀念日或活動是 10 月 15 日」）。
     """
     msg = current_discord_msg.get()
     user_name = msg.author.display_name if msg else "共同"
@@ -26,7 +26,7 @@ def record_memory(content: str) -> str:
 
 def create_todo(task: str) -> str:
     """
-    新增一項待辦事項到兩人的共同待辦清單中。
+    新增一項待辦事項到共同待辦清單中。
     參數:
       task: 待辦事項內容（例如：「訂週六晚上餐廳」、「買衛生紙」）。
     """
@@ -56,7 +56,7 @@ def finish_todo(task_keyword_or_id: str) -> str:
 
 def query_todos() -> str:
     """
-    查詢目前兩人尚未完成的待辦事項清單。
+    查詢目前尚未完成的待辦事項清單。
     """
     todos = assistant_db.list_todos(only_pending=True)
     if not todos:

@@ -13,12 +13,11 @@ DB_DIR = Path(__file__).parent / "data"
 
 def get_db_path() -> Path:
     """依環境變數 DB_NAME 動態取得資料庫路徑，預設為 assistant.db (支援不同社群/實例資料隔離)"""
-    db_name = os.getenv("DB_NAME", "assistant.db").strip()
-    return DB_DIR / db_name
+    raw_name = os.getenv("DB_NAME", "assistant.db").strip()
+    # 資安防護：僅取檔名部分，防止 Path Traversal 路徑穿越
+    safe_name = Path(raw_name).name or "assistant.db"
+    return DB_DIR / safe_name
 
-
-# 舊版向下相容變數
-DB_PATH = get_db_path()
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = contextvars.ContextVar("current_discord_msg", default=None)
@@ -26,8 +25,10 @@ current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = context
 
 def get_conn() -> sqlite3.Connection:
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(get_db_path())
+    conn = sqlite3.connect(get_db_path(), timeout=10.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
     return conn
 
 
@@ -102,11 +103,17 @@ def delete_memory(memory_id: int) -> bool:
 
 
 def format_memories_for_prompt() -> str:
-    """將所有長期記憶格式化為適合注入 System Instruction 的清單"""
+    """將所有長期記憶格式化為適合注入 System Instruction 的清單（自適應情侶版與社群版）"""
     memories = get_all_memories()
     if not memories:
         return ""
-    lines = ["【情侶長期記憶庫（由使用者設定，請隨時牢記於心並自然融入對話）】"]
+    is_jp_mode = os.getenv("ENABLE_JAPANESE_MODE", "true").strip().lower() not in ("false", "0", "no")
+    header = (
+        "【情侶長期記憶庫（由使用者設定，請隨時牢記於心並自然融入對話）】"
+        if is_jp_mode
+        else "【群組長期記憶與共識庫（由成員設定，請隨時牢記於心並自然融入對話）】"
+    )
+    lines = [header]
     for m in memories:
         user_prefix = f"[{m['user_name']}]: " if m['user_name'] else ""
         lines.append(f"{m['id']}. {user_prefix}{m['content']}")
@@ -227,11 +234,28 @@ def get_pending_due_reminders() -> list[dict]:
     return due_items
 
 
-def mark_reminder_sent(reminder_id: int):
+def mark_reminder_sent(reminder_id: int) -> bool:
     with get_conn() as conn:
         cursor = conn.cursor()
+        cursor.execute("UPDATE reminders SET is_sent = 1 WHERE id = ? AND is_sent = 0", (reminder_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def cancel_reminder(reminder_id: int, user_id: Optional[int] = None) -> tuple[bool, str]:
+    """取消尚未發送的提醒事項（社群模式下驗證是否為本人建立）"""
+    is_jp_mode = os.getenv("ENABLE_JAPANESE_MODE", "true").strip().lower() not in ("false", "0", "no")
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, user_id, user_name, content, is_sent FROM reminders WHERE id = ?", (reminder_id,))
+        row = cursor.fetchone()
+        if not row or row["is_sent"]:
+            return False, "找不到該筆尚未觸發的提醒事項。"
+        if not is_jp_mode and user_id and row["user_id"] != user_id:
+            return False, f"權限不足：該提醒是由 {row['user_name']} 建立的，僅限本人取消。"
         cursor.execute("UPDATE reminders SET is_sent = 1 WHERE id = ?", (reminder_id,))
         conn.commit()
+        return True, row["content"]
 
 
 def list_upcoming_reminders() -> list[dict]:

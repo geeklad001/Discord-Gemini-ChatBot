@@ -6,6 +6,7 @@ import discord
 
 import assistant_db
 import rpg_engine
+import flashcard_engine
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg = assistant_db.current_discord_msg
@@ -131,6 +132,52 @@ def parse_time_argument(arg: str) -> Optional[datetime]:
     return assistant_db.parse_iso_datetime(arg)
 
 
+def add_flashcard_card(
+    word_or_phrase: str,
+    reading: str = "",
+    meaning: str = "",
+    example_sentence_jp: str = "",
+    example_sentence_zh: str = "",
+    deck_name: Optional[str] = None
+) -> str:
+    """
+    將欲學習的日語單字、片語、文法或佳句整理成單字卡 (Flashcard) 儲存至資料庫中。
+    若未指定牌組名稱 (deck_name)，系統會自動放入預設的「⭐ 兩人的日常收藏」牌組中。
+    參數:
+      word_or_phrase: 日語漢字或單字/片語（例如：「木漏れ日」、「乾杯」、「美味しい」）。
+      reading: 平假名讀音（例如：「こもれび」、「かんぱい」、「おいしい」）。
+      meaning: 繁體中文釋義（例如：「從樹葉縫隙透進來的陽光」、「乾杯」、「好吃的」）。
+      example_sentence_jp: 實用日語生活例句（若無可由 AI 自然造句）。
+      example_sentence_zh: 繁體中文例句翻譯。
+      deck_name: 目標牌組名稱（例如：「居酒屋日文」、「動漫常用語」）。若無指定可留空，自動放入預設收集箱。
+    """
+    msg = current_discord_msg.get()
+    user_name = msg.author.display_name if msg else "使用者"
+    user_id = msg.author.id if msg else 0
+
+    if deck_name and deck_name.strip():
+        deck = flashcard_engine.get_or_create_deck(deck_name.strip(), created_by=user_name)
+    else:
+        deck = flashcard_engine.get_user_active_deck(user_id) if user_id else flashcard_engine.get_or_create_deck("⭐ 兩人的日常收藏")
+
+    card = flashcard_engine.add_card(
+        deck_id=deck["id"],
+        front=word_or_phrase,
+        reading=reading,
+        back=meaning,
+        example_jp=example_sentence_jp,
+        example_zh=example_sentence_zh
+    )
+
+    rd_str = f" ({reading})" if reading else ""
+    ex_str = f"\n💬 例句：{example_sentence_jp}（{example_sentence_zh}）" if example_sentence_jp else ""
+    return (
+        f"🎴 已成功收錄單字卡 #{card['id']}！\n"
+        f"單字：【{word_or_phrase}{rd_str}】➔ 釋義：{meaning}\n"
+        f"📁 已歸入牌組：【{deck['name']}】{ex_str}"
+    )
+
+
 # 工具函式列表，供 google-genai SDK 註冊
 ASSISTANT_TOOLS = [
     record_memory,
@@ -138,6 +185,7 @@ ASSISTANT_TOOLS = [
     finish_todo,
     query_todos,
     set_reminder,
+    add_flashcard_card,
     rpg_engine.rpg_roll_check,
     rpg_engine.rpg_update_state,
     rpg_engine.rpg_record_lore,

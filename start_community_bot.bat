@@ -1,5 +1,6 @@
 @echo off
-title Discord Gemini Bot [社群專案版]
+chcp 65001 >nul
+title Discord Gemini Bot [Community]
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
@@ -10,11 +11,8 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 if not exist ".env.community" (
-    echo ========================================================
-    echo [WARNING] 尚未找到 .env.community 設定檔！
-    echo 請先將 .env.community.example 複製為 .env.community，
-    echo 並填入第二個帳號的 GEMINI_API_KEY 與 DISCORD_BOT_TOKEN。
-    echo ========================================================
+    echo [WARNING] .env.community not found!
+    echo Please copy .env.community.example to .env.community.
     pause
     exit /b 1
 )

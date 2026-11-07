@@ -557,12 +557,17 @@ async def on_thread_delete(thread: discord.Thread):
 
 @bot.event
 async def on_ready():
-    logger.info(f"🌸 機器人已成功上線！登入身分：{bot.user} (ID: {bot.user.id})")
-    logger.info(f"🎯 日語教學綜合頻道 ID: {TARGET_CHANNEL_ID}")
-    if TTS_CHANNEL_ID:
-        logger.info(f"📻 HornBot 朗讀專用日文頻道 ID: {TTS_CHANNEL_ID}")
-    if GENERAL_CHANNEL_ID:
-        logger.info(f"💬 日常三人閒聊群聊頻道 ID: {GENERAL_CHANNEL_ID}")
+    logger.info(f"✨ 機器人已成功上線！登入身分：{bot.user} (ID: {bot.user.id})")
+    if ENABLE_JAPANESE_MODE:
+        logger.info(f"🎯 日語教學綜合頻道 ID: {TARGET_CHANNEL_ID}")
+        if TTS_CHANNEL_ID:
+            logger.info(f"📻 HornBot 朗讀專用日文頻道 ID: {TTS_CHANNEL_ID}")
+        if GENERAL_CHANNEL_ID:
+            logger.info(f"💬 日常三人閒聊群聊頻道 ID: {GENERAL_CHANNEL_ID}")
+    else:
+        logger.info(f"🎯 目標社群互動頻道 ID: {TARGET_CHANNEL_ID}")
+        if GENERAL_CHANNEL_ID:
+            logger.info(f"💬 次要互動頻道 ID: {GENERAL_CHANNEL_ID}")
     logger.info(f"🤖 首選模型: {PRIMARY_MODEL} (備選: {', '.join(FALLBACK_MODELS)})")
 
     if not reminder_check_loop.is_running():

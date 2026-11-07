@@ -73,7 +73,7 @@
 | `!lore del <編號>` | 刪除世界設定 | `!lore del 1` |
 | `!card [牌組名]` / `!decks` | 開啟互動式單字卡學習 / 查看所有牌組 | `!card`、`!decks` |
 | `!card add <單字>` | 新增單字（僅打單字時由 AI 自動補齊讀音與例句） | `!card add 桜` |
-| `!card import [檔名/子牌組]` | 貼上文字、讀取 `data/imports/`（支援指定如 `N3高頻`）或上傳匯入 | `!card import`、`!card import N3高頻` |
+| `!card import [檔名/等級/all]` | 貼上文字、讀取 `data/imports/`（支援一鍵全分類 `all` 或指定 `N3高頻`） | `!card import all`、`!card import N3高頻` |
 | `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |

@@ -638,6 +638,10 @@ def import_anki_apkg(
     回傳：{"success": bool, "deck_name": str, "deck_id": int, "imported_count": int, "imported_cards": int, "media_count": int}
     """
     init_flashcard_tables()
+    # 若指定為 all / 全部 / 全自動，則轉由 import_all_anki_subdecks 進行全牌組一鍵分類匯入
+    if file_path and subdeck_filter and subdeck_filter.lower() in ("all", "全部", "全自動", "一鍵分類", "*"):
+        return import_all_anki_subdecks(file_path=file_path, user_name=user_name, extract_media=False)
+
     if apkg_bytes and len(apkg_bytes) > MAX_APKG_BYTES:
         return {"success": False, "error": f"檔案過大（超過 {MAX_APKG_BYTES // (1024 * 1024)} MB 上限）。建議放入本機 data/imports/ 目錄。"}
 
@@ -834,6 +838,217 @@ def import_anki_apkg(
         "deck_id": deck_id,
         "imported_count": count,
         "imported_cards": count,
+        "media_count": media_count
+    }
+
+
+def get_card_audio_path(card: dict) -> Optional[Path]:
+    """取得單字卡的音訊檔路徑，若本地尚未解壓則從 data/imports/ 中的 .apkg 自動隨選提取"""
+    audio_fn = card.get("audio_filename")
+    if not audio_fn:
+        return None
+    local_path = MEDIA_DIR / audio_fn
+    if local_path.is_file():
+        return local_path
+
+    # audio_fn 格式通常為 audio_{deck_id}_{nid}.mp3
+    m = re.match(r"audio_\d+_(\d+)\.mp3", audio_fn)
+    target_nid = int(m.group(1)) if m else None
+
+    for apkg_file in IMPORTS_DIR.glob("*.apkg"):
+        try:
+            with zipfile.ZipFile(apkg_file, "r") as zf:
+                namelist = set(zf.namelist())
+                if "media" not in namelist:
+                    continue
+                media_dict = json.loads(zf.read("media").decode("utf-8"))
+                name_to_entry = {v: k for k, v in media_dict.items()}
+
+                db_name = "collection.anki21" if "collection.anki21" in namelist else "collection.anki2"
+                if db_name not in namelist:
+                    continue
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    zf.extract(db_name, tmpdir)
+                    conn = sqlite3.connect(os.path.join(tmpdir, db_name))
+                    cur = conn.cursor()
+                    if target_nid:
+                        cur.execute("SELECT flds FROM notes WHERE id = ?", (target_nid,))
+                    else:
+                        cur.execute("SELECT flds FROM notes WHERE flds LIKE ?", (f"%{card['front']}%",))
+                    row = cur.fetchone()
+                    cur.close()
+                    conn.close()
+
+                    if row:
+                        m_sound = re.search(r"\[sound:([^\]]+)\]", row[0])
+                        if m_sound:
+                            entry_name = name_to_entry.get(m_sound.group(1).strip())
+                            if entry_name and entry_name in namelist:
+                                local_path.write_bytes(zf.read(entry_name))
+                                return local_path
+        except Exception:
+            continue
+
+    return None
+
+
+def import_all_anki_subdecks(
+    file_path: Path,
+    user_name: str = "User",
+    extract_media: bool = False
+) -> dict:
+    """
+    一鍵掃描並全自動匯入 Anki .apkg 內的所有等級子牌組，依子牌組自動拆分並建置各自的獨立牌組。
+    回傳：{
+        "success": bool,
+        "is_batch_all": True,
+        "total_decks": int,
+        "total_cards": int,
+        "decks_summary": list[dict],
+        "media_count": int
+    }
+    """
+    init_flashcard_tables()
+    if not file_path.is_file():
+        return {"success": False, "error": f"找不到本機檔案：{file_path.name}"}
+
+    try:
+        zf = zipfile.ZipFile(file_path, "r")
+    except Exception as e:
+        return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
+
+    with zf:
+        namelist = set(zf.namelist())
+        db_name = None
+        for cand in ["collection.anki21", "collection.anki2"]:
+            if cand in namelist:
+                db_name = cand
+                break
+        if not db_name:
+            return {"success": False, "error": "未在該 .apkg 檔案中找到 collection.anki2 / anki21 資料庫。"}
+
+        media_json = {}
+        name_to_entry = {}
+        if "media" in namelist:
+            try:
+                media_dict = json.loads(zf.read("media").decode("utf-8"))
+                name_to_entry = {v: k for k, v in media_dict.items()}
+            except Exception:
+                pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zf.extract(db_name, tmpdir)
+            db_path = os.path.join(tmpdir, db_name)
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT decks, models FROM col LIMIT 1")
+                col_row = cur.fetchone()
+                if not col_row:
+                    return {"success": False, "error": "Anki 資料庫格式異常。"}
+                decks = json.loads(col_row["decks"]) if col_row["decks"] else {}
+                models = json.loads(col_row["models"]) if col_row["models"] else {}
+
+                cur.execute("SELECT did, nid FROM cards")
+                deck_to_nids = {}
+                for r in cur.fetchall():
+                    deck_to_nids.setdefault(r["did"], []).append(r["nid"])
+
+                cur.execute("SELECT id, mid, flds, tags FROM notes")
+                notes_dict = {r["id"]: r for r in cur.fetchall()}
+            finally:
+                cur.close()
+                conn.close()
+
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    decks_summary = []
+    total_cards = 0
+    media_count = 0
+
+    with get_conn() as local_conn:
+        local_cur = local_conn.cursor()
+        for did, nids in sorted(deck_to_nids.items(), key=lambda x: decks.get(str(x[0]), {}).get("name", "")):
+            dname = decks.get(str(did), {}).get("name", "")
+            if dname == "Default" or not nids:
+                continue
+            clean_title = clean_deck_title(dname)
+
+            local_cur.execute(
+                "INSERT OR IGNORE INTO flashcard_decks (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
+                (clean_title, f"由 {user_name} 自 {file_path.name} 一鍵分類匯入", user_name, now_str)
+            )
+            local_cur.execute("SELECT id FROM flashcard_decks WHERE name = ?", (clean_title,))
+            deck_id = local_cur.fetchone()[0]
+
+            cards_batch = []
+            for nid in nids:
+                n = notes_dict.get(nid)
+                if not n:
+                    continue
+                mid = str(n["mid"])
+                m = models.get(mid, {})
+                fld_names = [f["name"] for f in m.get("flds", [])]
+                flds = n["flds"].split("\x1f")
+                card_dict = dict(zip(fld_names, flds)) if fld_names else {}
+
+                if "VocabKanji" in card_dict and "VocabFurigana" in card_dict:
+                    front = card_dict.get("VocabKanji") or card_dict.get("VocabFurigana", "")
+                    reading = card_dict.get("VocabFurigana", "")
+                    pitch = card_dict.get("VocabPitch", "")
+                    pos = card_dict.get("VocabPoS", "")
+                    back = card_dict.get("VocabDefTC") or card_dict.get("VocabDefSC", "")
+                    ex_jp = clean_anki_html(card_dict.get("SentFurigana1") or card_dict.get("SentKanji1", ""))
+                    ex_zh = card_dict.get("SentDefTC1") or card_dict.get("SentDefSC1", "")
+                    notes = clean_anki_html(card_dict.get("VocabPlus", ""))
+                    audio_raw = card_dict.get("VocabAudio", "")
+                else:
+                    clean_flds = [clean_anki_html(f) for f in flds]
+                    if not clean_flds or not clean_flds[0]:
+                        continue
+                    front = clean_flds[0]
+                    reading = clean_flds[1] if len(clean_flds) > 1 else ""
+                    back = clean_flds[2] if len(clean_flds) > 2 else ""
+                    ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
+                    ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
+                    pitch = ""
+                    pos = ""
+                    notes = ""
+                    audio_raw = n["flds"]
+
+                audio_fn = ""
+                m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
+                if m_sound:
+                    sound_ref = m_sound.group(1).strip()
+                    if sound_ref in name_to_entry:
+                        audio_fn = f"audio_{deck_id}_{nid}.mp3"
+
+                cards_batch.append((
+                    deck_id, front, reading, back, ex_jp, ex_zh, notes,
+                    "", "both", audio_fn, pos, pitch, now_str
+                ))
+
+            local_cur.executemany("""
+                INSERT INTO flashcard_cards
+                (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, cards_batch)
+
+            decks_summary.append({
+                "id": deck_id,
+                "name": clean_title,
+                "card_count": len(cards_batch)
+            })
+            total_cards += len(cards_batch)
+
+        local_conn.commit()
+
+    return {
+        "success": True,
+        "is_batch_all": True,
+        "total_decks": len(decks_summary),
+        "total_cards": total_cards,
+        "decks_summary": decks_summary,
         "media_count": media_count
     }
 

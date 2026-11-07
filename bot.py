@@ -1788,8 +1788,8 @@ class FlashcardStudyView(discord.ui.View):
     async def on_tts(self, interaction: discord.Interaction):
         audio_filename = self.card.get("audio_filename")
         if audio_filename:
-            audio_path = flashcard_engine.MEDIA_DIR / audio_filename
-            if audio_path.is_file():
+            audio_path = flashcard_engine.get_card_audio_path(self.card)
+            if audio_path and audio_path.is_file():
                 try:
                     await interaction.response.send_message(
                         content=f"🔊 **{self.card['front']}** 的真人原音：",
@@ -2093,12 +2093,26 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                             return
 
                         if res.get("success"):
-                            media_info = f"（已同時提取 **{res.get('media_count', 0)}** 個真人原音/圖檔）" if res.get("media_count") else ""
-                            await ctx.send(
-                                f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{res['imported_count']}** 張單字卡！{media_info}\n"
-                                f"📚 牌組名稱：`{res['deck_name']}`\n"
-                                f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
-                            )
+                            if res.get("is_batch_all"):
+                                deck_lines = "\n".join(f"• **{d['name']}**：`{d['card_count']}` 張" for d in res["decks_summary"])
+                                embed = discord.Embed(
+                                    title="🎉 Anki 全牌組一鍵全自動分類匯入成功！",
+                                    description=(
+                                        f"已成功自 `{local_path.name}` 自動拆分建置 **{res['total_decks']}** 個等級牌組（共 **{res['total_cards']}** 張單字卡）！\n\n"
+                                        f"**各等級牌組清單：**\n{deck_lines}\n\n"
+                                        f"👉 隨時輸入 `!card <等級名稱>`（例如 `!card N5` 或 `!card N3高頻`）即可開始複習！\n"
+                                        f"👉 或輸入 `!decks` 查看所有牌組清單～🌸"
+                                    ),
+                                    color=0x57F287
+                                )
+                                await ctx.send(embed=embed)
+                            else:
+                                media_info = f"（已同時提取 **{res.get('media_count', 0)}** 個真人原音/圖檔）" if res.get("media_count") else ""
+                                await ctx.send(
+                                    f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{res['imported_count']}** 張單字卡！{media_info}\n"
+                                    f"📚 牌組名稱：`{res['deck_name']}`\n"
+                                    f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                                )
                         else:
                             await ctx.send(f"❌ 本機檔案匯入失敗：{res.get('error', '未知錯誤')}")
                     except Exception as e:
@@ -2117,7 +2131,7 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                         subdeck_sample = "、".join(s["title"].replace("🌸 JLPT ", "").replace("單字", "") for s in subdecks[:6])
                         if len(subdecks) > 6:
                             subdeck_sample += f" 等 {len(subdecks)} 個等級"
-                        local_lines.append(f"• `{p.name}`\n  └ 內含等級子牌組：{subdeck_sample}\n  └ 範例：`!card import {p.name} N3高頻` 或 `!card import N5`")
+                        local_lines.append(f"• `{p.name}`\n  └ 內含等級子牌組：{subdeck_sample}\n  └ 一鍵全自動分類：`!card import {p.name} all` 或 `!card import all`\n  └ 單一等級匯入：`!card import {p.name} N3高頻` 或 `!card import N5`")
                     else:
                         local_lines.append(f"• `{p.name}` ➔ 直接輸入 `!card import {p.name}` 即可匯入！")
                 else:
@@ -2599,7 +2613,7 @@ async def help_command(ctx: commands.Context):
             value=(
                 "• `!card`：開啟互動式翻面單字卡（支援真人原音/朗讀、圖卡顯示、AI 家教解說、一鍵換牌組）\n"
                 "• `!card add <單字>`：新增單字（AI 自動補完讀音與例句）\n"
-                "• `!card import [檔名/子牌組]`：讀取 `data/imports/`（支援指定如 `N3高頻`）或上傳匯入\n"
+                "• `!card import [檔名/等級/all]`：讀取 `data/imports/`（支援一鍵分類 `all` 或指定 `N3高頻`）\n"
                 "• `!card decks` (或 `!decks`)：查看所有牌組與卡片數量\n"
                 "• `!card deck <牌組名>`：切換個人預設收集牌組\n"
                 "• `!card generate <主題> [數量]`：由 AI 打造專屬主題單字庫\n"

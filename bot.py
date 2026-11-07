@@ -2034,11 +2034,17 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                 user_name=ctx.author.display_name
             )
             if res.get("success"):
-                await ctx.send(
-                    f"🎉 成功直接從文字批次匯入 **{res['imported_count']}** 張單字卡！\n"
-                    f"📚 牌組名稱：`{res['deck_name']}`\n"
-                    f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
-                )
+                if res.get("imported_count", 0) == 0:
+                    await ctx.send(
+                        f"ℹ️ 本次未新增任何單字卡，牌組 **`{res['deck_name']}`** 內的單字卡均已存在（自動去重保護）！\n"
+                        f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                    )
+                else:
+                    await ctx.send(
+                        f"🎉 成功直接從文字批次匯入 **{res['imported_count']}** 張單字卡！\n"
+                        f"📚 牌組名稱：`{res['deck_name']}`\n"
+                        f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                    )
             else:
                 await ctx.send(f"❌ 文字匯入失敗：{res.get('error', '未解析出有效單字行')}")
             return
@@ -2094,25 +2100,43 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
 
                         if res.get("success"):
                             if res.get("is_batch_all"):
-                                deck_lines = "\n".join(f"• **{d['name']}**：`{d['card_count']}` 張" for d in res["decks_summary"])
+                                new_added = res.get("new_cards", res.get("total_cards", 0))
+                                deck_lines = []
+                                for d in res["decks_summary"]:
+                                    new_cnt = d.get("new_count", d.get("card_count", 0))
+                                    if new_cnt > 0:
+                                        deck_lines.append(f"• **{d['name']}**：現有 `{d['card_count']}` 張（本次新增 +`{new_cnt}`）")
+                                    else:
+                                        deck_lines.append(f"• **{d['name']}**：現有 `{d['card_count']}` 張（已存在，無重複新增）")
+                                deck_lines_str = "\n".join(deck_lines)
+
+                                title_str = "🎉 Anki 全牌組一鍵全自動分類匯入成功！" if new_added > 0 else "ℹ️ Anki 全牌組掃描與去重檢查完畢！"
+                                desc_str = (
+                                    f"已掃描 `{local_path.name}` 並維護 **{res['total_decks']}** 個等級牌組（本次新增 **{new_added}** 張單字卡）！\n\n"
+                                    f"**各等級牌組清單：**\n{deck_lines_str}\n\n"
+                                    f"👉 隨時輸入 `!card <等級名稱>`（例如 `!card N5` 或 `!card N3高頻`）即可開始複習！\n"
+                                    f"👉 或輸入 `!decks` 查看所有牌組清單～🌸"
+                                )
                                 embed = discord.Embed(
-                                    title="🎉 Anki 全牌組一鍵全自動分類匯入成功！",
-                                    description=(
-                                        f"已成功自 `{local_path.name}` 自動拆分建置 **{res['total_decks']}** 個等級牌組（共 **{res['total_cards']}** 張單字卡）！\n\n"
-                                        f"**各等級牌組清單：**\n{deck_lines}\n\n"
-                                        f"👉 隨時輸入 `!card <等級名稱>`（例如 `!card N5` 或 `!card N3高頻`）即可開始複習！\n"
-                                        f"👉 或輸入 `!decks` 查看所有牌組清單～🌸"
-                                    ),
-                                    color=0x57F287
+                                    title=title_str,
+                                    description=desc_str,
+                                    color=0x57F287 if new_added > 0 else 0x3498DB
                                 )
                                 await ctx.send(embed=embed)
                             else:
                                 media_info = f"（已同時提取 **{res.get('media_count', 0)}** 個真人原音/圖檔）" if res.get("media_count") else ""
-                                await ctx.send(
-                                    f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{res['imported_count']}** 張單字卡！{media_info}\n"
-                                    f"📚 牌組名稱：`{res['deck_name']}`\n"
-                                    f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
-                                )
+                                new_cnt = res.get("imported_count", 0)
+                                if new_cnt == 0:
+                                    await ctx.send(
+                                        f"ℹ️ 本次未新增任何單字卡，牌組 **`{res['deck_name']}`** 內的單字卡均已存在（自動去重保護）！\n"
+                                        f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                                    )
+                                else:
+                                    await ctx.send(
+                                        f"🎉 成功自本機 `data/imports/{local_path.name}` 匯入 **{new_cnt}** 張單字卡！{media_info}\n"
+                                        f"📚 牌組名稱：`{res['deck_name']}`\n"
+                                        f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                                    )
                         else:
                             await ctx.send(f"❌ 本機檔案匯入失敗：{res.get('error', '未知錯誤')}")
                     except Exception as e:
@@ -2179,11 +2203,18 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                         user_name=ctx.author.display_name
                     )
                     if res.get("success"):
-                        await ctx.send(
-                            f"🎉 成功自 Anki 牌組檔匯入 **{res['imported_count']}** 張單字卡！\n"
-                            f"📚 牌組名稱：`{res['deck_name']}`\n"
-                            f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
-                        )
+                        new_cnt = res.get("imported_count", 0)
+                        if new_cnt == 0:
+                            await ctx.send(
+                                f"ℹ️ 本次未新增任何單字卡，牌組 **`{res['deck_name']}`** 內的單字卡均已存在（自動去重保護）！\n"
+                                f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                            )
+                        else:
+                            await ctx.send(
+                                f"🎉 成功自 Anki 牌組檔匯入 **{new_cnt}** 張單字卡！\n"
+                                f"📚 牌組名稱：`{res['deck_name']}`\n"
+                                f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                            )
                     else:
                         await ctx.send(f"❌ Anki 匯入失敗：{res.get('error', '未知錯誤')}")
                 elif fname.endswith((".txt", ".tsv", ".csv")):
@@ -2199,10 +2230,18 @@ async def card_command(ctx: commands.Context, subcmd: Optional[str] = None, *, a
                         user_name=ctx.author.display_name
                     )
                     if res.get("success"):
-                        await ctx.send(
-                            f"🎉 成功批次匯入 **{res['imported_count']}** 張單字卡！\n"
-                            f"📚 牌組名稱：`{res['deck_name']}`"
-                        )
+                        new_cnt = res.get("imported_count", 0)
+                        if new_cnt == 0:
+                            await ctx.send(
+                                f"ℹ️ 本次未新增任何單字卡，牌組 **`{res['deck_name']}`** 內的單字卡均已存在（自動去重保護）！\n"
+                                f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                            )
+                        else:
+                            await ctx.send(
+                                f"🎉 成功批次匯入 **{new_cnt}** 張單字卡！\n"
+                                f"📚 牌組名稱：`{res['deck_name']}`\n"
+                                f"隨時可以輸入 `!card {res['deck_name']}` 開始複習～🌸"
+                            )
                     else:
                         await ctx.send(f"❌ 匯入失敗：{res.get('error', '未知錯誤')}")
                 else:

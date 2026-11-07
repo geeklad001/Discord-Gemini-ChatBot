@@ -728,6 +728,12 @@ def import_anki_apkg(
                 deck = get_or_create_deck(resolved_deck_name, description=f"由 {user_name} 匯入之 Anki 牌組", created_by=user_name)
                 deck_id = deck["id"]
 
+                # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
+                with get_conn() as local_conn:
+                    existing_fronts = {row[0] for row in local_conn.execute(
+                        "SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,)
+                    ).fetchall()}
+
                 imported_cards = []
                 media_count = 0
 
@@ -813,6 +819,9 @@ def import_anki_apkg(
                                 image_filename = safe_img
 
                     if front and (back or reading):
+                        if front in existing_fronts:
+                            continue
+                        existing_fronts.add(front)
                         card = add_card(
                             deck_id,
                             front=front,
@@ -981,6 +990,10 @@ def import_all_anki_subdecks(
             local_cur.execute("SELECT id FROM flashcard_decks WHERE name = ?", (clean_title,))
             deck_id = local_cur.fetchone()[0]
 
+            # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
+            local_cur.execute("SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
+            existing_fronts = {row[0] for row in local_cur.fetchall()}
+
             cards_batch = []
             for nid in nids:
                 n = notes_dict.get(nid)
@@ -1016,6 +1029,12 @@ def import_all_anki_subdecks(
                     notes = ""
                     audio_raw = n["flds"]
 
+                if not front:
+                    continue
+                if front in existing_fronts:
+                    continue
+                existing_fronts.add(front)
+
                 audio_fn = ""
                 m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
                 if m_sound:
@@ -1028,16 +1047,21 @@ def import_all_anki_subdecks(
                     "", "both", audio_fn, pos, pitch, now_str
                 ))
 
-            local_cur.executemany("""
-                INSERT INTO flashcard_cards
-                (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, cards_batch)
+            if cards_batch:
+                local_cur.executemany("""
+                    INSERT INTO flashcard_cards
+                    (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, cards_batch)
+
+            local_cur.execute("SELECT count(*) FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
+            current_total = local_cur.fetchone()[0]
 
             decks_summary.append({
                 "id": deck_id,
                 "name": clean_title,
-                "card_count": len(cards_batch)
+                "new_count": len(cards_batch),
+                "card_count": current_total
             })
             total_cards += len(cards_batch)
 
@@ -1048,6 +1072,7 @@ def import_all_anki_subdecks(
         "is_batch_all": True,
         "total_decks": len(decks_summary),
         "total_cards": total_cards,
+        "new_cards": total_cards,
         "decks_summary": decks_summary,
         "media_count": media_count
     }
@@ -1070,7 +1095,14 @@ def import_text_cards(text_content: str, target_deck_name: str, user_name: str =
     deck = get_or_create_deck(target_deck_name, description=f"由 {user_name} 匯入之自訂牌組", created_by=user_name)
     deck_id = deck["id"]
 
+    # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
+    with get_conn() as local_conn:
+        existing_fronts = {row[0] for row in local_conn.execute(
+            "SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,)
+        ).fetchall()}
+
     lines = text_content.strip().splitlines()
+    valid_lines = 0
     count = 0
     for line in lines:
         line = line.strip()
@@ -1096,6 +1128,14 @@ def import_text_cards(text_content: str, target_deck_name: str, user_name: str =
             continue
 
         front = parts[0]
+        if not front:
+            continue
+        valid_lines += 1
+
+        if front in existing_fronts:
+            continue
+        existing_fronts.add(front)
+
         reading = ""
         back = ""
         ex_jp = ""
@@ -1115,10 +1155,11 @@ def import_text_cards(text_content: str, target_deck_name: str, user_name: str =
         count += 1
 
     return {
-        "success": count > 0,
+        "success": valid_lines > 0,
         "deck_name": target_deck_name,
         "deck_id": deck_id,
         "imported_count": count,
         "imported_cards": count,
-        "error": None if count > 0 else "未解析出任何有效的單字行。"
+        "already_existed_count": valid_lines - count,
+        "error": None if valid_lines > 0 else "未解析出任何有效的單字行。"
     }

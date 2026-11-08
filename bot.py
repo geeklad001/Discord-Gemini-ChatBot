@@ -50,6 +50,7 @@ import assistant_db
 import assistant_tools
 import rpg_engine
 import flashcard_engine
+import video_engine
 
 bot_instance_name = os.getenv("BOT_INSTANCE_NAME", "DiscordGeminiBot")
 logging.basicConfig(
@@ -355,6 +356,9 @@ async def fetch_url_preview(text: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     async with httpx.AsyncClient(follow_redirects=True, timeout=5.0, headers=headers) as client:
         for url in urls[:2]:
+            # 若為 YouTube 影片或 Shorts 網址，略過純文字抓取（由專屬 video_engine 原生處理多模態分析）
+            if video_engine.extract_youtube_video_id(url):
+                continue
             if not is_safe_public_url(url):
                 logger.warning(f"🛡️ 已攔截不安全或內部網路網址預覽請求: {url}")
                 continue
@@ -436,6 +440,100 @@ async def fetch_custom_emojis_and_stickers(message: discord.Message) -> list[tup
     return items
 
 
+async def build_current_message_media_parts(msg: discord.Message, context_label: str = "Chat") -> list[types.Part]:
+    """
+    為當前觸發的 Discord 訊息建立多模態 Parts：
+    1. 偵測並分析 YouTube 影片 / Shorts 連結（具備時長秒數過濾與直播過濾）
+    2. 處理 Discord 短影片附件 (.mp4, .mov, .webm, .mkv)（具備容量上限保護）
+    3. 處理 Discord 圖片附件 (Vision 看圖)
+    4. 處理 Discord 自定義表情符號與貼圖
+    """
+    media_parts: list[types.Part] = []
+
+    # 1. 偵測並分析 YouTube 影片 / Shorts 連結
+    if "http" in msg.clean_content:
+        yt_items = video_engine.find_all_youtube_urls(msg.clean_content)
+        for item in yt_items[:1]:  # 每次最多處理 1 支影片，避免多重影片 Token 爆量
+            info = await video_engine.fetch_youtube_video_info(item["canonical_url"])
+            max_dur = video_engine.get_max_youtube_duration_seconds()
+
+            if not info["success"]:
+                media_parts.append(types.Part.from_text(
+                    text=f"\n[系統提示：使用者分享了 YouTube 影片（{item['canonical_url']}），但無法取得其公開資訊（原因：{info.get('error', '未知原因')}）。請禮貌告知使用者確認影片是否設為公開。]"
+                ))
+            elif info["is_live"] and (info["duration_sec"] == 0 or info["duration_sec"] is None):
+                media_parts.append(types.Part.from_text(
+                    text=f"\n[系統提示：使用者分享了 YouTube 即時直播《{info['title']}》（{item['canonical_url']}）。目前系統僅支援已結束的短影片或一般錄播影片分析，不支援即時串流直播。請親切告知使用者。]"
+                ))
+            elif info["duration_sec"] is not None and info["duration_sec"] > max_dur:
+                dur_str = video_engine.format_duration(info["duration_sec"])
+                max_str = video_engine.format_duration(max_dur)
+                media_parts.append(types.Part.from_text(
+                    text=(
+                        f"\n[系統提示：使用者分享了 YouTube 影片《{info['title']}》（{item['canonical_url']}），"
+                        f"但該影片時長為 **{dur_str}**，已超過短影片分析上限（目前上限為 **{max_str}**）。"
+                        f"為了避免大量 Token 消耗與長時間等待，系統未載入該影片畫面。"
+                        f"請親切告知使用者影片時長超過上限，建議提供 {max_str} 以內的精華短片、Shorts 或直接以文字討論。]"
+                    )
+                ))
+            else:
+                dur_str = video_engine.format_duration(info["duration_sec"]) if info["duration_sec"] is not None else "短片"
+                media_parts.append(types.Part.from_uri(file_uri=info["canonical_url"], mime_type="video/mp4"))
+                media_parts.append(types.Part.from_text(
+                    text=f"\n(系統提示：已成功載入 YouTube 影片《{info['title']}》（時長 {dur_str}）。請直接觀看影片畫面、字幕與聲音內容並回應使用者)"
+                ))
+                logger.info(f"🎬 ({context_label}) 成功載入 YouTube 影片: {info['title']} ({dur_str})")
+
+    # 2. 處理 Discord 訊息附件（圖片 Vision 與短影片 Video）
+    if msg.attachments:
+        for att in msg.attachments:
+            # (A) 圖片附件 (Vision 多模態看圖)
+            if att.content_type and att.content_type.startswith("image/"):
+                if att.size and att.size > MAX_IMAGE_ATTACHMENT_BYTES:
+                    logger.warning(f"⚠️ 圖片附件 {att.filename} 超過大小上限 ({att.size} bytes)，已略過。")
+                    continue
+                try:
+                    img_data = await att.read()
+                    media_parts.append(types.Part.from_bytes(data=img_data, mime_type=att.content_type))
+                    logger.info(f"🖼️ ({context_label}) 成功加載圖片: {att.filename} ({len(img_data)} bytes)")
+                except Exception as img_err:
+                    logger.error(f"❌ 加載圖片失敗: {img_err}")
+
+            # (B) 短影片附件 (.mp4, .mov, .webm, .mkv)
+            elif video_engine.is_video_attachment(att):
+                max_v_bytes = video_engine.get_max_video_attachment_bytes()
+                if att.size and att.size > max_v_bytes:
+                    max_mb = max_v_bytes // (1024 * 1024)
+                    cur_mb = round(att.size / (1024 * 1024), 1)
+                    logger.warning(f"⚠️ 影片附件 {att.filename} 超過大小上限 ({cur_mb}MB > {max_mb}MB)，已略過。")
+                    media_parts.append(types.Part.from_text(
+                        text=(
+                            f"\n[系統提示：使用者上傳了影片附件【{att.filename}】(約 {cur_mb} MB)，"
+                            f"超過了本機短影片處理上限（{max_mb} MB）。"
+                            f"請禮貌提醒使用者影片過大，建議壓縮或上傳小於 {max_mb} MB 的精華短片。]"
+                        )
+                    ))
+                    continue
+                try:
+                    v_mime = video_engine.get_video_mime_type(att)
+                    v_data = await att.read()
+                    media_parts.append(types.Part.from_bytes(data=v_data, mime_type=v_mime))
+                    media_parts.append(types.Part.from_text(
+                        text=f"\n(系統提示：使用者上傳了短影片檔案【{att.filename}】，請直接觀看畫面、聽取音訊並給出適切回應)"
+                    ))
+                    logger.info(f"🎬 ({context_label}) 成功加載短影片附件: {att.filename} ({len(v_data)} bytes, mime={v_mime})")
+                except Exception as vid_err:
+                    logger.error(f"❌ 加載影片附件失敗: {vid_err}")
+
+    # 3. 處理 Discord 自定義表情符號與貼圖圖片
+    visual_items = await fetch_custom_emojis_and_stickers(msg)
+    for label, img_data in visual_items:
+        media_parts.append(types.Part.from_text(text=f"({label} 的畫面內容如下)："))
+        media_parts.append(types.Part.from_bytes(data=img_data, mime_type="image/png"))
+
+    return media_parts
+
+
 async def build_general_contents(channel: discord.abc.Messageable, current_message: discord.Message) -> list[types.Content]:
     """從一般日常群聊頻道抓取歷史訊息，格式化為三人日常對話的 Content 物件 (支援看圖與網址解析)。"""
     reset_after = channel_reset_timestamps.get(getattr(channel, "id", None))
@@ -463,10 +561,14 @@ async def build_general_contents(channel: discord.abc.Messageable, current_messa
         else:
             role = "user"
             author_name = msg.author.display_name
-            raw_text = msg.clean_content.strip() or ("(傳送了一張圖片，請直接觀看並回應)" if msg.attachments else "")
+            if not msg.clean_content.strip() and msg.attachments:
+                has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
+                raw_text = "(傳送了一段短影片，請直接觀看並回應)" if has_vid else "(傳送了一張圖片，請直接觀看並回應)"
+            else:
+                raw_text = msg.clean_content.strip()
             text = f"[{author_name}]: {raw_text}"
 
-            # 若當前訊息包含網址，抓取預覽附在文字後
+            # 若當前訊息包含網址，抓取預覽附在文字後 (YouTube 網址在 fetch_url_preview 內自動跳過)
             if msg.id == current_message.id and "http" in msg.clean_content:
                 url_summary = await fetch_url_preview(msg.clean_content)
                 if url_summary:
@@ -474,26 +576,10 @@ async def build_general_contents(channel: discord.abc.Messageable, current_messa
 
             parts.append(types.Part.from_text(text=text))
 
-            # 若當前訊息包含圖片附件，載入圖片二進制資料 (Vision 多模態看圖)
-            if msg.id == current_message.id and msg.attachments:
-                for att in msg.attachments:
-                    if att.content_type and att.content_type.startswith("image/"):
-                        if att.size and att.size > MAX_IMAGE_ATTACHMENT_BYTES:
-                            logger.warning(f"⚠️ 圖片附件 {att.filename} 超過大小上限 ({att.size} bytes)，已略過。")
-                            continue
-                        try:
-                            img_data = await att.read()
-                            parts.append(types.Part.from_bytes(data=img_data, mime_type=att.content_type))
-                            logger.info(f"🖼️ (日常群聊) 成功加載圖片: {att.filename} ({len(img_data)} bytes)")
-                        except Exception as img_err:
-                            logger.error(f"❌ 加載圖片失敗: {img_err}")
-
-            # 若當前訊息包含自定義表情符號或貼圖，載入圖片供 Gemini Vision 親眼觀看
+            # 當前訊息多模態掛載 (YouTube 影片分析、短影片附件、圖片 Vision、表情與貼圖)
             if msg.id == current_message.id:
-                visual_items = await fetch_custom_emojis_and_stickers(msg)
-                for label, img_data in visual_items:
-                    parts.append(types.Part.from_text(text=f"({label} 的畫面內容如下)："))
-                    parts.append(types.Part.from_bytes(data=img_data, mime_type="image/png"))
+                media_parts = await build_current_message_media_parts(msg, context_label="日常群聊")
+                parts.extend(media_parts)
 
         if parts:
             turns.append(types.Content(role=role, parts=parts))
@@ -543,10 +629,14 @@ async def build_gemini_contents(channel: discord.TextChannel | discord.Thread, c
         else:
             role = "user"
             author_name = msg.author.display_name
-            raw_text = msg.clean_content.strip() or ("(傳送了一張圖片，請直接觀看並回應)" if msg.attachments else "")
+            if not msg.clean_content.strip() and msg.attachments:
+                has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
+                raw_text = "(傳送了一段短影片，請直接觀看並回應)" if has_vid else "(傳送了一張圖片，請直接觀看並回應)"
+            else:
+                raw_text = msg.clean_content.strip()
             text = f"[{author_name}]: {raw_text}"
 
-            # 若當前訊息包含網址，抓取預覽
+            # 若當前訊息包含網址，抓取預覽 (YouTube 網址在 fetch_url_preview 內自動跳過)
             if msg.id == current_message.id and "http" in msg.clean_content:
                 url_summary = await fetch_url_preview(msg.clean_content)
                 if url_summary:
@@ -554,26 +644,10 @@ async def build_gemini_contents(channel: discord.TextChannel | discord.Thread, c
 
             parts.append(types.Part.from_text(text=text))
 
-            # 若當前訊息包含圖片附件，載入圖片二進制資料 (日語看圖學習、菜單翻譯、照片解說)
-            if msg.id == current_message.id and msg.attachments:
-                for att in msg.attachments:
-                    if att.content_type and att.content_type.startswith("image/"):
-                        if att.size and att.size > MAX_IMAGE_ATTACHMENT_BYTES:
-                            logger.warning(f"⚠️ 圖片附件 {att.filename} 超過大小上限 ({att.size} bytes)，已略過。")
-                            continue
-                        try:
-                            img_data = await att.read()
-                            parts.append(types.Part.from_bytes(data=img_data, mime_type=att.content_type))
-                            logger.info(f"🖼️ (日語共學) 成功加載圖片: {att.filename} ({len(img_data)} bytes)")
-                        except Exception as img_err:
-                            logger.error(f"❌ 加載圖片失敗: {img_err}")
-
-            # 若當前訊息包含自定義表情符號或貼圖，載入圖片供 Gemini Vision 親眼觀看
+            # 當前訊息多模態掛載 (YouTube 影片分析、短影片附件、圖片 Vision、表情與貼圖)
             if msg.id == current_message.id:
-                visual_items = await fetch_custom_emojis_and_stickers(msg)
-                for label, img_data in visual_items:
-                    parts.append(types.Part.from_text(text=f"({label} 的畫面內容如下)："))
-                    parts.append(types.Part.from_bytes(data=img_data, mime_type="image/png"))
+                media_parts = await build_current_message_media_parts(msg, context_label="日語共學")
+                parts.extend(media_parts)
 
         if parts:
             turns.append(types.Content(role=role, parts=parts))
@@ -2715,7 +2789,7 @@ async def handle_general_chat(message: discord.Message):
                 safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
 
-            models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
+            models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
             response = None
             last_error = None
             used_model = None
@@ -2731,7 +2805,7 @@ async def handle_general_chat(message: discord.Message):
                                 contents=contents,
                                 config=config,
                             ),
-                            timeout=30.0,
+                            timeout=45.0,
                         )
                         if response and response.text:
                             used_model = m
@@ -2767,7 +2841,11 @@ async def handle_japanese_learning_chat(message: discord.Message):
     # 雙頻道鏡像同步：在對向頻道以「小卡 (Embed)」顯示用戶發言 (HornBot 絕不朗讀 Embed)
     if tts_channel and main_channel:
         author_avatar = message.author.display_avatar.url if message.author.display_avatar else None
-        embed_desc = message.clean_content.strip() or "🖼️ [分享了一張圖片]"
+        if not message.clean_content.strip() and message.attachments:
+            has_vid = any(video_engine.is_video_attachment(a) for a in message.attachments)
+            embed_desc = "🎬 [分享了一段短影片]" if has_vid else "🖼️ [分享了一張圖片]"
+        else:
+            embed_desc = message.clean_content.strip() or "🖼️ [分享了一張圖片]"
 
         if message.channel.id == TARGET_CHANNEL_ID:
             mirror_embed = discord.Embed(
@@ -2809,7 +2887,7 @@ async def handle_japanese_learning_chat(message: discord.Message):
                 safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
 
-            models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
+            models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
             response = None
             last_error = None
             used_model = None
@@ -2825,7 +2903,7 @@ async def handle_japanese_learning_chat(message: discord.Message):
                                 contents=contents,
                                 config=config,
                             ),
-                            timeout=30.0,
+                            timeout=45.0,
                         )
                         if response and response.text:
                             used_model = m

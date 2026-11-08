@@ -183,7 +183,7 @@ def get_current_general_prompt(message: Optional[discord.Message] = None) -> str
         except Exception:
             pass
     if not base_prompt:
-        base_prompt = "你是 Discord 社群裡的親切助手與好友，熱情招呼大家並提供 TRPG 跑團娛樂服務。"
+        base_prompt = "你是 Discord 社群裡的常駐打工機器人，說話平實隨性帶點微吐槽，不刻意討好，平時正常群聊，隨選提供 TRPG 跑團服務。"
 
     now_str = datetime.now(assistant_db.TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     time_info = f"\n\n【當前時間資訊】\n台北時間 (UTC+8)：{now_str}。若使用者要求提醒，請據此換算為未來的 ISO 8601 時間字串。"

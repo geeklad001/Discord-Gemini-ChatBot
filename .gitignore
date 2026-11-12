@@ -9,8 +9,11 @@ env/
 !.env.example
 !.env.community.example
 
-# Database & Persistent Data
-data/
+# Database & Persistent Data (keep curated game_wiki files tracked)
+data/*
+!data/game_wiki/
+!data/game_wiki/*.md
+!data/game_wiki/*.csv
 *.db
 *.sqlite
 *.sqlite3

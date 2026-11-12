@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import re
 import json
@@ -13,6 +14,7 @@ from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
 import httpx
+from PIL import Image
 
 import discord
 from discord.ext import commands, tasks
@@ -51,6 +53,8 @@ import assistant_tools
 import rpg_engine
 import flashcard_engine
 import video_engine
+import game_wiki_engine
+import safety_guardrail
 
 bot_instance_name = os.getenv("BOT_INSTANCE_NAME", "DiscordGeminiBot")
 logging.basicConfig(
@@ -68,11 +72,12 @@ ENABLE_FLASHCARD_MODE = os.getenv("ENABLE_FLASHCARD_MODE", "true").strip().lower
 if not ENABLE_FLASHCARD_MODE:
     logger.info("🎴 單字卡與搶答測驗功能已關閉。")
 
-# 初始化生活助理資料庫、RPG 引擎與單字卡 (SQLite，自動依 DB_NAME 環境變數隔離資料庫)
+# 初始化生活助理資料庫、RPG 引擎、單字卡與《殭屍學園》知識庫
 assistant_db.init_db()
 rpg_engine.init_rpg_tables()
 if ENABLE_FLASHCARD_MODE:
     flashcard_engine.init_flashcard_tables()
+game_wiki_engine.load_wiki_entries()
 
 # 依開關動態配置 Gemini 工具清單
 CURRENT_TOOLS = assistant_tools.get_assistant_tools(enable_flashcards=ENABLE_FLASHCARD_MODE)
@@ -111,34 +116,6 @@ if GENERAL_CHANNEL_ID_RAW and GENERAL_CHANNEL_ID_RAW.strip():
     except ValueError:
         logger.warning("⚠️ GENERAL_CHANNEL_ID 格式不正確。")
 
-def get_current_system_prompt(message: Optional[discord.Message] = None) -> str:
-    """動態讀取日語教學提示詞 (預設 system_prompt.txt) 並注入時間與長期記憶"""
-    p_name = Path(os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt").strip()).name
-    prompt_path = Path(__file__).parent / p_name
-    base_prompt = ""
-    if prompt_path.exists():
-        try:
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                base_prompt = f.read().strip()
-        except Exception:
-            pass
-    if not base_prompt:
-        base_prompt = "你是一位住在日本、性格隨和平實的日本同齡朋友兼日語生活學伴。"
-
-    now_str = datetime.now(assistant_db.TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
-    time_info = f"\n\n【當前時間資訊】\n台北時間 (UTC+8)：{now_str}。若使用者要求提醒，請據此換算為未來的 ISO 8601 時間字串。"
-    mem_info = assistant_db.format_memories_for_prompt()
-    if mem_info:
-        mem_info = f"\n\n{mem_info}"
-
-    extra_parts = [base_prompt, time_info, mem_info]
-    if message:
-        matched_lore = rpg_engine.match_lorebook_for_text(message.clean_content)
-        if matched_lore:
-            extra_parts.append("\n\n【當前場景世界觀設定 (Lorebook)】\n" + "\n".join(f"- {l}" for l in matched_lore))
-    return "".join(extra_parts)
-
-
 def is_rpg_context(channel: discord.abc.Messageable, message_content: str = "") -> bool:
     """
     精準判斷當前發言是否處於 TRPG 跑團冒險情境中：
@@ -171,9 +148,16 @@ def is_rpg_context(channel: discord.abc.Messageable, message_content: str = "") 
     return False
 
 
-def get_current_general_prompt(message: Optional[discord.Message] = None) -> str:
-    """動態讀取日常群聊提示詞 (預設 general_prompt.txt) 並注入時間、長期記憶、權威 RPG 狀態 (限冒險情境) 與世界觀 Lorebook"""
-    p_name = Path(os.getenv("GENERAL_PROMPT_FILE", "general_prompt.txt").strip()).name
+def _build_dynamic_system_instruction(
+    prompt_filename: str,
+    default_fallback: str,
+    message: Optional[discord.Message] = None,
+    ocr_text: str = "",
+    recent_context_text: str = "",
+    include_rpg_state: bool = True,
+) -> str:
+    """統一封裝動態 System Instruction 組裝邏輯（時間、長期記憶、Lorebook、遊戲知識庫 RAG、以及按需注入的 RPG 狀態卡）"""
+    p_name = Path(prompt_filename.strip()).name
     prompt_path = Path(__file__).parent / p_name
     base_prompt = ""
     if prompt_path.exists():
@@ -183,7 +167,7 @@ def get_current_general_prompt(message: Optional[discord.Message] = None) -> str
         except Exception:
             pass
     if not base_prompt:
-        base_prompt = "你是 Discord 社群裡的常駐打工機器人，說話平實隨性帶點微吐槽，不刻意討好，平時正常群聊，隨選提供 TRPG 跑團服務。"
+        base_prompt = default_fallback
 
     now_str = datetime.now(assistant_db.TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     time_info = f"\n\n【當前時間資訊】\n台北時間 (UTC+8)：{now_str}。若使用者要求提醒，請據此換算為未來的 ISO 8601 時間字串。"
@@ -191,22 +175,62 @@ def get_current_general_prompt(message: Optional[discord.Message] = None) -> str
     if mem_info:
         mem_info = f"\n\n{mem_info}"
 
-    extra_parts = [base_prompt, time_info, mem_info]
+    guardrail_info = safety_guardrail.get_safety_guardrail_prompt(enable_japanese_mode=ENABLE_JAPANESE_MODE)
+
+    extra_parts = [base_prompt, guardrail_info, time_info, mem_info]
     if message:
-        # 動態掃描 Lorebook 關鍵字注入
         matched_lore = rpg_engine.match_lorebook_for_text(message.clean_content)
         if matched_lore:
             extra_parts.append("\n\n【當前場景世界觀設定 (Lorebook)】\n" + "\n".join(f"- {l}" for l in matched_lore))
 
-        # 僅在明確處於 TRPG 冒險情境或專屬討論串時，才注入本機權威 RPG 狀態卡 (背包、血量、任務)
-        # 避免在一般社群群聊、迎新招待時無端預設玩家在酒館裡拿著隨身小刀
-        if is_rpg_context(message.channel, message.clean_content):
+        wiki_rag_block = game_wiki_engine.build_auto_rag_context(
+            query_text=message.clean_content,
+            ocr_extracted_text=ocr_text,
+            recent_context_text=recent_context_text,
+            is_vision=bool(ocr_text),
+        )
+        if wiki_rag_block:
+            extra_parts.append(wiki_rag_block)
+
+        if include_rpg_state and is_rpg_context(message.channel, message.clean_content):
             rpg_context = rpg_engine.format_rpg_context_for_prompt(
                 message.channel.id, message.author.id, message.author.display_name
             )
             extra_parts.append(f"\n\n{rpg_context}")
 
     return "".join(extra_parts)
+
+
+def get_current_system_prompt(
+    message: Optional[discord.Message] = None,
+    ocr_text: str = "",
+    recent_context_text: str = "",
+) -> str:
+    """動態讀取日語教學提示詞 (預設 system_prompt.txt)"""
+    return _build_dynamic_system_instruction(
+        prompt_filename=os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt"),
+        default_fallback="你是一位住在日本、性格隨和平實的日本同齡朋友兼日語生活學伴。",
+        message=message,
+        ocr_text=ocr_text,
+        recent_context_text=recent_context_text,
+        include_rpg_state=True,
+    )
+
+
+def get_current_general_prompt(
+    message: Optional[discord.Message] = None,
+    ocr_text: str = "",
+    recent_context_text: str = "",
+) -> str:
+    """動態讀取日常群聊提示詞 (預設 general_prompt.txt)"""
+    return _build_dynamic_system_instruction(
+        prompt_filename=os.getenv("GENERAL_PROMPT_FILE", "general_prompt.txt"),
+        default_fallback="你是 Discord 社群裡的常駐打工機器人，說話平實隨性帶點微吐槽，不刻意討好，平時正常群聊，隨選提供 TRPG 跑團服務。",
+        message=message,
+        ocr_text=ocr_text,
+        recent_context_text=recent_context_text,
+        include_rpg_state=True,
+    )
 
 # -------------------------------------------------------------
 # 2. 初始化 Gemini Client (google-genai SDK 2026 最新規格)
@@ -345,6 +369,94 @@ def is_safe_public_url(url: str) -> bool:
         return False
 
 
+def _is_gif_or_media_share_url(url: str) -> bool:
+    """判斷網址是否為 Tenor / Giphy / Discord CDN 動圖或圖片連結（交由視覺多模態處理，跳過純文字網頁摘要）"""
+    try:
+        parsed = urllib.parse.urlparse(url.lower())
+        host = parsed.hostname or ""
+        path = parsed.path or ""
+        if any(h in host for h in ("tenor.com", "giphy.com", "media.discordapp.net", "cdn.discordapp.com", "imgur.com")):
+            return True
+        if path.endswith((".gif", ".webp", ".png", ".jpg", ".jpeg", ".apng")):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def convert_image_or_gif_for_gemini(
+    raw_bytes: bytes,
+    mime_type: str = "",
+    filename: str = "",
+) -> tuple[Optional[bytes], str, bool]:
+    """
+    將圖片、GIF 動圖或 Discord 貼圖（PNG / APNG / GIF）統一轉換為 Gemini Vision 100% 支援的格式：
+    - 若為動態 GIF / APNG (n_frames > 1)：自動抽取「開頭、中段、結尾」最多 3 個關鍵影格並橫向拼接為單張 PNG 連環圖，
+      解決 Gemini API 對 image/gif 的相容性問題，同時讓模型看懂動圖的連續動作與梗！
+    - 若為 Lottie JSON 向量貼圖（非點陣圖）：回傳 (None, "", False)，避免傳送 JSON 造成 API 400 錯誤。
+    回傳：(converted_bytes, target_mime_type, is_animated)
+    """
+    if not raw_bytes:
+        return None, "", False
+
+    stripped = raw_bytes[:32].lstrip()
+    if stripped.startswith((b"{", b"[", b"<")):
+        return None, "", False
+
+    mime_l = (mime_type or "").lower().strip()
+    fname_l = (filename or "").lower().strip()
+
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            n_frames = getattr(img, "n_frames", 1)
+            is_anim = bool(getattr(img, "is_animated", False) and n_frames > 1)
+            fmt = (img.format or "").upper()
+
+            if is_anim:
+                frame_indices = sorted(list(dict.fromkeys([0, n_frames // 2, n_frames - 1])))
+                frames_rgba: list[Image.Image] = []
+                max_h = 420
+                for idx in frame_indices:
+                    try:
+                        img.seek(idx)
+                        fr = img.convert("RGBA")
+                        if fr.height > max_h and fr.height > 0:
+                            ratio = max_h / float(fr.height)
+                            new_w = max(1, int(fr.width * ratio))
+                            fr = fr.resize((new_w, max_h), Image.Resampling.LANCZOS)
+                        frames_rgba.append(fr)
+                    except Exception:
+                        continue
+
+                if frames_rgba:
+                    gap = 6
+                    total_w = sum(f.width for f in frames_rgba) + gap * (len(frames_rgba) - 1)
+                    max_frame_h = max(f.height for f in frames_rgba)
+                    canvas = Image.new("RGBA", (total_w, max_frame_h), (30, 31, 34, 255))
+                    x_offset = 0
+                    for f in frames_rgba:
+                        y_offset = (max_frame_h - f.height) // 2
+                        canvas.paste(f, (x_offset, y_offset), f)
+                        x_offset += f.width + gap
+                    out_buf = io.BytesIO()
+                    canvas.save(out_buf, format="PNG")
+                    return out_buf.getvalue(), "image/png", True
+
+            # 靜態單格圖片：若原本是 GIF / APNG 或未知格式，統一轉為 PNG
+            if fmt == "GIF" or mime_l == "image/gif" or fname_l.endswith(".gif") or mime_l not in ("image/png", "image/jpeg", "image/webp"):
+                rgba = img.convert("RGBA")
+                out_buf = io.BytesIO()
+                rgba.save(out_buf, format="PNG")
+                return out_buf.getvalue(), "image/png", False
+
+            return raw_bytes, mime_l, False
+    except Exception as e:
+        logger.debug(f"圖片/GIF 轉換略過 ({filename or mime_type}): {e}")
+        if mime_l in ("image/png", "image/jpeg", "image/webp"):
+            return raw_bytes, mime_l, False
+        return None, "", False
+
+
 async def fetch_url_preview(text: str) -> str:
     """自動偵測訊息中的網址，在通過 SSRF 檢查後非同步抓取網頁文字摘要（限制大小與類型，並加上防提示詞注入標籤）。"""
     urls = re.findall(r'https?://[^\s<>"]+', text)
@@ -356,8 +468,8 @@ async def fetch_url_preview(text: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     async with httpx.AsyncClient(follow_redirects=True, timeout=5.0, headers=headers) as client:
         for url in urls[:2]:
-            # 若為 YouTube 影片或 Shorts 網址，略過純文字抓取（由專屬 video_engine 原生處理多模態分析）
-            if video_engine.extract_youtube_video_id(url):
+            # 若為 YouTube 影片或 Tenor/Giphy 動圖網址，略過純文字抓取（交由多模態視覺處理）
+            if video_engine.extract_youtube_video_id(url) or _is_gif_or_media_share_url(url):
                 continue
             if not is_safe_public_url(url):
                 logger.warning(f"🛡️ 已攔截不安全或內部網路網址預覽請求: {url}")
@@ -401,43 +513,127 @@ async def fetch_url_preview(text: str) -> str:
     return "\n\n".join(previews)
 
 
-async def fetch_custom_emojis_and_stickers(message: discord.Message) -> list[tuple[str, bytes]]:
-    """從 Discord 訊息中抓取自定義表情符號 (<:name:id>) 與貼圖，下載其圖片資料供 Gemini Vision 觀看"""
-    items: list[tuple[str, bytes]] = []
+async def fetch_custom_emojis_stickers_and_gifs(message: discord.Message) -> tuple[list[tuple[str, bytes, str]], list[str]]:
+    """
+    從 Discord 訊息中抓取：
+    1. 自定義表情符號 (<:name:id> 或動態 <a:name:id>)
+    2. Discord 貼圖 (Stickers：支援 PNG / APNG / GIF，以及 Lottie 向量貼圖文字描述保底)
+    3. Discord 內建 GIF 選擇器 (Tenor / Giphy / Discord CDN GIF 連結或 Embed)
+    回傳：(visual_items[(label, png_bytes, mime_type)], text_only_notes[str])
+    """
+    visual_items: list[tuple[str, bytes, str]] = []
+    text_notes: list[str] = []
 
-    # 1. 抓取訊息中的自定義表情符號 (<:name:id> 或 <a:name:id>)
-    custom_emojis = re.findall(r'<(a?):(\w+):(\d+)>', message.content)
+    custom_emojis = re.findall(r'<(a?):(\w+):(\d+)>', message.content or "")
+    stickers = getattr(message, "stickers", []) or []
 
-    # 2. 抓取訊息中的 Discord 貼圖
-    stickers = getattr(message, "stickers", [])
+    # 收集訊息中可能包含的 GIF / 圖片連結 (例如使用者從 Discord 內建 Tenor GIF 面板點選發送的動圖)
+    candidate_gif_urls: list[str] = []
+    for emb in (getattr(message, "embeds", []) or []):
+        if emb.image and emb.image.url:
+            candidate_gif_urls.append(emb.image.url)
+        elif emb.thumbnail and emb.thumbnail.url:
+            candidate_gif_urls.append(emb.thumbnail.url)
+        elif emb.url and _is_gif_or_media_share_url(emb.url):
+            candidate_gif_urls.append(emb.url)
 
-    if not custom_emojis and not stickers:
-        return items
+    for u in re.findall(r'https?://[^\s<>"]+', message.content or ""):
+        if _is_gif_or_media_share_url(u) and u not in candidate_gif_urls:
+            candidate_gif_urls.append(u)
+
+    if not custom_emojis and not stickers and not candidate_gif_urls:
+        return visual_items, text_notes
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    async with httpx.AsyncClient(follow_redirects=True, timeout=4.0, headers=headers) as client:
-        # 下載自定義表情符號圖片 (最多前 3 個)
+    async with httpx.AsyncClient(follow_redirects=True, timeout=6.0, headers=headers) as client:
+        # 1. 下載自定義表情符號圖片 (最多前 3 個，支援動態表情符號)
         for is_anim, name, eid in custom_emojis[:3]:
-            url = f"https://cdn.discordapp.com/emojis/{eid}.png?size=96&quality=lossless"
+            ext = "gif" if is_anim == "a" else "png"
+            url = f"https://cdn.discordapp.com/emojis/{eid}.{ext}?size=96&quality=lossless"
             try:
                 resp = await client.get(url)
                 if resp.status_code == 200 and resp.content:
-                    items.append((f"自定義表情 :{name}:", resp.content))
-                    logger.info(f"🎨 成功加載自定義表情符號圖片: :{name}: ({len(resp.content)} bytes)")
+                    conv_bytes, conv_mime, anim_flag = convert_image_or_gif_for_gemini(
+                        resp.content, mime_type=f"image/{ext}", filename=f"{name}.{ext}"
+                    )
+                    if conv_bytes:
+                        tag = "動態表情" if anim_flag else "自定義表情"
+                        visual_items.append((f"{tag} :{name}:", conv_bytes, conv_mime))
+                        logger.info(f"🎨 成功加載{tag}圖片: :{name}: ({len(conv_bytes)} bytes)")
             except Exception as e:
                 logger.debug(f"下載表情符號 :{name}: 略過: {e}")
 
-        # 下載貼圖圖片 (最多前 2 個)
+        # 2. 下載 Discord 貼圖 (Stickers，最多前 2 個)
         for st in stickers[:2]:
+            st_name = getattr(st, "name", "貼圖")
+            st_fmt = str(getattr(st, "format", "")).lower()
+            if "lottie" in st_fmt or str(getattr(st, "url", "")).lower().endswith(".json"):
+                text_notes.append(f"(系統提示：使用者傳送了 Discord 動態貼圖【{st_name}】，請根據貼圖名稱與氣氛自然回應)")
+                logger.info(f"🎨 偵測到 Lottie 向量貼圖: {st_name} (已注入文字描述)")
+                continue
             try:
                 resp = await client.get(st.url)
                 if resp.status_code == 200 and resp.content:
-                    items.append((f"Discord 貼圖【{st.name}】", resp.content))
-                    logger.info(f"🎨 成功加載貼圖圖片: {st.name} ({len(resp.content)} bytes)")
+                    conv_bytes, conv_mime, anim_flag = convert_image_or_gif_for_gemini(
+                        resp.content,
+                        mime_type=resp.headers.get("content-type", ""),
+                        filename=st.url.split("?")[0],
+                    )
+                    if conv_bytes:
+                        tag = "Discord 動態貼圖（左至右為連續動作關鍵影格）" if anim_flag else "Discord 貼圖"
+                        visual_items.append((f"{tag}【{st_name}】", conv_bytes, conv_mime))
+                        logger.info(f"🎨 成功加載貼圖圖片: {st_name} ({len(conv_bytes)} bytes, animated={anim_flag})")
+                    else:
+                        text_notes.append(f"(系統提示：使用者傳送了 Discord 貼圖【{st_name}】，請自然回應)")
             except Exception as e:
-                logger.debug(f"下載貼圖 {st.name} 略過: {e}")
+                logger.debug(f"下載貼圖 {st_name} 略過: {e}")
+                text_notes.append(f"(系統提示：使用者傳送了 Discord 貼圖【{st_name}】，請自然回應)")
 
-    return items
+        # 3. 下載 Tenor / Giphy / Discord 外部 GIF 動圖連結 (最多 1 張)
+        for gif_url in candidate_gif_urls[:1]:
+            if not is_safe_public_url(gif_url):
+                continue
+            try:
+                resp = await client.get(gif_url)
+                if resp.status_code != 200 or not resp.content:
+                    continue
+                ctype = resp.headers.get("content-type", "").lower()
+                raw_img_bytes = None
+
+                # 若網址本身是 Tenor / Giphy 網頁 HTML，從 meta og:image 提取真實 .gif 網址再下載
+                if "text/html" in ctype:
+                    html_str = resp.content[:120000].decode("utf-8", errors="ignore")
+                    og_match = re.search(
+                        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://[^"\']+\.gif[^"\']*)["\']',
+                        html_str,
+                        re.IGNORECASE,
+                    ) or re.search(
+                        r'<meta[^>]+content=["\'](https?://[^"\']+\.gif[^"\']*)["\'][^>]+property=["\']og:image["\']',
+                        html_str,
+                        re.IGNORECASE,
+                    )
+                    if og_match:
+                        real_gif_url = og_match.group(1)
+                        if is_safe_public_url(real_gif_url):
+                            img_resp = await client.get(real_gif_url)
+                            if img_resp.status_code == 200 and img_resp.content:
+                                raw_img_bytes = img_resp.content
+                                ctype = img_resp.headers.get("content-type", "image/gif").lower()
+                elif ctype.startswith("image/") or gif_url.lower().split("?")[0].endswith((".gif", ".webp", ".png", ".jpg", ".jpeg")):
+                    raw_img_bytes = resp.content
+
+                if raw_img_bytes and len(raw_img_bytes) <= MAX_IMAGE_ATTACHMENT_BYTES:
+                    conv_bytes, conv_mime, anim_flag = convert_image_or_gif_for_gemini(
+                        raw_img_bytes, mime_type=ctype, filename=gif_url.split("?")[0]
+                    )
+                    if conv_bytes:
+                        label_str = "GIF 動圖（左至右為開頭、中段、結尾關鍵影格）" if anim_flag else "分享圖片"
+                        visual_items.append((label_str, conv_bytes, conv_mime))
+                        logger.info(f"🎞️ 成功加載並轉換外部 GIF/圖片連結: {gif_url} ({len(conv_bytes)} bytes, animated={anim_flag})")
+            except Exception as e:
+                logger.debug(f"外部 GIF 連結 {gif_url} 加載略過: {e}")
+
+    return visual_items, text_notes
 
 
 async def build_current_message_media_parts(msg: discord.Message, context_label: str = "Chat") -> list[types.Part]:
@@ -484,20 +680,34 @@ async def build_current_message_media_parts(msg: discord.Message, context_label:
                 ))
                 logger.info(f"🎬 ({context_label}) 成功載入 YouTube 影片: {info['title']} ({dur_str})")
 
-    # 2. 處理 Discord 訊息附件（圖片 Vision 與短影片 Video）
+    # 2. 處理 Discord 訊息附件（圖片 Vision、GIF 動圖與短影片 Video）
     if msg.attachments:
         for att in msg.attachments:
-            # (A) 圖片附件 (Vision 多模態看圖)
-            if att.content_type and att.content_type.startswith("image/"):
+            fname_l = (att.filename or "").lower()
+            ctype_l = (att.content_type or "").lower()
+            is_img_or_gif = ctype_l.startswith("image/") or fname_l.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".apng"))
+            # (A) 圖片與 GIF 動圖附件 (Vision 多模態看圖，自動將動態 GIF 轉為 3 格連續影格 PNG)
+            if is_img_or_gif:
                 if att.size and att.size > MAX_IMAGE_ATTACHMENT_BYTES:
                     logger.warning(f"⚠️ 圖片附件 {att.filename} 超過大小上限 ({att.size} bytes)，已略過。")
                     continue
                 try:
                     img_data = await att.read()
-                    media_parts.append(types.Part.from_bytes(data=img_data, mime_type=att.content_type))
-                    logger.info(f"🖼️ ({context_label}) 成功加載圖片: {att.filename} ({len(img_data)} bytes)")
+                    conv_bytes, conv_mime, anim_flag = convert_image_or_gif_for_gemini(
+                        img_data, mime_type=ctype_l, filename=att.filename
+                    )
+                    if conv_bytes:
+                        if anim_flag:
+                            media_parts.append(types.Part.from_text(
+                                text=f"\n(系統提示：使用者上傳了 GIF 動圖【{att.filename}】，下方圖片由左至右為動圖的開頭、中段、結尾關鍵影格，請直接觀看並自然回應)："
+                            ))
+                        media_parts.append(types.Part.from_bytes(data=conv_bytes, mime_type=conv_mime))
+                        logger.info(
+                            f"🖼️ ({context_label}) 成功加載圖片/GIF: {att.filename} "
+                            f"({len(conv_bytes)} bytes, mime={conv_mime}, animated={anim_flag})"
+                        )
                 except Exception as img_err:
-                    logger.error(f"❌ 加載圖片失敗: {img_err}")
+                    logger.error(f"❌ 加載圖片/GIF 失敗: {img_err}")
 
             # (B) 短影片附件 (.mp4, .mov, .webm, .mkv)
             elif video_engine.is_video_attachment(att):
@@ -525,45 +735,92 @@ async def build_current_message_media_parts(msg: discord.Message, context_label:
                 except Exception as vid_err:
                     logger.error(f"❌ 加載影片附件失敗: {vid_err}")
 
-    # 3. 處理 Discord 自定義表情符號與貼圖圖片
-    visual_items = await fetch_custom_emojis_and_stickers(msg)
-    for label, img_data in visual_items:
+    # 3. 處理 Discord 自定義表情符號、貼圖 (Stickers) 與外部 GIF 動圖連結 (Tenor / Giphy)
+    visual_items, text_notes = await fetch_custom_emojis_stickers_and_gifs(msg)
+    for note in text_notes:
+        media_parts.append(types.Part.from_text(text=note))
+    for label, img_data, img_mime in visual_items:
         media_parts.append(types.Part.from_text(text=f"({label} 的畫面內容如下)："))
-        media_parts.append(types.Part.from_bytes(data=img_data, mime_type="image/png"))
+        media_parts.append(types.Part.from_bytes(data=img_data, mime_type=img_mime))
 
     return media_parts
 
 
-async def build_general_contents(channel: discord.abc.Messageable, current_message: discord.Message) -> list[types.Content]:
-    """從一般日常群聊頻道抓取歷史訊息，格式化為三人日常對話的 Content 物件 (支援看圖與網址解析)。"""
-    reset_after = channel_reset_timestamps.get(getattr(channel, "id", None))
-    raw_messages: list[discord.Message] = []
+async def _build_chat_history_contents(
+    channel: discord.abc.Messageable,
+    current_message: discord.Message,
+    is_japanese_dual_mode: bool = False,
+) -> list[types.Content]:
+    """
+    統一抓取滑動視窗歷史訊息並格式化為 Gemini SDK 的 Content 清單（支援圖片、GIF 動圖、貼圖、短影片、YouTube 與網址預覽）。
+    - 當 is_japanese_dual_mode=True 時，以 TARGET_CHANNEL_ID 為全域基準並還原雙頻道鏡像小卡。
+    - 當 is_japanese_dual_mode=False 時，直接讀取當前頻道或討論串歷史。
+    """
+    if is_japanese_dual_mode and not isinstance(channel, discord.Thread):
+        source_channel = bot.get_channel(TARGET_CHANNEL_ID) or channel
+    else:
+        source_channel = channel
 
-    history_limit = THREAD_WINDOW_LIMIT if isinstance(channel, discord.Thread) else SLIDING_WINDOW_LIMIT
-    async for msg in channel.history(limit=history_limit, oldest_first=False):
+    reset_after = channel_reset_timestamps.get(getattr(source_channel, "id", None))
+    raw_messages: list[discord.Message] = []
+    history_limit = THREAD_WINDOW_LIMIT if isinstance(source_channel, discord.Thread) else SLIDING_WINDOW_LIMIT
+
+    async for msg in source_channel.history(limit=history_limit, oldest_first=False):
         if reset_after and msg.created_at <= reset_after:
             break
         if msg.content.strip().startswith("!"):
             continue
-        if not msg.content.strip() and not msg.attachments:
-            continue
+        has_stickers = bool(getattr(msg, "stickers", None))
+        if is_japanese_dual_mode:
+            if not msg.content.strip() and not msg.embeds and not msg.attachments and not has_stickers:
+                continue
+        else:
+            if not msg.content.strip() and not msg.attachments and not has_stickers:
+                continue
         raw_messages.append(msg)
 
     raw_messages.reverse()
-
     turns: list[types.Content] = []
+    context_label = "日語共學" if is_japanese_dual_mode else "日常群聊"
 
     for msg in raw_messages:
         parts: list[types.Part] = []
         if msg.author == bot.user:
-            role = "model"
-            parts.append(types.Part.from_text(text=msg.clean_content.strip()))
+            if is_japanese_dual_mode and msg.embeds and not msg.content.strip():
+                embed = msg.embeds[0]
+                author_name = embed.author.name if embed.author and embed.author.name else ""
+                # 嚴格過濾：僅有來自雙頻道鏡像轉發的小卡才還原為 user 對話，避免將 !help / !card / !rpg 等系統 Embed 面板誤當成「學員發言」污染上下文
+                if "(來自綜合頻道)" in author_name or "(來自日文頻道)" in author_name:
+                    clean_author = author_name.replace("(來自綜合頻道)", "").replace("(來自日文頻道)", "").strip()
+                    role = "user"
+                    parts.append(types.Part.from_text(text=f"[{clean_author}]: {embed.description}"))
+                else:
+                    continue
+            else:
+                role = "model"
+                clean_model_text = safety_guardrail.sanitize_model_output(
+                    msg.clean_content.strip(),
+                    enable_japanese_mode=ENABLE_JAPANESE_MODE,
+                )
+                parts.append(types.Part.from_text(text=clean_model_text))
         else:
             role = "user"
             author_name = msg.author.display_name
-            if not msg.clean_content.strip() and msg.attachments:
+            msg_stickers = getattr(msg, "stickers", None) or []
+            if not msg.clean_content.strip() and msg_stickers:
+                st_names = "、".join(getattr(s, "name", "貼圖") for s in msg_stickers)
+                raw_text = f"(傳送了貼圖【{st_names}】，請直接觀看貼圖畫面並自然回應)"
+            elif not msg.clean_content.strip() and msg.attachments:
                 has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
-                raw_text = "(傳送了一段短影片，請直接觀看並回應)" if has_vid else "(傳送了一張圖片，請直接觀看並回應)"
+                has_gif = any((a.filename or "").lower().endswith(".gif") or (a.content_type or "").lower() == "image/gif" for a in msg.attachments)
+                if has_vid:
+                    raw_text = "(傳送了一段短影片，請直接觀看並回應)"
+                elif has_gif:
+                    raw_text = "(傳送了一張 GIF 動圖，請直接觀看畫面並自然回應)"
+                else:
+                    raw_text = "(傳送了一張圖片，請直接觀看並回應)"
+            elif msg.clean_content.strip() and _is_gif_or_media_share_url(msg.clean_content.strip()):
+                raw_text = f"{msg.clean_content.strip()} (傳送了一張 GIF 動圖，請觀看下方動圖畫面並自然回應)"
             else:
                 raw_text = msg.clean_content.strip()
             text = f"[{author_name}]: {raw_text}"
@@ -578,81 +835,23 @@ async def build_general_contents(channel: discord.abc.Messageable, current_messa
 
             # 當前訊息多模態掛載 (YouTube 影片分析、短影片附件、圖片 Vision、表情與貼圖)
             if msg.id == current_message.id:
-                media_parts = await build_current_message_media_parts(msg, context_label="日常群聊")
+                media_parts = await build_current_message_media_parts(msg, context_label=context_label)
                 parts.extend(media_parts)
 
         if parts:
             turns.append(types.Content(role=role, parts=parts))
 
     return turns
+
+
+async def build_general_contents(channel: discord.abc.Messageable, current_message: discord.Message) -> list[types.Content]:
+    """從一般日常群聊頻道抓取歷史訊息，格式化為日常對話的 Content 物件。"""
+    return await _build_chat_history_contents(channel, current_message, is_japanese_dual_mode=False)
 
 
 async def build_gemini_contents(channel: discord.TextChannel | discord.Thread, current_message: discord.Message) -> list[types.Content]:
-    """
-    動態抓取滑動視窗歷史訊息，格式化為 Gemini SDK 的 Content 物件 (支援看圖與網址解析)。
-    在雙頻道模式下，一律以綜合聊天頻道 (TARGET_CHANNEL_ID) 作為全域上下文基準，確保雙邊對話完全同步。
-    """
-    source_channel = channel if isinstance(channel, discord.Thread) else (bot.get_channel(TARGET_CHANNEL_ID) or channel)
-    reset_after = channel_reset_timestamps.get(source_channel.id)
-
-    raw_messages: list[discord.Message] = []
-    history_limit = THREAD_WINDOW_LIMIT if isinstance(source_channel, discord.Thread) else SLIDING_WINDOW_LIMIT
-    async for msg in source_channel.history(limit=history_limit, oldest_first=False):
-        if reset_after and msg.created_at <= reset_after:
-            break
-        if msg.content.strip().startswith("!"):
-            continue
-        if not msg.content.strip() and not msg.embeds and not msg.attachments:
-            continue
-        raw_messages.append(msg)
-
-    raw_messages.reverse()
-
-    turns: list[types.Content] = []
-
-    for msg in raw_messages:
-        parts: list[types.Part] = []
-        if msg.author == bot.user:
-            if msg.embeds and not msg.content.strip():
-                embed = msg.embeds[0]
-                author_name = embed.author.name if embed.author and embed.author.name else ""
-                # 嚴格過濾：僅有來自雙頻道鏡像轉發的小卡才還原為 user 對話，避免將 !help / !card / !rpg 等系統 Embed 面板誤當成「學員發言」污染上下文
-                if "(來自綜合頻道)" in author_name or "(來自日文頻道)" in author_name:
-                    clean_author = author_name.replace("(來自綜合頻道)", "").replace("(來自日文頻道)", "").strip()
-                    role = "user"
-                    parts.append(types.Part.from_text(text=f"[{clean_author}]: {embed.description}"))
-                else:
-                    continue
-            else:
-                role = "model"
-                parts.append(types.Part.from_text(text=msg.clean_content.strip()))
-        else:
-            role = "user"
-            author_name = msg.author.display_name
-            if not msg.clean_content.strip() and msg.attachments:
-                has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
-                raw_text = "(傳送了一段短影片，請直接觀看並回應)" if has_vid else "(傳送了一張圖片，請直接觀看並回應)"
-            else:
-                raw_text = msg.clean_content.strip()
-            text = f"[{author_name}]: {raw_text}"
-
-            # 若當前訊息包含網址，抓取預覽 (YouTube 網址在 fetch_url_preview 內自動跳過)
-            if msg.id == current_message.id and "http" in msg.clean_content:
-                url_summary = await fetch_url_preview(msg.clean_content)
-                if url_summary:
-                    text += f"\n\n{url_summary}"
-
-            parts.append(types.Part.from_text(text=text))
-
-            # 當前訊息多模態掛載 (YouTube 影片分析、短影片附件、圖片 Vision、表情與貼圖)
-            if msg.id == current_message.id:
-                media_parts = await build_current_message_media_parts(msg, context_label="日語共學")
-                parts.extend(media_parts)
-
-        if parts:
-            turns.append(types.Content(role=role, parts=parts))
-
-    return turns
+    """雙頻道日語學習模式上下文建構（以 TARGET_CHANNEL_ID 為全域基準並支援雙向鏡像小卡還原）。"""
+    return await _build_chat_history_contents(channel, current_message, is_japanese_dual_mode=True)
 
 
 async def send_split_messages(destination: discord.abc.Messageable, text: str):
@@ -806,21 +1005,28 @@ async def on_ready():
 
 @bot.command(name="reset", aliases=["clear", "重設", "重置"])
 async def reset_context(ctx: commands.Context):
-    """手動重設當前頻道的上下文記憶。"""
+    """手動重設當前頻道或討論串的上下文記憶。"""
     if not is_target_channel(ctx.channel):
         return
 
     now = datetime.now(timezone.utc)
     cid = ctx.channel.id
 
-    # 若是在一般日常群聊頻道下重設，只重設一般群聊
-    if GENERAL_CHANNEL_ID and (cid == GENERAL_CHANNEL_ID or getattr(ctx.channel, "parent_id", None) == GENERAL_CHANNEL_ID):
+    # 1. 若是在獨立討論串 (Thread) 內執行，僅重設該討論串本身，絕不影響父頻道
+    if isinstance(ctx.channel, discord.Thread):
         channel_reset_timestamps[cid] = now
-        await ctx.send("🧹 **日常群聊記憶已重設！** 隨時可以開啟新話題。")
-        logger.info(f"日常群聊頻道 {cid} 已重設上下文。")
+        await ctx.send("🧹 **當前討論串的對話記憶已重設。** 隨時可以開啟新話題。")
+        logger.info(f"討論串 {cid} 已重設上下文。")
         return
 
-    # 若是在日語學習頻道下重設，同步重設日語學習的雙頻道
+    # 2. 若未開啟日語學習模式（如社群伺服器模式），或位於一般日常群聊頻道，僅重設當前單一頻道
+    if not ENABLE_JAPANESE_MODE or (GENERAL_CHANNEL_ID and cid == GENERAL_CHANNEL_ID):
+        channel_reset_timestamps[cid] = now
+        await ctx.send("🧹 **對話記憶已重設。** 過去的上下文已清除，隨時可以開啟新話題。")
+        logger.info(f"頻道 {cid} 已重設上下文。")
+        return
+
+    # 3. 僅當 ENABLE_JAPANESE_MODE=True 且在日語共學主/副頻道執行時，才同步重設日語學習雙頻道
     channel_reset_timestamps[TARGET_CHANNEL_ID] = now
     main_ch = bot.get_channel(TARGET_CHANNEL_ID)
     if main_ch:
@@ -834,6 +1040,7 @@ async def reset_context(ctx: commands.Context):
             await tts_ch.send("🧹 **日語共學記憶已重設！**")
 
     if cid not in (TARGET_CHANNEL_ID, TTS_CHANNEL_ID):
+        channel_reset_timestamps[cid] = now
         await ctx.send("🧹 **已重設上下文記憶！**")
 
     logger.info("已重設日語學習雙頻道上下文記憶。")
@@ -852,13 +1059,13 @@ async def todo_command(ctx: commands.Context, action: str = None, *, arg: str = 
     if not action or action.lower() in ("list", "show", "ls"):
         todos = assistant_db.list_todos(only_pending=True)
         if not todos:
-            await ctx.send("📋 目前沒有任何未完成的待辦事項！太棒了～✨")
+            await ctx.send("📋 目前沒有任何未完成的待辦事項。")
             return
         desc_lines = []
         for t in todos:
             desc_lines.append(f"**#{t['id']}** {t['content']}\n└ *由 {t['user_name']} 於 {t['created_at'][5:16]} 新增*")
         embed = discord.Embed(
-            title="📋 共同待辦事項清單",
+            title="📋 待辦事項清單",
             description=truncate_embed_text("\n".join(desc_lines)),
             color=0x48CAE4
         )
@@ -1017,7 +1224,8 @@ async def memory_command(ctx: commands.Context, action: str = None, *, arg: str 
     act = action.lower()
     if act in ("add", "new", "+"):
         if not arg:
-            await ctx.send("❓ 請輸入要記住的事實，例如：`!remember 女友最愛吃抹茶`")
+            example_text = "女友最愛吃抹茶" if ENABLE_JAPANESE_MODE else "每週六晚上八點固定打團"
+            await ctx.send(f"❓ 請輸入要記住的事實，例如：`!remember {example_text}`")
             return
         mid = assistant_db.add_memory(arg.strip(), user_name=ctx.author.display_name)
         await ctx.send(f"🧠 已存入長期記憶庫 **#{mid}**：{arg.strip()}")
@@ -1032,7 +1240,7 @@ async def memory_command(ctx: commands.Context, action: str = None, *, arg: str 
         else:
             await ctx.send(f"❌ 找不到記憶編號 **#{mid}**。")
     else:
-        # 如果使用者直接打 !memory 女友喜歡草莓蛋糕
+        # 如果使用者直接打 !memory <內容>
         full_content = f"{action} {arg}" if arg else action
         mid = assistant_db.add_memory(full_content.strip(), user_name=ctx.author.display_name)
         await ctx.send(f"🧠 已存入長期記憶庫 **#{mid}**：{full_content.strip()}")
@@ -1321,7 +1529,7 @@ async def send_sheet_embed(ctx: commands.Context, char: dict, title_prefix: str 
         if trait_lines:
             embed.add_field(
                 name="🔮 專屬世界觀特質 / 設定",
-                value="\n".join(trait_lines[:8]),
+                value=truncate_embed_text("\n".join(trait_lines[:8]), max_len=950),
                 inline=False
             )
 
@@ -1338,7 +1546,7 @@ async def send_sheet_embed(ctx: commands.Context, char: dict, title_prefix: str 
     if skills:
         embed.add_field(
             name="🎭 專長技能 / 功法法術",
-            value="、".join(skills),
+            value=truncate_embed_text("、".join(skills), max_len=950),
             inline=False
         )
 
@@ -1347,7 +1555,7 @@ async def send_sheet_embed(ctx: commands.Context, char: dict, title_prefix: str 
         inv_display = "\n".join([f"• {it}" for it in inv])
         if len(inv_display) > 800:
             inv_display = "、".join(inv)
-        embed.add_field(name="🎒 隨身持有物 / 法寶裝備", value=inv_display, inline=False)
+        embed.add_field(name="🎒 隨身持有物 / 法寶裝備", value=truncate_embed_text(inv_display, max_len=950), inline=False)
 
     embed.set_footer(text="💡 支援修仙、賽博龐克、克蘇魯、奇幻冒險等任意世界觀！輸入 !sheet 查看或更新卡片")
     await ctx.send(embed=embed)
@@ -1496,7 +1704,7 @@ async def rpg_command(ctx: commands.Context, action: str = None, *, arg: str = N
     if act in ("reset", "restart", "重置", "重開"):
         rpg_engine.reset_rpg_character(cid, uid)
         rpg_engine.set_rpg_session_active(cid, False)
-        await ctx.send(f"🔄 **{uname}** 的冒險紀錄與旅程手記已重置！可以隨時開始一場全新的冒險～✨")
+        await ctx.send(f"🔄 **{uname}** 的冒險紀錄與旅程手記已重置，可以隨時開始新的冒險。")
         return
 
     # 7. 修改角色名與職業
@@ -2660,118 +2868,465 @@ async def quiz_command(ctx: commands.Context, deck_or_count: Optional[str] = Non
 
 
 @bot.command(name="help", aliases=["指令", "說明"])
-async def help_command(ctx: commands.Context):
-    """查看常用指令說明"""
+async def help_command(ctx: commands.Context, *, topic: Optional[str] = None):
+    """查看指令手冊（支援 !help wiki / !help rpg / !help lore 查看分類詳情）"""
     if not is_target_channel(ctx.channel):
         return
 
-    if ENABLE_JAPANESE_MODE:
+    sub = (topic or "").strip().lower()
+
+    # ── 分類詳情 1：!help wiki ──
+    if sub in ("wiki", "圖鑑", "黑話", "좀고", "知識庫", "補充", "import"):
         embed = discord.Embed(
-            title="📖 GeminiBot 生活管家、文字冒險與共學指令手冊",
-            description="除了直接用自然口語跟機器人聊天（支援看圖、網址摘要、自然呼叫管家），你也可以使用下列快捷指令：",
-            color=0x48CAE4
+            title="🧟 《殭屍學園》知識庫 (`!wiki`) 詳細指南",
+            description="查詢韓服黑話與設定，或直接丟文本／傳檔案擴充資料庫（免重啟立即生效）：",
+            color=0x2ECC71,
         )
         embed.add_field(
-            name="📋 待辦事項 (!todo)",
+            name="🔍 查詢指令（別名：`!圖鑑`、`!黑話`、`!좀고`）",
             value=(
-                "• `!todo`：列出所有未完成事項\n"
-                "• `!todo add <內容>`：新增待辦事項\n"
-                "• `!todo done <編號/關鍵字>`：標記為已完成\n"
-                "• `!todo del <編號>`：刪除待辦事項\n"
-                "• `!todo all`：查看歷史紀錄"
+                "`!wiki` — 查看收錄統計\n"
+                "`!wiki <關鍵字>` — 查黑話、角色、模式（如 `!wiki ㄷㅋㅈ`、`!wiki 進化感染`）"
             ),
-            inline=False
+            inline=False,
         )
         embed.add_field(
-            name="⏰ 定時提醒 (!remind)",
+            name="📥 補充資料庫的 4 種方式",
             value=(
-                "• `!remind 10m 關火`：10 分鐘後提醒\n"
-                "• `!remind 18:30 倒垃圾`：今天 18:30 提醒\n"
-                "• `!reminds`：查看預約中的提醒清單\n"
-                "• `!remind del <編號>`：取消提醒"
+                "1️⃣ **直接貼無標示長文**：輸入 `!wiki import` 換行貼上觀念心得，自動分段抽詞建檔\n"
+                "2️⃣ **上傳檔案**：輸入 `!wiki import [主題]` 並夾帶 `.txt` / `.md` 檔案上傳\n"
+                "3️⃣ **多段標題格式**：輸入 `!wiki import` 換行貼上多段 `【標題】內容` 或 `# 標題`\n"
+                "4️⃣ **單筆快速新增**：`!wiki add 關鍵字1, 關鍵字2 | 內容說明`"
             ),
-            inline=False
+            inline=False,
         )
-    else:
-        # 社群專屬版本：非管家、非共學，主打群聊互動與 TRPG 冒險
+        embed.add_field(
+            name="🗂️ 管理補充條目",
+            value=(
+                "`!wiki list` — 查看群友補充的條目與編號\n"
+                "`!wiki del <編號>` — 刪除補充條目（如 `!wiki del contrib_1`）"
+            ),
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+        return
+
+    # ── 分類詳情 2：!help rpg ──
+    if sub in ("rpg", "trpg", "adv", "sheet", "跑團", "冒險", "角色卡"):
         embed = discord.Embed(
-            title=f"⚔️ {bot_instance_name} 社群群聊與 TRPG 冒險指令手冊",
-            description="你可以直接在頻道用自然口語聊天（支援看圖、網址摘要），也可以隨時發起 TRPG 冒險跑團！常用快捷指令如下：",
-            color=0x7289DA
+            title="🗡️ TRPG 跑團與角色卡 (`!rpg`) 詳細指南",
+            color=0xF15BB5,
         )
+        embed.add_field(
+            name="🎲 開局與檢定",
+            value=(
+                "`!rpg start [主題]` — 建立專屬討論串開局（別名：`!adv`）\n"
+                "`!roll [骰子]` — 擲骰檢定（如 `!roll 1d20`、`!roll 2d6+3`）\n"
+                "`!rpg reset` — 重置當前頻道的冒險狀態"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="👤 角色卡與小隊",
+            value=(
+                "`!rpg` — 查看個人簡要狀態卡（HP、地點、背包）\n"
+                "`!sheet` — 查看個人極詳細角色卡（別名：`!角色卡`）\n"
+                "`!sheet <文字或附檔>` — 貼上文字或上傳 `.txt`/`.md` 匯入角色卡\n"
+                "`!rpg name <名>` / `!rpg class <職業>` — 修改名字或職業\n"
+                "`!party` — 查看小隊全員名冊與血量"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="💾 存讀檔與手記",
+            value=(
+                "`!save <名稱>` / `!load <名稱>` — 保存或載入全隊進度\n"
+                "`!saves` / `!rpg delsave <名稱>` — 查看或刪除存檔\n"
+                "`!note <線索>` / `!journal` / `!rpg delnote <編號>` — 管理冒險手記"
+            ),
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+        return
+
+    # ── 分類詳情 3：!help lore ──
+    if sub in ("lore", "memory", "mem", "設定", "世界觀", "記憶"):
+        embed = discord.Embed(
+            title="📖 通用設定集 (`!lore`) 與常駐記憶 (`!memory`) 指南",
+            color=0x00BBF9,
+        )
+        embed.add_field(
+            name="🌍 通用／跑團設定集（提及關鍵字時自動喚醒）",
+            value=(
+                "`!lore` — 查看所有世界觀設定\n"
+                "`!lore add <關鍵字> | <內容>` — 新增單筆設定\n"
+                "`!lore import` — 貼上多段 `【標題】內容` 或夾帶 `.txt`/`.md` 批次匯入\n"
+                "`!lore del <編號>` — 刪除單筆設定 ｜ `!lore clear` — 清空設定集"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="🧠 全群常駐記憶（每次對話固定載入，適合簡短共識）",
+            value=(
+                "`!memory` — 查看常駐記憶清單\n"
+                "`!remember <內容>` — 新增一筆常駐記憶\n"
+                "`!forget <編號>` — 刪除指定編號的記憶"
+            ),
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+        return
+
+    # ── 主選單：精簡清爽總覽 ──
+    embed = discord.Embed(
+        title=f"📖 {bot_instance_name} 指令速查表",
+        description="平時可直接聊天、貼韓服截圖翻譯或傳貼圖互動。常用指令如下：",
+        color=0x5865F2,
+    )
 
     embed.add_field(
-        name="🗡️ RPG 文字冒險與組隊 (!rpg / !party / !sheet / !roll)",
+        name="🧟 《殭屍學園》知識庫 (`!wiki` / `!圖鑑`)",
         value=(
-            "• `!rpg start [主題]`：自動建立專屬獨立討論串開局\n"
-            "• `!rpg`：查看個人冒險狀態卡 (血量、裝備背包、地點、目標)\n"
-            "• `!party`：查看冒險小隊全員名冊與血量（多人組隊面板）\n"
-            "• `!sheet`：查看個人極詳細角色卡\n"
-            "• `!sheet <卡片文字或附檔>`：批次匯入/更新角色卡\n"
-            "• `!save <存檔名>`：保存冒險進度與全隊快照\n"
-            "• `!load <存檔名>`：載入存檔（小隊全員與手記一併還原）\n"
-            "• `!saves`：查看所有保存的存檔清單\n"
-            "• `!note <線索>`：手動記錄冒險線索至本趟手記\n"
-            "• `!journal`：查看本趟冒險的所有線索與手記\n"
-            "• `!roll [表達式]`：TRPG 擲骰檢定 (如 `!roll`、`!roll 2d6`)\n"
-            "• `!lore`：查看世界觀設定 (!lore import 批次匯入)\n"
-            "• `!rpg reset`：重置當前頻道冒險開新局"
+            "`!wiki <關鍵字>` — 查詢韓服黑話、角色、模式或攻略\n"
+            "`!wiki add <關鍵字> | <內容>` — 單筆補充設定或黑話\n"
+            "`!wiki import` — 貼上長文或**夾帶 `.txt`/`.md` 檔**批次擴充資料庫\n"
+            "`!wiki list` / `!wiki del <編號>` — 查看或刪除群友補充條目"
         ),
-        inline=False
+        inline=False,
+    )
+
+    embed.add_field(
+        name="📖 設定集與常駐記憶 (`!lore` / `!memory`)",
+        value=(
+            "`!lore` / `!lore add <詞> | <內容>` — 查看或新增通用世界觀設定\n"
+            "`!lore import` — 貼文或夾帶 `.txt`/`.md` 批次匯入世界觀\n"
+            "`!memory` / `!remember <內容>` / `!forget <編號>` — 管理全群常駐記憶"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🗡️ TRPG 跑團冒險 (`!rpg` / `!sheet` / `!roll`)",
+        value=(
+            "`!rpg start [主題]` — 開啟專屬討論串跑團（`!rpg reset` 重置）\n"
+            "`!rpg` / `!party` — 查看個人狀態卡 ／ 小隊全員面板\n"
+            "`!sheet [文字或附檔]` — 查看或匯入詳細角色卡\n"
+            "`!save <名>` / `!load <名>` / `!saves` — 存檔與讀檔\n"
+            "`!note <線索>` / `!journal` / `!roll [1d20]` — 手記與擲骰"
+        ),
+        inline=False,
     )
 
     if ENABLE_FLASHCARD_MODE:
         embed.add_field(
-            name="🌸 日語單字卡與 Kotoba 搶答 (!card / !quiz)",
+            name="🌸 日語單字與搶答 (`!card` / `!quiz`)",
             value=(
-                "• `!card`：開啟互動式翻面單字卡（支援真人原音/朗讀、圖卡顯示、AI 家教解說、一鍵換牌組）\n"
-                "• `!card add <單字>`：新增單字（AI 自動補完讀音與例句）\n"
-                "• `!card import [檔名/等級/all]`：讀取 `data/imports/`（支援一鍵分類 `all` 或指定 `N3高頻`）\n"
-                "• `!card decks` (或 `!decks`)：查看所有牌組與卡片數量\n"
-                "• `!card deck <牌組名>`：切換個人預設收集牌組\n"
-                "• `!card generate <主題> [數量]`：由 AI 打造專屬主題單字庫\n"
-                "• `!quiz [牌組名] [題數]` (或 `!搶答` / `!kotoba`)：Kotoba 風格多人限時搶答測驗"
+                "`!card` / `!card add <單字>` — 互動單字卡 ／ 新增單字\n"
+                "`!card decks` / `!quiz [牌組] [題數]` — 查看牌組 ／ 多人搶答"
             ),
-            inline=False
+            inline=False,
         )
 
-    mem_title = "🧠 長期記憶庫 (!memory)" if ENABLE_JAPANESE_MODE else "🧠 社群知識庫 (!memory)"
     embed.add_field(
-        name=mem_title,
+        name="🛠️ 待辦、提醒與重設 (`!todo` / `!remind` / `!reset`)",
         value=(
-            "• `!memory`：查看所有保存的事實與設定\n"
-            "• `!remember <內容>`：記錄新設定或共識\n"
-            "• `!forget <編號>`：刪除某一條記憶"
+            "`!todo` / `!todo add <事項>` / `!todo done <編號>` — 待辦清單\n"
+            "`!remind 10m <事項>` / `!reminds` — 定時提醒與清單\n"
+            "`!reset` — 清除當前頻道／討論串的對話上下文"
         ),
-        inline=False
+        inline=False,
     )
 
-    if not ENABLE_JAPANESE_MODE:
-        embed.add_field(
-            name="📋 社群待辦與排程 (!todo / !remind)",
-            value=(
-                "• `!todo`：查看待辦事項（`!todo add <內容>` 新增、`!todo done <編號>` 完成）\n"
-                "• `!remind 10m <內容>`：設定排程定時提醒（`!reminds` 查看清單）"
-            ),
-            inline=False
-        )
-
-    embed.add_field(
-        name="🧹 話題重設 (!reset)",
-        value="• `!reset`：封存當前頻道的聊天上下文，乾淨開啟新話題",
-        inline=False
-    )
-
-    if ENABLE_JAPANESE_MODE:
-        embed.set_footer(text="💡 口語直呼：也可以直接說「我想玩文字冒險！」或「15分鐘後提醒我收衣服」！")
-    else:
-        embed.set_footer(text="💡 隨時暢聊：直接在聊天室發話聊天，或說「我想展開文字冒險！」即可立即開局！")
-
+    embed.set_footer(text="💡 輸入 !help wiki、!help rpg 或 !help lore 可查看該分類的詳細教學與範例！")
     await ctx.send(embed=embed)
 
 
+@bot.command(name="wiki", aliases=["圖鑑", "黑話", "좀고"])
+async def wiki_command(ctx: commands.Context, *, query: Optional[str] = None):
+    """查詢與擴充《殭屍學園 (좀비고등학교)》知識庫"""
+    if not is_target_channel(ctx.channel):
+        return
+
+    raw_arg = (query or "").strip()
+
+    # 若未帶參數，但訊息直接夾帶了 .txt / .md 附件，自動視為 !wiki import
+    has_text_attachment = any(
+        att.filename.lower().endswith((".txt", ".md")) for att in ctx.message.attachments
+    )
+    if not raw_arg and has_text_attachment:
+        raw_arg = "import"
+
+    if not raw_arg:
+        stats = game_wiki_engine.get_wiki_stats()
+        cat_lines = []
+        for cat_key, label in game_wiki_engine.CATEGORY_LABELS.items():
+            cnt = stats["by_category"].get(cat_key, 0)
+            if cnt > 0 or cat_key == "community_contrib":
+                cat_lines.append(f"• **{label}**：共 **{cnt}** 筆")
+        embed = discord.Embed(
+            title="🧟 《殭屍學園 (좀비고등학교)》知識庫",
+            description=(
+                f"目前共收錄 **{stats['total']}** 筆資料：\n\n"
+                + "\n".join(cat_lines)
+                + "\n\n🔍 **查詢用法**：\n"
+                "• `!wiki ㄷㅋㅈ` / `!wiki 클모` / `!wiki 올치어`（查韓服開房黑話與縮寫）\n"
+                "• `!wiki 南東進` / `!wiki 鄭東碩`（查角色設定與人際關係）\n"
+                "• `!wiki 進化感染` / `!wiki APO` / `!wiki Reboot`（查模式與重製版機制）\n\n"
+                "📥 **群友補充文本／擴充資料庫用法**：\n"
+                "• **單筆新增**：`!wiki add 關鍵字1, 關鍵字2 | 條目內容說明`\n"
+                "• **批次貼文或傳檔**：輸入 `!wiki import [主題名稱]` 並在後方換行貼上長文（支援 `【標題】內容`、`# 標題` 分段或整篇攻略），或直接**夾帶 `.txt` / `.md` 檔案上傳**！\n"
+                "• **管理補充條目**：`!wiki list`（查看群友補充清單）、`!wiki del <編號>`（刪除條目）"
+            ),
+            color=0x2ECC71,
+        )
+        await ctx.send(embed=embed)
+        return
+
+    parts = raw_arg.split(maxsplit=1)
+    sub = parts[0].lower()
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    # 1. 查看群友補充條目清單 (!wiki list / !wiki contrib)
+    if sub in ("list", "contrib", "清單", "補充清單"):
+        contribs = game_wiki_engine.list_community_wiki_entries()
+        if not contribs:
+            await ctx.reply(
+                "📭 目前還沒有群友透過指令補充的條目！\n"
+                "💡 歡迎使用 `!wiki add <關鍵字> | <內容>` 或 `!wiki import [主題]`（可夾帶 `.txt`/`.md` 檔）來擴充資料庫！",
+                mention_author=False,
+            )
+            return
+        lines = []
+        for item in contribs[-25:]:
+            kws_preview = "、".join(item.get("keywords", [])[:5])
+            body_lines = [ln for ln in item.get("body", "").splitlines() if not ln.startswith("【《殭屍學園》")]
+            preview = " ".join(body_lines)[:80]
+            if len(" ".join(body_lines)) > 80:
+                preview += "..."
+            lines.append(f"• **`{item['id']}`** 【{item['name_zh']}】（關鍵字：`{kws_preview}`）\n  └ {preview}")
+        embed = discord.Embed(
+            title=f"📥 群友補充《殭屍學園》知識庫清單（共 {len(contribs)} 筆）",
+            description=truncate_embed_text("\n".join(lines)),
+            color=0x2ECC71,
+        )
+        embed.set_footer(text="💡 如需刪除特定補充條目，請輸入 !wiki del <編號>（例如 !wiki del contrib_1）")
+        await ctx.send(embed=embed)
+        return
+
+    # 2. 刪除群友補充條目 (!wiki del <id>)
+    if sub in ("del", "delete", "remove", "rm", "刪除"):
+        if not rest:
+            await ctx.reply("⚠️ 請指定要刪除的補充條目編號，例如：`!wiki del contrib_1`（可先用 `!wiki list` 查看編號）。", mention_author=False)
+            return
+        ok = game_wiki_engine.delete_community_wiki_entry(rest)
+        if ok:
+            await ctx.reply(f"🗑️ 已從《殭屍學園》知識庫刪除群友補充條目 **`{rest}`**，並即時更新檢索索引！", mention_author=False)
+        else:
+            await ctx.reply(f"⚠️ 找不到編號為 `{rest}` 的群友補充條目（僅限刪除透過 `!wiki add/import` 新增的 `contrib_N` 條目）。", mention_author=False)
+        return
+
+    # 3. 新增或批次匯入文本 (!wiki add / !wiki import)
+    if sub in ("add", "import", "新增", "匯入", "補充"):
+        raw_text_sources: list[str] = []
+        default_title = ""
+
+        # 讀取訊息夾帶的 .txt / .md 附件
+        for att in ctx.message.attachments:
+            if att.filename.lower().endswith((".txt", ".md")):
+                try:
+                    file_bytes = await att.read()
+                    file_str = file_bytes.decode("utf-8", errors="replace").strip()
+                    if file_str:
+                        raw_text_sources.append(file_str)
+                        if not default_title:
+                            default_title = Path(att.filename).stem
+                except Exception as e:
+                    await ctx.reply(f"⚠️ 讀取附件 `{att.filename}` 失敗：{e}", mention_author=False)
+                    return
+
+        if rest:
+            if raw_text_sources and "\n" not in rest and "|" not in rest and "｜" not in rest and "【" not in rest:
+                # 使用者寫 `!wiki import 破滅的裂隙攻略` 並附上 .txt 檔案：將 rest 作為該檔案的主題標題
+                default_title = rest.strip()
+            else:
+                raw_text_sources.insert(0, rest)
+
+        combined_text = "\n\n".join(raw_text_sources).strip()
+        if not combined_text:
+            await ctx.reply(
+                "📥 **《殭屍學園》知識庫補充教學**：\n"
+                "1️⃣ **單筆快速補充**：\n"
+                "`!wiki add 關鍵字1, 關鍵字2 | 這裡填寫詳細設定、機制或攻略說明`\n\n"
+                "2️⃣ **多段文本直接貼上**：\n"
+                "```text\n"
+                "!wiki import\n"
+                "【條目一標題 / 別名】\n"
+                "這裡寫條目一的詳細內容...\n\n"
+                "【條目二標題 / 韓文名】\n"
+                "這裡寫條目二的詳細內容...\n"
+                "```\n"
+                "3️⃣ **直接上傳 `.txt` / `.md` 檔案**：\n"
+                "在訊息框輸入 `!wiki import [主題名稱]` 並**夾帶 `.txt` 或 `.md` 檔案**發送，系統會自動分段建立索引！",
+                mention_author=False,
+            )
+            return
+
+        parsed_entries = game_wiki_engine.parse_community_wiki_blocks(combined_text, default_title=default_title)
+        if not parsed_entries:
+            await ctx.reply("⚠️ 無法從輸入內容解析出有效條目，請確認文本不為空。", mention_author=False)
+            return
+
+        # 針對無標示純文字觀念，以「原文 100% 不動、僅補強同義詞與主題標籤」方式進行雙重索引強化
+        parsed_entries = await game_wiki_engine.enrich_community_entries_with_ai(
+            gemini_client,
+            [PRIMARY_MODEL] + FALLBACK_MODELS,
+            parsed_entries,
+        )
+
+        author_display = getattr(ctx.author, "display_name", str(ctx.author))
+        added = game_wiki_engine.add_community_wiki_entries(parsed_entries, author_name=author_display)
+        stats = game_wiki_engine.get_wiki_stats()
+
+        preview_lines = []
+        for item in added[:8]:
+            kws_str = "、".join(item["keywords"][:7])
+            preview_lines.append(f"• **`{item['id']}`** 【{item['name_zh']}】（索引詞：`{kws_str}`）")
+        if len(added) > 8:
+            preview_lines.append(f"…以及其他 {len(added) - 8} 筆條目")
+
+        embed = discord.Embed(
+            title=f"✅ 成功補充 {len(added)} 筆《殭屍學園》知識庫資料！",
+            description=(
+                "已寫入本地知識庫並完成熱重載，現在直接問機器人或用 `!wiki` 都查得到囉：\n\n"
+                + "\n".join(preview_lines)
+                + f"\n\n📚 目前《殭屍學園》知識庫總收錄數：**{stats['total']}** 筆"
+            ),
+            color=0x2ECC71,
+        )
+        embed.set_footer(text="💡 輸入 !wiki list 可檢視所有群友補充條目；輸入 !wiki del <編號> 可刪除誤植條目。")
+        await ctx.reply(embed=embed, mention_author=False)
+        return
+
+    # 4. 一般查詢 (!wiki <關鍵字>)
+    res_text = game_wiki_engine.lookup_game_wiki_tool_impl(raw_arg)
+    embed = discord.Embed(
+        title=f"🔍 《殭屍學園》查詢：{raw_arg[:50]}",
+        description=truncate_embed_text(res_text),
+        color=0x3498DB,
+    )
+    await ctx.send(embed=embed)
+
+
+def _extract_current_image_parts(message: discord.Message, contents: list[types.Content]) -> list[types.Part]:
+    """從當前訊息的 Content 中提取使用者上傳的圖片附件 Part（供 Pass-1 純視覺 OCR 預提取使用，排除小型表情貼圖）"""
+    has_img_att = any(
+        att.content_type and att.content_type.startswith("image/")
+        for att in getattr(message, "attachments", [])
+    )
+    if not has_img_att or not contents:
+        return []
+
+    last_turn = contents[-1]
+    img_parts: list[types.Part] = []
+    for p in (last_turn.parts or []):
+        inline = getattr(p, "inline_data", None)
+        if inline and getattr(inline, "mime_type", "") and inline.mime_type.startswith("image/"):
+            img_parts.append(p)
+    return img_parts
+
+
+def _extract_recent_context_text(contents: list[types.Content], max_turns: int = 3) -> str:
+    """提取最近幾輪對話的純文字脈絡，讓代名詞追問（如「那他的職業攻擊範圍呢？」）也能命中知識庫"""
+    if not contents or len(contents) <= 1:
+        return ""
+    recent_turns = contents[max(0, len(contents) - max_turns):-1]
+    snippets: list[str] = []
+    for turn in recent_turns:
+        for p in (turn.parts or []):
+            t = getattr(p, "text", None)
+            if t:
+                snippets.append(t[:300])
+    return "\n".join(snippets)
+
+
+async def _prepare_and_generate_chat_response(
+    message: discord.Message,
+    contents: list[types.Content],
+    system_prompt_fn,
+    base_temperature: float,
+    context_label: str,
+) -> tuple[str, str]:
+    """
+    統一執行聊天回合的：
+    1. Pass-1 純視覺 OCR 預提取（若附帶圖片）
+    2. 最近對話脈絡提取與動態工具瘦身 (Tool Scoping)
+    3. 遊戲/韓服查詢低溫防幻覺切換 (temperature=0.15)
+    4. Gemini 模型請求與自動備援降級 (generate_with_fallback)
+    回傳 (reply_text, used_model)
+    """
+    models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
+
+    # 1. 若訊息附帶圖片截圖，先執行 Pass-1 純視覺文字提取 (OCR)，讓 Python 能 100% 精準查出韓文房名黑話與場景物件
+    image_parts = _extract_current_image_parts(message, contents)
+    ocr_text = ""
+    if image_parts:
+        ocr_text = await game_wiki_engine.extract_image_text_pass1(
+            gemini_client=gemini_client,
+            models_to_try=models_to_try,
+            image_parts=image_parts,
+        )
+
+    # 2. 提取最近對話脈絡並執行 Contextual-LightRAG 自動預檢索與動態工具瘦身 (Tool Scoping)
+    recent_text = _extract_recent_context_text(contents)
+    in_rpg = is_rpg_context(message.channel, message.clean_content)
+    scoped_tools = assistant_tools.get_scoped_tools(
+        enable_flashcards=ENABLE_FLASHCARD_MODE,
+        include_rpg=in_rpg,
+    )
+
+    is_factual_game_query = bool(
+        game_wiki_engine.is_game_or_korean_context(ocr_text)
+        or game_wiki_engine.is_game_or_korean_context(message.clean_content)
+        or game_wiki_engine.is_game_or_korean_context(recent_text)
+    )
+    config = types.GenerateContentConfig(
+        system_instruction=system_prompt_fn(
+            message,
+            ocr_text=ocr_text,
+            recent_context_text=recent_text,
+        ),
+        thinking_config=types.ThinkingConfig(thinking_level="medium"),
+        temperature=0.15 if is_factual_game_query else base_temperature,
+        tools=scoped_tools,
+        safety_settings=DEFAULT_SAFETY_SETTINGS,
+    )
+
+    token = assistant_tools.current_discord_msg.set(message)
+    try:
+        response, used_model = await generate_with_fallback(
+            contents=contents,
+            config=config,
+            timeout=45.0,
+            context_label=context_label,
+        )
+    finally:
+        assistant_tools.current_discord_msg.reset(token)
+
+    if response and response.text:
+        thoughts_count = getattr(response.usage_metadata, "thoughts_token_count", 0) if response.usage_metadata else 0
+        if thoughts_count:
+            logger.info(f"💭 {used_model} 深度思考完成，思考消耗了 {thoughts_count} 個 tokens！")
+        safe_reply = safety_guardrail.sanitize_model_output(
+            response.text,
+            enable_japanese_mode=ENABLE_JAPANESE_MODE,
+        )
+        return safe_reply, (used_model or PRIMARY_MODEL)
+
+    raise RuntimeError(f"({context_label}) 無法回應訊息。")
+
+
 async def handle_general_chat(message: discord.Message):
-    """處理日常三人閒聊（不刻意教日文、不標假名、自然繁體中文好友哈拉）"""
+    """處理日常群聊（具備 2-Pass 視覺預提取、Contextual-LightRAG 自動預檢索與動態工具瘦身）"""
     author_name = message.author.display_name
     logger.info(f"💬 收到來自 [{author_name}] 的日常閒聊: {message.clean_content}")
 
@@ -2781,49 +3336,14 @@ async def handle_general_chat(message: discord.Message):
             if not contents:
                 return
 
-            config = types.GenerateContentConfig(
-                system_instruction=get_current_general_prompt(message),
-                thinking_config=types.ThinkingConfig(thinking_level="medium"),
-                temperature=0.8,
-                tools=CURRENT_TOOLS,
-                safety_settings=DEFAULT_SAFETY_SETTINGS,
+            reply_text, _ = await _prepare_and_generate_chat_response(
+                message=message,
+                contents=contents,
+                system_prompt_fn=get_current_general_prompt,
+                base_temperature=0.75,
+                context_label="日常群聊",
             )
-
-            models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
-            response = None
-            last_error = None
-            used_model = None
-
-            token = assistant_tools.current_discord_msg.set(message)
-            try:
-                for m in models_to_try:
-                    try:
-                        logger.info(f"🤖 (日常群聊) 正在向 {m} 請求回答...")
-                        response = await asyncio.wait_for(
-                            gemini_client.aio.models.generate_content(
-                                model=m,
-                                contents=contents,
-                                config=config,
-                            ),
-                            timeout=45.0,
-                        )
-                        if response and response.text:
-                            used_model = m
-                            break
-                    except Exception as err:
-                        last_error = err
-                        logger.warning(f"⚠️ 模型 {m} 無法回應 ({err})，自動嘗試下一個備用模型...")
-                        continue
-            finally:
-                assistant_tools.current_discord_msg.reset(token)
-
-            if response and response.text:
-                thoughts_count = getattr(response.usage_metadata, "thoughts_token_count", 0) if response.usage_metadata else 0
-                if thoughts_count:
-                    logger.info(f"💭 {used_model} 深度思考完成，思考消耗了 {thoughts_count} 個 tokens！")
-                await send_split_messages(message.channel, response.text)
-            else:
-                raise last_error or RuntimeError("無法回應日常群聊訊息。")
+            await send_split_messages(message.channel, reply_text)
 
         except Exception as e:
             logger.error(f"❌ 日常群聊呼叫 Gemini 失敗: {e}", exc_info=True)
@@ -2879,51 +3399,14 @@ async def handle_japanese_learning_chat(message: discord.Message):
             if not contents:
                 return
 
-            config = types.GenerateContentConfig(
-                system_instruction=get_current_system_prompt(message),
-                thinking_config=types.ThinkingConfig(thinking_level="medium"),
-                temperature=0.7,
-                tools=CURRENT_TOOLS,
-                safety_settings=DEFAULT_SAFETY_SETTINGS,
+            reply_text, used_model = await _prepare_and_generate_chat_response(
+                message=message,
+                contents=contents,
+                system_prompt_fn=get_current_system_prompt,
+                base_temperature=0.7,
+                context_label="日語共學",
             )
-
-            models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
-            response = None
-            last_error = None
-            used_model = None
-
-            token = assistant_tools.current_discord_msg.set(message)
-            try:
-                for m in models_to_try:
-                    try:
-                        logger.info(f"🤖 (日語共學) 正在向 {m} 請求回答...")
-                        response = await asyncio.wait_for(
-                            gemini_client.aio.models.generate_content(
-                                model=m,
-                                contents=contents,
-                                config=config,
-                            ),
-                            timeout=45.0,
-                        )
-                        if response and response.text:
-                            used_model = m
-                            break
-                    except Exception as model_err:
-                        last_error = model_err
-                        logger.warning(f"⚠️ 模型 {m} 無法回應 ({model_err})，自動嘗試下一個備用模型...")
-                        continue
-            finally:
-                assistant_tools.current_discord_msg.reset(token)
-
-            if response and response.text:
-                thoughts_count = getattr(response.usage_metadata, "thoughts_token_count", 0) if response.usage_metadata else 0
-                if thoughts_count:
-                    logger.info(f"💭 {used_model} 深度思考完成，思考消耗了 {thoughts_count} 個 tokens！")
-                reply_text = response.text
-            else:
-                raise last_error or RuntimeError("所有模型皆無法回應用戶訊息。")
-
-            await send_synchronized_response(message.channel, reply_text, used_model=used_model or PRIMARY_MODEL)
+            await send_synchronized_response(message.channel, reply_text, used_model=used_model)
 
         except Exception as e:
             logger.error(f"❌ 日語共學呼叫 Gemini 失敗: {e}", exc_info=True)
@@ -2945,8 +3428,25 @@ async def on_message(message: discord.Message):
     if not is_target_channel(message.channel):
         return
 
-    # 忽略既無文字又無附件的純空白訊息
-    if not message.content.strip() and not message.attachments:
+    # 忽略既無文字、無附件、也無貼圖 (Stickers) 的純空白訊息
+    if not message.content.strip() and not message.attachments and not getattr(message, "stickers", None):
+        return
+
+    # 🛡️ 第一層安全與防濫用護欄 (Pre-Flight Safety Guardrail：在呼叫 Gemini API 前零成本攔截)
+    in_rpg = is_rpg_context(message.channel, message.clean_content)
+    safety_res = safety_guardrail.check_message_safety(
+        text=message.clean_content,
+        user_id=message.author.id,
+        enable_japanese_mode=ENABLE_JAPANESE_MODE,
+        is_rpg_session=in_rpg,
+    )
+    if not safety_res.allowed:
+        logger.warning(
+            f"🛡️ [SafetyGuardrail] 攔截來自 [{message.author.display_name}] 的請求 "
+            f"(類別: {safety_res.category}): {message.clean_content[:100]}"
+        )
+        if safety_res.should_send_reply and safety_res.reply:
+            await message.channel.send(safety_res.reply)
         return
 
     # 判斷是否開啟日語學習模式 (社群版若 ENABLE_JAPANESE_MODE=false 則全頻繁中聊天與冒險)

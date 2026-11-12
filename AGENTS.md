@@ -1,4 +1,4 @@
-# 🤖 DiscordGeminiBot 開發 Agent 行為準則與防幻覺規範 (AGENT.md)
+# 🤖 DiscordGeminiBot 開發 Agent 行為準則與防幻覺規範 (AGENTS.md)
 
 本文件為 **DiscordGeminiBot** 專案的最高開發指導原則。任何參與本專案開發、重構、除錯或擴充功能的 AI Coding Agent，在動手修改任何程式碼之前，**必須完整閱讀並嚴格遵守本規範**。
 
@@ -62,8 +62,26 @@
    - 一般訊息必須經過 `send_split_messages`（單則 <= 1900 字元）。
    - Discord `Embed.description` 嚴格限制 <= 4096 字元、單一 `Embed.add_field` 的 `value` <= 1024 字元、每個 Embed 最多 25 個 fields。所有列表型指令（`!todo`, `!memory`, `!lore`, `!journal`, `!saves`, `!party`）都必須做長度截斷或分頁保護。
    - 機器人發送訊息應預設關閉 `@everyone` 與 `@here` 權限（設定 `AllowedMentions(everyone=False, roles=False)`），防止被誘導群體標註。
-4. **敏感資訊隔離**：
+4. **敏感資訊隔離（最高資安鐵律）**：
    - `.env`、`.env.*`（除 `.example` 外）與 `data/*.db` 嚴禁加入 Git 版本控制。
+   - **嚴禁在任何終端機指令（如 `Get-Content`、`cat`、`type`）或檔案讀取工具中開啟或印出真實的 `.env` 與 `.env.community` 內容！** 若需檢查環境變數鍵名，**只能讀取 `.env.example` 或 `.env.community.example`**，避免將真實 API Key 與 Bot Token 洩漏至系統日誌。
+
+---
+
+## ⚡ 三之二、 輕量模型 (`gemini-flash-lite`) 強化架構規範 (`game_wiki_engine.py`)
+
+為確保在使用免費/高頻額度的輕量模型（如 `gemini-flash-lite-latest`）時仍具備高準確度與零幻覺表現，必須維持以下四大機制：
+
+1. **Contextual-LightRAG 自動預檢索 (`game_wiki_engine.build_auto_rag_context`)**：
+   - 本地知識庫位於 `data/game_wiki/*.md`（`slang.md`、`characters.md`、`story.md`、`modes.md`、`au_events.md`），支援依檔案 `mtime` 自動熱重載。
+   - 每個條目皆包含全知脈絡標頭（Contextual Header）、雙語與初聲縮寫 `keywords`、以及 1-Hop 實體關聯 `related_ids`（LightRAG）。
+   - 文字或圖片訊息進入時，由 Python 先行精準檢索並自動注入 System Prompt（韓服黑話最多 8~10 筆、長篇設定嚴格限制 `Top-K <= 3` 以避免小模型分心效應 Distraction Effect）。
+2. **兩階段視覺微流水線 (`game_wiki_engine.extract_image_text_pass1`)**：
+   - 當訊息包含圖片附件時，先執行無工具、無人設、`temperature=0.0` 的 **Pass-1 純視覺 OCR 預提取**，將圖上的韓文、初聲縮寫（如 `ㄷㅋㅈ`、`클모`、`34퀸`）與數字抄錄下來，再交由 Python 查表注入 **Pass-2 最終回覆**，解決小模型「邊看圖邊忘記查工具」的硬傷。
+3. **CRAG (Corrective RAG) 防幻覺煞車**：
+   - 當偵測到《殭屍學園》或韓文專有名詞提問，強制要求模型遵循「**先列事實、後套人設**」的輸出結構；若遇到知識庫未收錄之縮寫，嚴禁以英文諧音（如把 `클모` 猜成 Clan Mode）自行腦補。
+4. **動態工具瘦身 (`assistant_tools.get_scoped_tools`)**：
+   - 在非 TRPG 冒險情境（`is_rpg_context == False`）下，自動卸載 6 個 RPG 專用工具，僅保留常態核心工具（含 `lookup_game_wiki`），避免過多 Tool Schema 稀釋小模型注意力。
 
 ---
 

@@ -7,6 +7,7 @@ import discord
 import assistant_db
 import rpg_engine
 import flashcard_engine
+import game_wiki_engine
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg = assistant_db.current_discord_msg
@@ -60,7 +61,7 @@ def query_todos() -> str:
     """
     todos = assistant_db.list_todos(only_pending=True)
     if not todos:
-        return "目前沒有任何未完成的待辦事項！太棒了～"
+        return "目前沒有任何未完成的待辦事項。"
     lines = ["目前尚未完成的待辦清單："]
     for t in todos:
         lines.append(f"- #{t['id']} {t['content']} (由 {t['user_name']} 於 {t['created_at']} 新增)")
@@ -178,24 +179,49 @@ def add_flashcard_card(
     )
 
 
-# 工具函式清單建立函式，支援依模式切換 (例如社群版可停用單字卡)
-def get_assistant_tools(enable_flashcards: bool = True) -> list:
+def lookup_game_wiki(query: str) -> str:
+    """
+    查詢《殭屍學園 (Zombie High School / 좀비고등학교)》本地結構化知識庫（Contextual-LightRAG）。
+    當遇到《殭屍學園》角色、主線/Division/Heroes 劇情、遊戲模式、職業射程機制、AU 活動，
+    或韓服房間列表縮寫、韓文初聲縮寫（如 'ㄷㅋㅈ'、'34퀸'、'클모'、'오더'、'조건x'、'prace'）時，
+    必須調用此工具查詢官方設定與黑話定義，嚴禁自行猜測韓文縮寫或腦補設定！
+    參數:
+      query: 欲查詢的關鍵字（支援繁中譯名、韓文原文、韓文初聲縮寫或房名詞彙，可同時傳入多個空白分隔的關鍵字）。
+    """
+    return game_wiki_engine.lookup_game_wiki_tool_impl(query)
+
+
+def get_scoped_tools(enable_flashcards: bool = True, include_rpg: bool = False) -> list:
+    """
+    【小模型 Tool Scoping 動態工具瘦身】
+    針對 gemini-flash-lite 等輕量模型，在非 TRPG 跑團情境下自動卸載 6 個龐大的 RPG 專用工具，
+    將常態掛載工具數量減半，避免 Tool Schema 造成注意力稀釋 (Attention Dilution)。
+    """
     tools = [
+        lookup_game_wiki,
         record_memory,
         create_todo,
         finish_todo,
         query_todos,
         set_reminder,
-        rpg_engine.rpg_roll_check,
-        rpg_engine.rpg_update_state,
-        rpg_engine.rpg_record_lore,
-        rpg_engine.rpg_batch_record_lore,
-        rpg_engine.rpg_record_story_clue,
-        rpg_engine.rpg_import_character_sheet
     ]
+    if include_rpg:
+        tools.extend([
+            rpg_engine.rpg_roll_check,
+            rpg_engine.rpg_update_state,
+            rpg_engine.rpg_record_lore,
+            rpg_engine.rpg_batch_record_lore,
+            rpg_engine.rpg_record_story_clue,
+            rpg_engine.rpg_import_character_sheet,
+        ])
     if enable_flashcards:
         tools.append(add_flashcard_card)
     return tools
+
+
+# 工具函式清單建立函式，支援依模式切換 (向下相容保留完整清單)
+def get_assistant_tools(enable_flashcards: bool = True) -> list:
+    return get_scoped_tools(enable_flashcards=enable_flashcards, include_rpg=True)
 
 
 # 預設工具函式列表，供 google-genai SDK 註冊 (向下相容)

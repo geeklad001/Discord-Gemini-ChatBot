@@ -1,7 +1,7 @@
 # 🛠️ 專案重構、防幻覺與資安強化執行報告 (給 Development Agent 的交接通知)
 
 > **致 Development Agent：**
-> 本專案剛完成一次全面的資安審查、防幻覺修復與匯入功能重構。在你接手進行任何後續開發前，請務必詳讀本報告與 [`agent.md`](./agent.md)，切勿將已修復的防呆與安全機制改回舊寫法。
+> 本專案剛完成一次全面的資安審查、防幻覺修復與匯入功能重構。在你接手進行任何後續開發前，請務必詳讀本報告與 [`AGENTS.md`](./AGENTS.md)，切勿將已修復的防呆與安全機制改回舊寫法。
 
 ---
 
@@ -66,10 +66,29 @@
 
 ---
 
-## 五、 後續開發注意事項
+## 五、 2026-11-08 新增：《殭屍學園》Contextual-LightRAG 知識庫與輕量模型 (`gemini-flash-lite`) 強化架構
 
-請在後續每次修改程式碼前閱讀 [`agent.md`](./agent.md)，並於修改後執行：
+為了解決 `gemini-flash-lite-latest` 在面對《殭屍學園 (좀비고등학교)》韓服房間列表截圖（如 `ㄷㅋㅈ`、`34퀸`、`11렙 오더 클모`、`prace 조건x`）及遊戲設定時，「看圖忘記呼叫工具」與「過多工具造成注意力稀釋」的問題，已完成以下架構升級（請勿回退或覆蓋）：
+
+1. **新增 [`game_wiki_engine.py`](./game_wiki_engine.py)（Contextual-LightRAG + 動態熱重載檢索器）**：
+   - 自動載入 `data/game_wiki/*.md`（`slang.md`、`characters.md`、`story.md`、`modes.md`、`au_events.md` 共 91+ 筆條目），並依檔案 `mtime` 自動熱重載。
+   - 支援 **Contextual Retrieval 全知脈絡標頭**、韓文初聲縮寫（`ㄷㅋㅈ`）與房名動態正則解析（`N렙`、`듀옹`、`prace`、`조건x`）。
+   - 支援 **LightRAG 1-Hop 實體關聯圖譜展開 (`related_ids`)**，且針對長篇設定嚴格限制 `Top-K <= 3`（防止小模型分心效應 Distraction Effect），同時完整保留所有命中的韓服開房黑話。
+2. **新增「兩階段視覺微流水線 (2-Pass Vision Pipeline)」(`game_wiki_engine.extract_image_text_pass1` + `bot.py`)**：
+   - 當訊息包含圖片附件時，`handle_general_chat` 與 `handle_japanese_learning_chat` 會先執行無工具、無人設、`temperature=0.0` 的 **Pass-1 純視覺 OCR 預提取**，將圖中韓文與縮寫抄出，再由 Python 自動查出 `data/game_wiki/` 標準答案注入 **Pass-2 最終回覆**。
+3. **新增 CRAG (Corrective RAG) 防幻覺煞車與「先列事實、後套人設」約束**：
+   - 在 System Prompt 動態注入區塊與 `general_prompt_community.txt` 中，強制要求模型先條列字典與設定事實，再套用群組微毒舌人設收尾；遇到未收錄的韓文縮寫嚴禁以英文諧音（如 Clan Mode）瞎掰。
+4. **新增動態工具瘦身 (`assistant_tools.get_scoped_tools`) 與 `!wiki` 快捷指令**：
+   - 在非 TRPG 冒險情境下，自動卸載 6 個 RPG 專用工具，僅保留常態核心工具（含新增的 `lookup_game_wiki`），大幅提升 `flash-lite` 的工具遵循率。
+   - 在 `bot.py` 新增 `!wiki [關鍵字]`（別名：`!圖鑑`、`!黑話`、`!좀고`）指令，可隨時檢視知識庫統計或直接查詢條目。
+
+---
+
+## 六、 後續開發注意事項（含最高資安警告）
+
+1. 🚨 **嚴禁讀取真實 `.env` 或 `.env.community`**：請絕對不要在終端機執行 `Get-Content .env.community` 或讀取真實 `.env` 檔案，以免將真實 API Key 與 Discord Token 印在對話紀錄中！檢查設定鍵名請一律讀取 `.env.example` 或 `.env.community.example`。
+2. 請在後續每次修改程式碼前閱讀 [`AGENTS.md`](./AGENTS.md)，並於修改後執行：
 ```powershell
-.\.venv\Scripts\python.exe -m py_compile bot.py assistant_db.py assistant_tools.py rpg_engine.py flashcard_engine.py
+.\.venv\Scripts\python.exe -m py_compile bot.py assistant_db.py assistant_tools.py rpg_engine.py flashcard_engine.py video_engine.py game_wiki_engine.py
 ```
 確認所有模組編譯通過，並同步維護 `README.md`、`COMMANDS.md` 與 `RPG_GUIDE.md`。

@@ -234,8 +234,8 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # 優先使用 .env 中的 PRIMARY_MODEL 設定，預設為旗艦 gemini-3.8-flash
 # 若遇到 429 當日次數超標或 503 尖峰，則由 FALLBACK_MODELS 接棒保底，絕不當機
-PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini-3.8-flash").strip()
-FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.6-flash"]
+PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini-flash-lite-latest").strip()
+FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite"]
 
 # -------------------------------------------------------------
 # 安全過濾設定：全部設定為 BLOCK_NONE (完全關閉審查過濾)

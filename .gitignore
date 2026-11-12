@@ -1,0 +1,21 @@
+# 敏感檔案與金鑰（絕對嚴禁上傳 GitHub）
+.env
+.env*
+!.env.example
+
+# Python 虛擬環境
+.venv/
+venv/
+env/
+
+# Python 快取與編譯檔
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 系統與日誌暫存
+*.log
+*.tmp
+*.db
+*.sqlite
+*.sqlite3

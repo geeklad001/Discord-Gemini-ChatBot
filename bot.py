@@ -39,6 +39,9 @@ TARGET_CHANNEL_ID_RAW = os.getenv("TARGET_CHANNEL_ID", "").strip()
 PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini-3.8-flash").strip()
 FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-flash-lite"]
 
+# 安全設定開關 (預設為 true，即全面解除審查限制 BLOCK_NONE)
+DISABLE_SAFETY_SETTINGS = os.getenv("DISABLE_SAFETY_SETTINGS", "true").strip().lower() not in ("false", "0", "no")
+
 # 檢查關鍵環境變數
 if not DISCORD_BOT_TOKEN or DISCORD_BOT_TOKEN == "YOUR_DISCORD_BOT_TOKEN_HERE":
     logger.error("❌ 找不到有效的 DISCORD_BOT_TOKEN！請確認已在 .env 中正確填寫機器人 Token。")
@@ -56,8 +59,35 @@ if TARGET_CHANNEL_ID_RAW and TARGET_CHANNEL_ID_RAW.isdigit():
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # -------------------------------------------------------------
-# 2. 載入人設提示詞 (Prompt)
+# 2. 安全設定與人設提示詞
 # -------------------------------------------------------------
+def get_custom_safety_settings() -> Optional[List[types.SafetySetting]]:
+    """若開啟解除安全限制，將各大危害分類閾值設為 BLOCK_NONE，暢聊不被攔截。"""
+    if not DISABLE_SAFETY_SETTINGS:
+        return None
+    return [
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold=types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold=types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            threshold=types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold=types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+            threshold=types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+    ]
+
 def load_system_prompt() -> str:
     prompt_path = BASE_DIR / "prompt.txt"
     if prompt_path.exists():
@@ -68,7 +98,7 @@ def load_system_prompt() -> str:
                 return content
         except Exception as e:
             logger.warning(f"⚠️ 讀取 prompt.txt 失敗 ({e})，將採用預設人設。")
-    return "你是這個 Discord 伺服器裡的隨性群友，講話自然、略帶冷幽默，不用客服口氣，像個真實的朋友一樣聊天。"
+    return "你是這個 Discord 伺服器裡的隨性好友，講話自然、略帶冷幽默，不用客服口氣，像個真實的朋友或伴侶一樣輕鬆聊天。"
 
 SYSTEM_INSTRUCTION = load_system_prompt()
 
@@ -132,15 +162,17 @@ async def call_gemini_with_fallback(
     contents: List[types.Content],
     system_instruction: str,
 ) -> str:
-    """呼叫 Gemini 生成回覆，支援自動降級 fallback 機制。"""
+    """呼叫 Gemini 生成回覆，支援自動降級 fallback 機制與自訂安全設定。"""
     candidate_models = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
     last_error = None
+    safety_settings = get_custom_safety_settings()
 
     for model_name in candidate_models:
         try:
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 temperature=0.8,
+                safety_settings=safety_settings,
             )
             response = await asyncio.wait_for(
                 gemini_client.aio.models.generate_content(
@@ -163,13 +195,12 @@ async def call_gemini_with_fallback(
 async def build_chat_context(
     channel: discord.TextChannel,
     current_message: discord.Message,
-    history_limit: int = 10,
+    history_limit: int = 12,
 ) -> List[types.Content]:
     """從頻道抓取近期歷史訊息，組合成連貫的對話上下文。"""
     raw_messages = []
     try:
         async for msg in channel.history(limit=history_limit, before=current_message):
-            # 排除空的或是由其他機器人發送的指令訊息
             if msg.content or msg.attachments:
                 raw_messages.append(msg)
     except Exception as e:
@@ -226,9 +257,13 @@ async def on_ready():
     else:
         logger.info("🎯 目標頻道未設定，將在被 @提及 時進行回覆。")
     logger.info(f"🧠 主要模型: {PRIMARY_MODEL}")
+    if DISABLE_SAFETY_SETTINGS:
+        logger.info("🔓 安全審查過濾: 已關閉 (BLOCK_NONE，暢聊不受限制)")
+    else:
+        logger.info("🛡️ 安全審查過濾: 啟用中 (標準防護)")
     logger.info("=" * 60)
 
-    activity = discord.CustomActivity(name="在群裡摸魚打工中 | 找我直接說話")
+    activity = discord.CustomActivity(name="在線摸魚中 | 隨時找我聊天")
     await bot.change_presence(status=discord.Status.online, activity=activity)
 
 @bot.event
@@ -258,7 +293,7 @@ async def on_message(message: discord.Message):
             await send_split_messages(message.channel, reply_text, reply_to=message)
         except Exception as e:
             logger.error(f"處理訊息時發生錯誤: {e}", exc_info=True)
-            await message.reply("（揉了揉太陽穴）...後台出了點小狀況，等下再聊吧。", mention_author=False)
+            await message.reply("（揉了揉太陽穴）...剛才發了個呆，等下再聊吧。", mention_author=False)
 
 # -------------------------------------------------------------
 # 6. 基本實用指令
@@ -267,14 +302,14 @@ async def on_message(message: discord.Message):
 async def ping(ctx: commands.Context):
     """檢查機器人延遲與在線狀態"""
     latency_ms = round(bot.latency * 1000)
-    await ctx.reply(f"🏓 延遲 {latency_ms} ms。在線呢，別催了。", mention_author=False)
+    await ctx.reply(f"🏓 延遲 {latency_ms} ms。在線呢，找我幹嘛？", mention_author=False)
 
 @bot.command(name="reload")
 async def reload_prompt(ctx: commands.Context):
     """熱重載人設提示詞 (修改 prompt.txt 後可直接生效)"""
     global SYSTEM_INSTRUCTION
     SYSTEM_INSTRUCTION = load_system_prompt()
-    await ctx.reply("🔄 人設 prompt.txt 已重新載入！現在已經換上新設定囉。", mention_author=False)
+    await ctx.reply("🔄 人設 prompt.txt 已重新載入！新個性已生效囉。", mention_author=False)
 
 # -------------------------------------------------------------
 # 7. 主程式進入點

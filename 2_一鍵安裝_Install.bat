@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title Discord Gemini Bot - 一鍵環境安裝
 cd /d "%~dp0"
@@ -38,7 +38,7 @@ if %errorlevel% neq 0 goto install_fail
 
 echo.
 echo ========================================================
-echo   恭喜。所有環境與套件已安裝成功。
+echo   恭喜！所有環境與套件已安裝成功。
 echo.
 echo   接下來請確認 .env 已填寫完畢，
 echo   然後雙擊執行 [3_一鍵啟動_Start_Bot.bat] 即可讓機器人上線。

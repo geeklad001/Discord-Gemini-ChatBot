@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title Discord Gemini 聊天機器人
 cd /d "%~dp0"

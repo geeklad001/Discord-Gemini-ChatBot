@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title 建立設定檔 [.env]
 cd /d "%~dp0"

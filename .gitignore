@@ -8,6 +8,8 @@ env/
 .env*
 !.env.example
 !.env.community.example
+!.env.starter.example
+*_personal.txt
 
 # Database & Persistent Data (keep curated game_wiki files tracked)
 data/*

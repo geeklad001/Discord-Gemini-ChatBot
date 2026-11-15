@@ -41,9 +41,12 @@
 * **三合一超直覺匯入（`!card import`）**：支援直接在聊天室貼上多行單字文字、從本機 `data/imports/` 直接讀取大型 Anki 牌組（支援 N1~N5 子牌組與高低頻篩選匯入、保留繁體釋義、重點粗體高亮與真人音訊）、或在 Discord 拖曳上傳檔案匯入。
 * **Kotoba 限時搶答（`!quiz`）**：多人拼刀限時搶答假名讀音或中文意思，附即時排行榜結算。
 
-### 8. 🌐 多實例雙開架構（情侶共學版 vs. 社群跑團版）
-* **情侶版（`start_bot.bat` / `.env`）**：開啟日語雙頻道與單字卡，連結 `data/assistant.db`。
-* **社群版（`start_community_bot.bat` / `.env.community`）**：關閉日語與單字卡，化身為熱情且親切的社群助手與新人招待，日常暢聊並隨選提供 TRPG 跑團服務，獨立連結 `data/community.db`，100% 資料隔離！
+### 8. 🌐 單一程式碼庫 × 功能開關與多實例隔離
+本專案透過模組化套件（`core/`、`cogs/`、`*_engine.py`）與 `.env` 功能開關，一套程式碼即可切換三種開箱模式並完全隔離資料庫：
+* **新手自架／好友分享版（`.env.starter.example` + `general_prompt_starter.txt`）**：搭配 `1_設定金鑰_Setup_Env.bat` ➔ `2_一鍵安裝_Install.bat` ➔ `3_一鍵啟動_Start_Bot.bat` 三步驟快速開張！
+* **社群跑團與群聊版（`start_community_bot.bat` / `.env.community.example`）**：關閉日語與單字卡（`ENABLE_JAPANESE_MODE=false`、`ENABLE_FLASHCARD_MODE=false`），可選擇開啟遊戲知識庫（`ENABLE_GAME_WIKI`）與防注入護欄（`ENABLE_SAFETY_GUARDRAIL`），獨立連結 `data/community.db`。
+* **雙語共學管家版（`start_bot.bat` / `.env.example`）**：開啟日語雙頻道（`ENABLE_JAPANESE_MODE=true`）與 Anki 單字卡（`ENABLE_FLASHCARD_MODE=true`），獨立連結 `data/assistant.db`。
+* 常用彈性開關：`ENABLE_GAME_WIKI`、`ENABLE_SAFETY_GUARDRAIL`（本地安全/防注入護欄）、`DISABLE_SAFETY_SETTINGS`（暢聊放鬆 Gemini 安全過濾）、`FALLBACK_MODELS`（自訂備援模型順序）。
 
 ---
 
@@ -51,7 +54,8 @@
 
 | 指令 | 說明 | 範例 |
 | :--- | :--- | :--- |
-| `!help` | 查看完整指令手冊與說明卡片 | `!help` |
+| `!help` | 依當前實例啟用的模組動態顯示指令速查表 | `!help` |
+| `!reload` | 免重啟即時熱重載人設 Prompt 與知識庫 | `!reload` |
 | `!todo` | 查看目前尚未完成的待辦事項 | `!todo` |
 | `!todo add <內容>` | 新增待辦事項 | `!todo add 訂週六燒肉` |
 | `!todo done <編號/關鍵字>` | 標記待辦為已完成 | `!todo done 1` 或 `!todo done 燒肉` |
@@ -71,19 +75,22 @@
 | `!lore` / `!lore import` | 查看或批次匯入世界設定集 (Lorebook) | `!lore`、`!lore import` |
 | `!lore add <詞> \| <內容>` | 新增單筆世界設定 | `!lore add 星露草 \| 深山發光解毒藥草` |
 | `!lore del <編號>` | 刪除世界設定 | `!lore del 1` |
+| `!wiki [關鍵字]` | 查詢《殭屍學園》角色、模式劇情與韓服開房黑話（另有 `add`/`import`/`list`/`del`） | `!wiki ㄷㅋㅈ`、`!wiki add 詞 \| 解釋` |
 | `!card [牌組名]` / `!decks` | 開啟互動式單字卡學習 / 查看所有牌組 | `!card`、`!decks` |
 | `!card add <單字>` | 新增單字（僅打單字時由 AI 自動補齊讀音與例句） | `!card add 桜` |
 | `!card import [檔名/等級/all]` | 貼上文字、讀取 `data/imports/`（支援一鍵全分類 `all` 或指定 `N3高頻`） | `!card import all`、`!card import N3高頻` |
 | `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |
-| `!remember <事實>` | 直接寫入長期記憶庫 | `!remember 女友對花生過敏` |
+| `!remember <事實>` | 直接寫入長期記憶庫 | `!remember 喜歡抹茶拿鐵` |
 | `!forget <編號>` | 刪除某一條長期記憶 | `!forget 1` |
-| `!reset` | 封存當前頻道的歷史對話，重新開啟新話題 | `!reset` |
+| `!reset` | 封存當前頻道的歷史對話（持久化於 SQLite），開啟新話題 | `!reset` |
 
 ---
 
 ## 🚀 快速啟動
 
-* **情侶共學與管家實例**：雙擊 **`start_bot.bat`**
-* **社群跑團與群聊實例**：雙擊 **`start_community_bot.bat`**
+* **第一次新手自架（一鍵引導）**：依序雙擊 **`1_設定金鑰_Setup_Env.bat`** ➔ **`2_一鍵安裝_Install.bat`** ➔ **`3_一鍵啟動_Start_Bot.bat`**（詳見 [新手架設指南](COMMUNITY_SETUP_GUIDE.md)）
+* **已有 `.venv` 的雙實例進階啟動**：
+  * 主實例：雙擊 **`start_bot.bat`**（載入 `.env`）
+  * 社群實例：雙擊 **`start_community_bot.bat`**（載入 `.env.community`）

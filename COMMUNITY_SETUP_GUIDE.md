@@ -96,36 +96,40 @@
 下載專案資料夾解壓縮後，你會看到資料夾內有準備好的小幫手：
 
 ### 1. 產生並填寫設定檔
-- 雙擊執行資料夾中的 **`1_建立設定檔.bat`**。
-- 它會自動建立 `.env` 設定檔，並用「記事本」幫你打開。
+- 雙擊執行資料夾中的 **`1_設定金鑰_Setup_Env.bat`**。
+- 它會自動以安全的新手入門範本（`.env.starter.example` + `general_prompt_starter.txt`）建立 `.env` 與你的專屬人設檔（若尚未存在），並用「記事本」幫你打開 `.env`。
 - 請在對應的位置貼上剛才準備好的三串金鑰與 ID（**等號後面不要留空格**）：
   ```env
   GEMINI_API_KEY=貼上你的Gemini_API_Key
   DISCORD_BOT_TOKEN=貼上你的Discord_Bot_Token
   TARGET_CHANNEL_ID=貼上你的純數字頻道ID
   ```
+- （選用功能開關）預設新手版只開啟通用群聊與 TRPG 跑團；若想開啟額外模組，可在 `.env` 將對應開關改為 `true`：
+  - `ENABLE_GAME_WIKI=true`（開啟《殭屍學園》韓服黑話與圖鑑知識庫）
+  - `ENABLE_FLASHCARD_MODE=true`（開啟日語單字卡與搶答）
+  - `ENABLE_SAFETY_GUARDRAIL=true`（開啟防 Prompt 注入與濫用安全護欄）
 - 按鍵盤 `Ctrl + S` 存檔，然後關閉記事本。
 
 ### 2. 一鍵安裝依賴套件（只需執行一次）
-- 雙擊執行 **`2_一鍵安裝.bat`**。
-- 黑色視窗會自動為你建立專屬虛擬環境並安裝所需的套件（如 discord.py 等）。
-- 過程中請耐心等待 1~3 分鐘，直到視窗顯示「安裝完成！請按任意鍵繼續」，按任意鍵關閉視窗即可。
+- 雙擊執行 **`2_一鍵安裝_Install.bat`**。
+- 黑色視窗會自動為你建立 `.venv` 專屬虛擬環境並安裝 `requirements.txt` 所需的套件（如 discord.py、google-genai 等）。
+- 過程中請耐心等待 1~3 分鐘，直到視窗顯示安裝完成後按任意鍵關閉即可。
 
 ### 3. 一鍵啟動機器人！
-- 雙擊執行 **`3_一鍵啟動.bat`**。
+- 雙擊執行 **`3_一鍵啟動_Start_Bot.bat`**。
 - 視窗會顯示正在啟動，並出現：
   ```
   [INFO] 🚀 DiscordGeminiBot 登入成功！已連線身分: ...
   ```
 - 此時回到你的 Discord 伺服器，你的機器人頭像旁邊會亮起綠燈（在線上）！
-- 在指定頻道傳送訊息（例如：`嗨，你是誰？`），機器人就會用語氣自然的打工仔風格回應你囉！
+- 在指定頻道傳送訊息（例如：`嗨，你是誰？`），機器人就會回應你囉！
 - **想關閉機器人時**：直接關閉該黑色視窗即可。
 
 ---
 
 ## ❓ 常見問題與排錯指南 (FAQ)
 
-### Q1：點擊 `2_一鍵安裝.bat` 出現 `'python' 不是內部或外部命令`？
+### Q1：點擊 `2_一鍵安裝_Install.bat` 出現 `'python' 不是內部或外部命令`？
 - **原因**：安裝 Python 時忘了勾選 `Add python.exe to PATH`。
 - **解決方法**：重新執行剛才下載的 Python 安裝檔，選擇「Modify」或解除安裝後重裝，**請務必在第一步勾選最下方的 `Add python.exe to PATH`**！
 
@@ -139,8 +143,9 @@
 - **原因**：`.env` 中的 `DISCORD_BOT_TOKEN` 複製有誤，或者多複製了空格或換行。
 - **解決方法**：回到 Discord Developer Portal 重新點一次 Reset Token，重新複製並小心貼到 `.env` 的 `DISCORD_BOT_TOKEN=` 後方。
 
-### Q4：我想改機器人的說話風格或名字？
-- 機器人的日常說話風格與群聊人設寫在資料夾內的 **`general_prompt.txt`** 檔案中，你可以隨時用記事本打開修改，儲存後重新執行 `3_一鍵啟動.bat` 即可生效！
+### Q4：我想改機器人的說話風格、安全限制或知識庫？
+- 機器人的日常說話風格與人設寫在 `.env` 的 `GENERAL_PROMPT_FILE` 指定的檔案中（新手腳本預設使用 `general_prompt.txt`，源自 `general_prompt_starter.txt`）；你可以在開關機前修改 `.env` 中的 `ENABLE_SAFETY_GUARDRAIL` / `DISABLE_SAFETY_SETTINGS` / `ENABLE_GAME_WIKI`。
+- 若只修改人設文字或 `data/game_wiki/` 知識庫，直接在頻道輸入 **`!reload`** 就能即時熱重載，不用重開視窗！
 
 ---
 祝使用愉快！如果有任何問題，歡迎詢問伺服器管理員！

@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sqlite3
 import contextvars
@@ -9,6 +10,10 @@ import discord
 # 台灣時區 (UTC+8)
 TZ_TAIPEI = timezone(timedelta(hours=8))
 DB_DIR = Path(__file__).parent / "data"
+DATA_DIR = DB_DIR
+IMPORTS_DIR = DATA_DIR / "imports"
+MEDIA_DIR = DATA_DIR / "media"
+_initialized_dbs: set[str] = set()
 
 
 def get_db_path() -> Path:
@@ -23,18 +28,32 @@ def get_db_path() -> Path:
 current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = contextvars.ContextVar("current_discord_msg", default=None)
 
 
-def get_conn() -> sqlite3.Connection:
+@contextlib.contextmanager
+def get_conn():
+    """取得並自動管理交易與關閉的 SQLite 連線 Context Manager（防止 Windows 檔案鎖定與連線洩漏）"""
     DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(get_db_path(), timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
-    """初始化助理資料庫表結構"""
+    """初始化助理資料庫表結構（每個資料庫實例僅執行一次建表與 WAL 設定）"""
+    db_key = str(get_db_path())
+    if db_key in _initialized_dbs:
+        return
+    IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
+        conn.execute("PRAGMA journal_mode = WAL;")
         cursor = conn.cursor()
         # 1. 長期記憶庫
         cursor.execute("""
@@ -69,7 +88,15 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        # 4. 頻道/討論串對話重設時間點 (持久化 !reset)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS channel_states (
+                channel_id INTEGER PRIMARY KEY,
+                reset_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
+    _initialized_dbs.add(db_key)
 
 
 # -------------------------------------------------------------
@@ -271,3 +298,34 @@ def list_upcoming_reminders() -> list[dict]:
             if remind_dt and remind_dt > now:
                 upcoming.append(item)
     return upcoming
+
+
+# -------------------------------------------------------------
+# 頻道對話重設時間點 (Persistent !reset Timestamps)
+# -------------------------------------------------------------
+def set_channel_reset(channel_id: int, reset_dt: datetime) -> None:
+    """持久化紀錄頻道或討論串最後一次 !reset 的時間點（UTC ISO 8601）"""
+    init_db()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO channel_states (channel_id, reset_at)
+            VALUES (?, ?)
+            ON CONFLICT(channel_id) DO UPDATE SET reset_at = excluded.reset_at
+            """,
+            (channel_id, reset_dt.isoformat()),
+        )
+        conn.commit()
+
+
+def get_channel_reset(channel_id: int) -> Optional[datetime]:
+    """讀取頻道或討論串最後一次 !reset 的時間點"""
+    init_db()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT reset_at FROM channel_states WHERE channel_id = ?",
+            (channel_id,),
+        ).fetchone()
+    if not row or not row["reset_at"]:
+        return None
+    return parse_iso_datetime(row["reset_at"])

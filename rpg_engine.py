@@ -945,7 +945,7 @@ def rpg_update_state(
     更新玩家或隊伍成員的冒險狀態（獲得或失去物品、扣減或恢復血量、轉移地點、更新任務目標）。
     這會直接永久寫入本機資料庫，使物品和數值絕對不會在未來的對話中憑空遺忘或消失。
     參數:
-      target_player: 要更新的目標角色名或玩家名稱（例如：「莉莉亞」或「妖貓」）。若更新全隊地點或目標，可填「全隊」或「隊伍」。若留空，預設為當前發言玩家。
+      target_player: 要更新的目標角色名或玩家名稱（例如：「莉莉亞」或「小明」）。若更新全隊地點或目標，可填「全隊」或「隊伍」。若留空，預設為當前發言玩家。
       char_name: 角色名稱（若無更改可留空）
       char_class: 職業稱號（若無更改可留空）
       hp_change: 血量增減（如受傷填 -15，喝藥水恢復填 +25）
@@ -1143,6 +1143,8 @@ def parse_character_sheet(raw_text: str, default_name: str = "冒險者") -> dic
     # 7. 初始裝備 / 隨身道具 / 武器 / 防具 / 法寶 / 義體
     inv_items = []
     equip_matches = re.findall(r"(?:[\-\*][ \t]*)?\*\*(?:武器|防具|特殊道具|道具|裝備|隨身裝備|隨身物品|攜帶物品|本命法寶|法寶|義體|義體植入)[^\*]*\*\*[ \t\:\：]+([^\r\n]+)", raw_text)
+    if not equip_matches:
+        equip_matches = re.findall(r"^(?:[\-\*][ \t]*)?(?:武器|防具|特殊道具|道具|裝備|隨身裝備|隨身物品|攜帶物品|本命法寶|法寶|義體|義體植入)[ \t\:\：]+([^\r\n]+)", raw_text, re.MULTILINE)
     if equip_matches:
         for em in equip_matches:
             item_clean = em.strip().strip("*-` ")

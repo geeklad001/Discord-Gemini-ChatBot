@@ -22,7 +22,7 @@
 - SQLite 建表 (`init_*_tables()`) 應在啟動時執行一次，**禁止**在每個高頻率查詢函式內重複執行 `CREATE TABLE` 或 `ALTER TABLE`。
 
 ### 4. 修改後強制驗證 (Mandatory Post-Edit Verification)
-- 每次修改完 Python 檔案後，Agent **必須**執行語法與匯入檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py assistant_db.py assistant_tools.py rpg_engine.py flashcard_engine.py`），確認零語法錯誤後才算完成。
+- 每次修改完 Python 檔案後，Agent **必須**執行語法與單元測試檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py assistant_db.py assistant_tools.py rpg_engine.py flashcard_engine.py video_engine.py game_wiki_engine.py safety_guardrail.py core/*.py cogs/*.py` 與 `.venv\Scripts\python.exe -m unittest discover -s tests -v`），確認零語法錯誤與全數測試通過後才算完成。
 
 ---
 
@@ -41,7 +41,8 @@
 - **嚴禁硬編碼特定身分詞彙**：在共用的 `assistant_db.py`、`assistant_tools.py`（包含 Tool Docstrings！）與 `rpg_engine.py` 中，**不得將「情侶」寫死在共用提示詞或工具描述中**（應根據環境變數或使用中性詞彙如「長期記憶庫」、「共同待辦清單」），否則社群版 AI 會在讀取 Tool Schema 時產生「你們是情侶」的嚴重幻覺。
 
 ### 3. 工具掛載與 System Prompt 一致性 (Tool-Prompt Alignment)
-- 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道不應使用的工具（例如在純日語發音練習頻道中不需使用的工具，或停用 Flashcard 時的 `add_flashcard_card`），應從 `tools` 清單中移除，避免模型亂呼叫做白工。
+- 本專案主程式已模組化拆分至 `core/`（`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`）與 `cogs/`（`assistant_cog.py`、`rpg_cog.py`、`flashcard_cog.py`、`wiki_cog.py`），由 `bot.py` 統一載入。
+- 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道或該實例未啟用的工具（例如停用 `ENABLE_FLASHCARD_MODE` 時的 `add_flashcard_card`、停用 `ENABLE_GAME_WIKI` 時的 `lookup_game_wiki` 與 Pass-1 OCR），應從 `tools` 清單中移除並停用對應 Cog，避免模型亂呼叫做白工。
 - **HornBot 語音頻道防護 (`TTS_CHANNEL_ID`)**：在日語雙頻道模式下，必須確保只有純日語區段 (`[JP]`) 會送往 `TTS_CHANNEL_ID`。若模型因呼叫工具而未輸出 `[ZH]` 分隔標籤，必須有防呆機制避免將整段中文工具回報直接丟進 TTS 頻道朗讀。
 
 ### 4. 歷史上下文建構過濾 (Context History Hygiene)
@@ -91,10 +92,10 @@
 
 | 變更類型 | 必須同步更新的文件清單 |
 | :--- | :--- |
-| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `bot.py` 中的 `help_command` (`!help` Embed 面板，含情侶版與社群版分支) |
-| **新增 / 修改 RPG 機制、角色卡欄位、存讀檔或擲骰規則** | 1. `RPG_GUIDE.md`（RPG 專屬指南與速查表）<br>2. `COMMANDS.md` & `README.md`<br>3. `general_prompt.txt` & `general_prompt_community.txt` |
-| **新增 / 修改 Gemini Function Calling 工具 (`assistant_tools.py` / `rpg_engine.py`)** | 1. 對應的函數 Docstring（Gemini 直接讀取 Docstring 作為 Tool Schema）<br>2. `general_prompt.txt`、`general_prompt_community.txt`、`system_prompt.txt`<br>3. `assistant_tools.py` 的 `get_assistant_tools()` 註冊清單 |
-| **新增 / 修改環境變數 (`.env` 開關或設定)** | 1. `.env.example`（情侶/預設版範本）<br>2. `.env.community.example`（社群版範本）<br>3. `README.md` |
+| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `cogs/assistant_cog.py` 中的 `build_help_overview_embed`（依啟用開關動態呈現的 `!help` Embed 面板） |
+| **新增 / 修改 RPG 機制、角色卡欄位、存讀檔或擲骰規則** | 1. `RPG_GUIDE.md`（RPG 專屬指南與速查表）<br>2. `COMMANDS.md` & `README.md`<br>3. `general_prompt.txt`、`general_prompt_community.txt`、`general_prompt_starter.txt` |
+| **新增 / 修改 Gemini Function Calling 工具 (`assistant_tools.py` / `rpg_engine.py`)** | 1. 對應的函數 Docstring（Gemini 直接讀取 Docstring 作為 Tool Schema）<br>2. `general_prompt.txt`、`general_prompt_community.txt`、`general_prompt_starter.txt`、`system_prompt.txt`<br>3. `assistant_tools.py` 的 `get_scoped_tools()` / `get_assistant_tools()` 註冊清單 |
+| **新增 / 修改環境變數 (`.env` 開關或設定)** | 1. `.env.example`（雙語共學版範本）<br>2. `.env.community.example`（社群版範本）<br>3. `.env.starter.example`（新手一鍵分享版範本）<br>4. `core/config.py` & `README.md` |
 | **新增外部 Python 套件 `import`** | 1. `requirements.txt`（必須明確列出所有直接 import 的第三方套件與版本下限） |
 
 ---

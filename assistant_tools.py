@@ -191,20 +191,25 @@ def lookup_game_wiki(query: str) -> str:
     return game_wiki_engine.lookup_game_wiki_tool_impl(query)
 
 
-def get_scoped_tools(enable_flashcards: bool = True, include_rpg: bool = False) -> list:
+def get_scoped_tools(
+    enable_flashcards: bool = True,
+    include_rpg: bool = False,
+    enable_game_wiki: bool = True,
+) -> list:
     """
     【小模型 Tool Scoping 動態工具瘦身】
     針對 gemini-flash-lite 等輕量模型，在非 TRPG 跑團情境下自動卸載 6 個龐大的 RPG 專用工具，
-    將常態掛載工具數量減半，避免 Tool Schema 造成注意力稀釋 (Attention Dilution)。
+    並依功能開關決定是否掛載單字卡與《殭屍學園》知識庫工具，避免無關 Tool Schema 稀釋注意力。
     """
     tools = [
-        lookup_game_wiki,
         record_memory,
         create_todo,
         finish_todo,
         query_todos,
         set_reminder,
     ]
+    if enable_game_wiki:
+        tools.insert(0, lookup_game_wiki)
     if include_rpg:
         tools.extend([
             rpg_engine.rpg_roll_check,
@@ -220,9 +225,13 @@ def get_scoped_tools(enable_flashcards: bool = True, include_rpg: bool = False) 
 
 
 # 工具函式清單建立函式，支援依模式切換 (向下相容保留完整清單)
-def get_assistant_tools(enable_flashcards: bool = True) -> list:
-    return get_scoped_tools(enable_flashcards=enable_flashcards, include_rpg=True)
+def get_assistant_tools(enable_flashcards: bool = True, enable_game_wiki: bool = True) -> list:
+    return get_scoped_tools(
+        enable_flashcards=enable_flashcards,
+        include_rpg=True,
+        enable_game_wiki=enable_game_wiki,
+    )
 
 
 # 預設工具函式列表，供 google-genai SDK 註冊 (向下相容)
-ASSISTANT_TOOLS = get_assistant_tools(enable_flashcards=True)
+ASSISTANT_TOOLS = get_assistant_tools(enable_flashcards=True, enable_game_wiki=True)

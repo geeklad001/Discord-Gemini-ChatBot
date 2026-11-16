@@ -256,20 +256,23 @@ def get_deck(deck_identifier: str) -> Optional[dict]:
 
 
 def delete_deck(deck_id: int) -> bool:
-    """刪除指定牌組與其底下的所有卡片（連帶清理關聯媒體圖檔）"""
+    """刪除指定牌組與其底下的所有卡片（連帶清理關聯圖檔與音訊檔）"""
     init_flashcard_tables()
     with get_conn() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT image_filename FROM flashcard_cards WHERE deck_id = ? AND image_filename != ''", (deck_id,))
+        cursor.execute(
+            "SELECT image_filename, audio_filename FROM flashcard_cards WHERE deck_id = ? AND (image_filename != '' OR audio_filename != '')",
+            (deck_id,),
+        )
         for row in cursor.fetchall():
-            fn = row["image_filename"]
-            if fn:
-                p = MEDIA_DIR / fn
-                if p.is_file():
-                    try:
-                        p.unlink()
-                    except Exception:
-                        pass
+            for fn in (row["image_filename"], row["audio_filename"]):
+                if fn:
+                    p = MEDIA_DIR / fn
+                    if p.is_file():
+                        try:
+                            p.unlink()
+                        except Exception:
+                            pass
         cursor.execute("DELETE FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
         cursor.execute("DELETE FROM flashcard_decks WHERE id = ?", (deck_id,))
         conn.commit()
@@ -623,6 +626,101 @@ def get_anki_subdecks(apkg_path: Path) -> list[dict]:
         return []
 
 
+def _parse_anki_note_fields(note_row, models: dict) -> dict:
+    """將單筆 Anki note 列解析為標準化的單字卡欄位字典"""
+    flds = note_row["flds"].split("\x1f")
+    mid = str(note_row["mid"])
+    m = models.get(mid, {})
+    fld_names = [f["name"] for f in m.get("flds", [])]
+    card_dict = dict(zip(fld_names, flds)) if fld_names else {}
+
+    if "VocabKanji" in card_dict and "VocabFurigana" in card_dict:
+        return {
+            "front": card_dict.get("VocabKanji") or card_dict.get("VocabFurigana", ""),
+            "reading": card_dict.get("VocabFurigana", ""),
+            "pitch": card_dict.get("VocabPitch", ""),
+            "pos": card_dict.get("VocabPoS", ""),
+            "back": card_dict.get("VocabDefTC") or card_dict.get("VocabDefSC", ""),
+            "ex_jp": clean_anki_html(card_dict.get("SentFurigana1") or card_dict.get("SentKanji1", "")),
+            "ex_zh": card_dict.get("SentDefTC1") or card_dict.get("SentDefSC1", ""),
+            "notes": clean_anki_html(card_dict.get("VocabPlus", "")),
+            "audio_raw": card_dict.get("VocabAudio", ""),
+        }
+
+    clean_flds = [clean_anki_html(f) for f in flds]
+    if not clean_flds or not clean_flds[0]:
+        return {}
+    front = clean_flds[0]
+    reading = clean_flds[1] if len(clean_flds) > 1 else ""
+    back = clean_flds[2] if len(clean_flds) > 2 else ""
+    ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
+    ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
+    if len(clean_flds) == 2:
+        back = clean_flds[1]
+        reading = ""
+    return {
+        "front": front,
+        "reading": reading,
+        "pitch": "",
+        "pos": "",
+        "back": back,
+        "ex_jp": ex_jp,
+        "ex_zh": ex_zh,
+        "notes": "",
+        "audio_raw": note_row["flds"],
+    }
+
+
+def _extract_anki_media(
+    zf: zipfile.ZipFile,
+    namelist: set[str],
+    name_to_entry: dict,
+    deck_id: int,
+    note_id: int,
+    audio_raw: str,
+    raw_flds: str,
+) -> tuple[str, str, int]:
+    """自 .apkg 壓縮檔提取該筆筆記關聯的音訊與圖片至 MEDIA_DIR，回傳 (audio_filename, image_filename, extracted_count)"""
+    audio_filename = ""
+    image_filename = ""
+    extracted = 0
+    if not name_to_entry:
+        return audio_filename, image_filename, extracted
+
+    m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
+    if m_sound:
+        sound_ref = m_sound.group(1).strip()
+        entry_name = name_to_entry.get(sound_ref)
+        if entry_name and entry_name in namelist:
+            safe_audio = f"audio_{deck_id}_{note_id}.mp3"
+            out_audio_path = MEDIA_DIR / safe_audio
+            if not out_audio_path.is_file():
+                try:
+                    out_audio_path.write_bytes(zf.read(entry_name))
+                    extracted += 1
+                except Exception:
+                    pass
+            audio_filename = safe_audio
+
+    m_img = re.search(r'<img[^>]+src=["\']?([^"\'>]+)["\']?', raw_flds, re.IGNORECASE)
+    if m_img:
+        img_ref = urllib.parse.unquote(m_img.group(1).strip())
+        entry_name = name_to_entry.get(img_ref)
+        if entry_name and entry_name in namelist:
+            ext = Path(img_ref).suffix.lower() or ".png"
+            safe_img = f"img_{deck_id}_{note_id}{ext}"
+            out_img_path = MEDIA_DIR / safe_img
+            if not out_img_path.is_file():
+                try:
+                    out_img_path.write_bytes(zf.read(entry_name))
+                    extracted += 1
+                except Exception:
+                    pass
+            image_filename = safe_img
+
+    return audio_filename, image_filename, extracted
+
+
 def import_anki_apkg(
     file_path: Optional[Path] = None,
     apkg_bytes: Optional[bytes] = None,
@@ -633,12 +731,18 @@ def import_anki_apkg(
 ) -> dict:
     """
     從 Anki .apkg 檔案（本機檔案路徑或二進位資料）中解析卡片，支援子牌組/等級篩選與真人音訊/圖檔提取。
+    若檔案包含多個非空子牌組且未指定篩選條件或自訂目標牌組名稱，將自動依子牌組拆分匯入。
     回傳：{"success": bool, "deck_name": str, "deck_id": int, "imported_count": int, "imported_cards": int, "media_count": int}
     """
     init_flashcard_tables()
     # 若指定為 all / 全部 / 全自動，則轉由 import_all_anki_subdecks 進行全牌組一鍵分類匯入
-    if file_path and subdeck_filter and subdeck_filter.lower() in ("all", "全部", "全自動", "一鍵分類", "*"):
-        return import_all_anki_subdecks(file_path=file_path, user_name=user_name, extract_media=False)
+    if subdeck_filter and subdeck_filter.lower() in ("all", "全部", "全自動", "一鍵分類", "*"):
+        return import_all_anki_subdecks(
+            file_path=file_path,
+            apkg_bytes=apkg_bytes,
+            user_name=user_name,
+            extract_media=False if file_path else extract_media,
+        )
 
     if apkg_bytes and len(apkg_bytes) > MAX_APKG_BYTES:
         return {"success": False, "error": f"檔案過大（超過 {MAX_APKG_BYTES // (1024 * 1024)} MB 上限）。建議放入本機 data/imports/ 目錄。"}
@@ -653,6 +757,7 @@ def import_anki_apkg(
     except Exception as e:
         return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
 
+    should_auto_split = False
     with zf:
         namelist = set(zf.namelist())
         db_name = None
@@ -688,155 +793,125 @@ def import_anki_apkg(
                 decks = json.loads(col_row["decks"]) if col_row["decks"] else {}
                 models = json.loads(col_row["models"]) if col_row["models"] else {}
 
-                # 判定子牌組篩選
-                matched_dids = []
-                matched_deck_names = []
-                if subdeck_filter:
-                    for did_str, d in decks.items():
-                        dname = d.get("name", "")
-                        if dname == "Default":
-                            continue
-                        if match_subdeck(subdeck_filter, dname):
-                            matched_dids.append(int(did_str))
-                            matched_deck_names.append(dname)
+                # 若未指定篩選條件與目標名稱，且內含多個非空子牌組，自動改用全子牌組拆分匯入
+                if not subdeck_filter and not target_deck_name:
+                    cur.execute("SELECT DISTINCT did FROM cards")
+                    active_non_default = [
+                        r[0] for r in cur.fetchall()
+                        if decks.get(str(r[0]), {}).get("name", "") != "Default"
+                    ]
+                    if len(active_non_default) > 1:
+                        should_auto_split = True
 
-                # 決定牌組名稱與欲抓取之卡片
-                if matched_dids:
-                    cur.execute(f"SELECT DISTINCT nid FROM cards WHERE did IN ({','.join('?'*len(matched_dids))})", matched_dids)
-                    nids = [r[0] for r in cur.fetchall()]
-                    if target_deck_name:
-                        resolved_deck_name = target_deck_name.strip()
-                    elif len(matched_deck_names) == 1:
-                        resolved_deck_name = clean_deck_title(matched_deck_names[0])
+                if not should_auto_split:
+                    # 判定子牌組篩選
+                    matched_dids = []
+                    matched_deck_names = []
+                    if subdeck_filter:
+                        for did_str, d in decks.items():
+                            dname = d.get("name", "")
+                            if dname == "Default":
+                                continue
+                            if match_subdeck(subdeck_filter, dname):
+                                matched_dids.append(int(did_str))
+                                matched_deck_names.append(dname)
+                        if not matched_dids:
+                            return {"success": False, "error": f"未在牌組中找到符合「{subdeck_filter}」條件的子牌組。"}
+
+                    # 決定牌組名稱與欲抓取之卡片
+                    if matched_dids:
+                        cur.execute(f"SELECT DISTINCT nid FROM cards WHERE did IN ({','.join('?'*len(matched_dids))})", matched_dids)
+                        nids = [r[0] for r in cur.fetchall()]
+                        if target_deck_name:
+                            resolved_deck_name = target_deck_name.strip()
+                        elif len(matched_deck_names) == 1:
+                            resolved_deck_name = clean_deck_title(matched_deck_names[0])
+                        else:
+                            resolved_deck_name = f"🌸 JLPT {subdeck_filter.strip()} 單字"
                     else:
-                        resolved_deck_name = f"🌸 JLPT {subdeck_filter.strip()} 單字"
-                else:
-                    cur.execute("SELECT DISTINCT nid FROM cards")
-                    nids = [r[0] for r in cur.fetchall()]
-                    if target_deck_name:
-                        resolved_deck_name = target_deck_name.strip()
-                    else:
-                        names = [d["name"] for d in decks.values() if d.get("name") and d.get("name") != "Default"]
-                        resolved_deck_name = clean_deck_title(names[0]) if names else f"Anki 匯入牌組_{datetime.now(TZ_TAIPEI).strftime('%m%d')}"
+                        cur.execute("SELECT DISTINCT nid FROM cards")
+                        nids = [r[0] for r in cur.fetchall()]
+                        if target_deck_name:
+                            resolved_deck_name = target_deck_name.strip()
+                        else:
+                            cur.execute("SELECT did FROM cards LIMIT 1")
+                            first_did_row = cur.fetchone()
+                            first_dname = decks.get(str(first_did_row[0]), {}).get("name", "") if first_did_row else ""
+                            if first_dname and first_dname != "Default":
+                                resolved_deck_name = clean_deck_title(first_dname)
+                            else:
+                                names = [d["name"] for d in decks.values() if d.get("name") and d.get("name") != "Default"]
+                                resolved_deck_name = clean_deck_title(names[0]) if names else f"Anki 匯入牌組_{datetime.now(TZ_TAIPEI).strftime('%m%d')}"
 
-                if not nids:
-                    return {"success": False, "error": f"未在牌組中找到符合「{subdeck_filter or '所有'}」條件的卡片。"}
+                    if not nids:
+                        return {"success": False, "error": f"未在牌組中找到符合「{subdeck_filter or '所有'}」條件的卡片。"}
 
-                # 建立目標牌組
-                deck = get_or_create_deck(resolved_deck_name, description=f"由 {user_name} 匯入之 Anki 牌組", created_by=user_name)
-                deck_id = deck["id"]
+                    # 建立目標牌組
+                    deck = get_or_create_deck(resolved_deck_name, description=f"由 {user_name} 匯入之 Anki 牌組", created_by=user_name)
+                    deck_id = deck["id"]
 
-                # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
-                with get_conn() as local_conn:
-                    existing_fronts = {row[0] for row in local_conn.execute(
-                        "SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,)
-                    ).fetchall()}
+                    # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
+                    with get_conn() as local_conn:
+                        existing_fronts = {row[0] for row in local_conn.execute(
+                            "SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,)
+                        ).fetchall()}
 
-                imported_cards = []
-                media_count = 0
+                    imported_cards = []
+                    media_count = 0
 
-                # 分批讀取 notes，避免 SQLite 參數上限
-                all_notes = []
-                chunk_size = 500
-                for i in range(0, len(nids), chunk_size):
-                    chunk = nids[i:i + chunk_size]
-                    cur.execute(f"SELECT id, mid, flds, tags FROM notes WHERE id IN ({','.join('?' * len(chunk))})", chunk)
-                    all_notes.extend(cur.fetchall())
+                    # 分批讀取 notes，避免 SQLite 參數上限
+                    all_notes = []
+                    chunk_size = 500
+                    for i in range(0, len(nids), chunk_size):
+                        chunk = nids[i:i + chunk_size]
+                        cur.execute(f"SELECT id, mid, flds, tags FROM notes WHERE id IN ({','.join('?' * len(chunk))})", chunk)
+                        all_notes.extend(cur.fetchall())
 
-                for r in all_notes:
-                    flds = r["flds"].split("\x1f")
-                    mid = str(r["mid"])
-                    m = models.get(mid, {})
-                    fld_names = [f["name"] for f in m.get("flds", [])]
-                    card_dict = dict(zip(fld_names, flds)) if fld_names else {}
-
-                    # 針對 eggrolls-JLPT10k 豐富欄位之專屬解析
-                    if "VocabKanji" in card_dict and "VocabFurigana" in card_dict:
-                        front = card_dict.get("VocabKanji") or card_dict.get("VocabFurigana", "")
-                        reading = card_dict.get("VocabFurigana", "")
-                        pitch = card_dict.get("VocabPitch", "")
-                        pos = card_dict.get("VocabPoS", "")
-                        back = card_dict.get("VocabDefTC") or card_dict.get("VocabDefSC", "")
-                        ex_jp = clean_anki_html(card_dict.get("SentFurigana1") or card_dict.get("SentKanji1", ""))
-                        ex_zh = card_dict.get("SentDefTC1") or card_dict.get("SentDefSC1", "")
-                        notes = clean_anki_html(card_dict.get("VocabPlus", ""))
-                        audio_raw = card_dict.get("VocabAudio", "")
-                    else:
-                        # 通用型 Anki 筆記解析
-                        clean_flds = [clean_anki_html(f) for f in flds]
-                        if not clean_flds or not clean_flds[0]:
+                    for r in all_notes:
+                        parsed = _parse_anki_note_fields(r, models)
+                        if not parsed:
                             continue
-                        front = clean_flds[0]
-                        reading = clean_flds[1] if len(clean_flds) > 1 else ""
-                        back = clean_flds[2] if len(clean_flds) > 2 else ""
-                        ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
-                        ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
-                        if len(clean_flds) == 2:
-                            back = clean_flds[1]
-                            reading = ""
-                        pitch = ""
-                        pos = ""
-                        notes = ""
-                        audio_raw = r["flds"]
+                        front = parsed["front"]
+                        reading = parsed["reading"]
+                        back = parsed["back"]
 
-                    # 提取真人發音音訊檔 (.mp3)
-                    audio_filename = ""
-                    if extract_media and name_to_entry:
-                        m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
-                        if m_sound:
-                            sound_ref = m_sound.group(1).strip()
-                            entry_name = name_to_entry.get(sound_ref)
-                            if entry_name and entry_name in namelist:
-                                safe_audio = f"audio_{deck_id}_{r['id']}.mp3"
-                                out_audio_path = MEDIA_DIR / safe_audio
-                                if not out_audio_path.is_file():
-                                    try:
-                                        out_audio_path.write_bytes(zf.read(entry_name))
-                                        media_count += 1
-                                    except Exception:
-                                        pass
-                                audio_filename = safe_audio
+                        audio_filename = ""
+                        image_filename = ""
+                        if extract_media and name_to_entry:
+                            audio_filename, image_filename, extracted = _extract_anki_media(
+                                zf, namelist, name_to_entry, deck_id, r["id"], parsed["audio_raw"], r["flds"]
+                            )
+                            media_count += extracted
 
-                    # 提取圖片檔 (.png, .jpg, .webp)
-                    image_filename = ""
-                    if extract_media and name_to_entry:
-                        m_img = re.search(r'<img[^>]+src=["\']?([^"\'>]+)["\']?', r["flds"], re.IGNORECASE)
-                        if m_img:
-                            img_ref = urllib.parse.unquote(m_img.group(1).strip())
-                            entry_name = name_to_entry.get(img_ref)
-                            if entry_name and entry_name in namelist:
-                                ext = Path(img_ref).suffix.lower() or ".png"
-                                safe_img = f"img_{deck_id}_{r['id']}{ext}"
-                                out_img_path = MEDIA_DIR / safe_img
-                                if not out_img_path.is_file():
-                                    try:
-                                        out_img_path.write_bytes(zf.read(entry_name))
-                                        media_count += 1
-                                    except Exception:
-                                        pass
-                                image_filename = safe_img
-
-                    if front and (back or reading):
-                        if front in existing_fronts:
-                            continue
-                        existing_fronts.add(front)
-                        card = add_card(
-                            deck_id,
-                            front=front,
-                            reading=reading,
-                            back=back,
-                            example_jp=ex_jp,
-                            example_zh=ex_zh,
-                            notes=notes,
-                            image_filename=image_filename,
-                            audio_filename=audio_filename,
-                            pos=pos,
-                            pitch=pitch
-                        )
-                        imported_cards.append(card)
+                        if front and (back or reading):
+                            if front in existing_fronts:
+                                continue
+                            existing_fronts.add(front)
+                            card = add_card(
+                                deck_id,
+                                front=front,
+                                reading=reading,
+                                back=back,
+                                example_jp=parsed["ex_jp"],
+                                example_zh=parsed["ex_zh"],
+                                notes=parsed["notes"],
+                                image_filename=image_filename,
+                                audio_filename=audio_filename,
+                                pos=parsed["pos"],
+                                pitch=parsed["pitch"]
+                            )
+                            imported_cards.append(card)
             finally:
                 cur.close()
                 conn.close()
+
+    if should_auto_split:
+        return import_all_anki_subdecks(
+            file_path=file_path,
+            apkg_bytes=apkg_bytes,
+            user_name=user_name,
+            extract_media=False if file_path else extract_media,
+        )
 
     count = len(imported_cards)
     return {
@@ -900,7 +975,8 @@ def get_card_audio_path(card: dict) -> Optional[Path]:
 
 
 def import_all_anki_subdecks(
-    file_path: Path,
+    file_path: Optional[Path] = None,
+    apkg_bytes: Optional[bytes] = None,
     user_name: str = "User",
     extract_media: bool = False
 ) -> dict:
@@ -916,13 +992,22 @@ def import_all_anki_subdecks(
     }
     """
     init_flashcard_tables()
-    if not file_path.is_file():
-        return {"success": False, "error": f"找不到本機檔案：{file_path.name}"}
-
-    try:
-        zf = zipfile.ZipFile(file_path, "r")
-    except Exception as e:
-        return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
+    if file_path is not None:
+        if not file_path.is_file():
+            return {"success": False, "error": f"找不到本機檔案：{file_path.name}"}
+        source_name = file_path.name
+        try:
+            zf = zipfile.ZipFile(file_path, "r")
+        except Exception as e:
+            return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
+    elif apkg_bytes is not None:
+        source_name = "Anki 牌組檔"
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(apkg_bytes), "r")
+        except Exception as e:
+            return {"success": False, "error": f"無法開啟 .apkg 壓縮檔：{e}"}
+    else:
+        return {"success": False, "error": "未提供有效之 .apkg 檔案路徑或資料。"}
 
     with zf:
         namelist = set(zf.namelist())
@@ -934,7 +1019,6 @@ def import_all_anki_subdecks(
         if not db_name:
             return {"success": False, "error": "未在該 .apkg 檔案中找到 collection.anki2 / anki21 資料庫。"}
 
-        media_json = {}
         name_to_entry = {}
         if "media" in namelist:
             try:
@@ -968,102 +1052,92 @@ def import_all_anki_subdecks(
                 cur.close()
                 conn.close()
 
-    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
-    decks_summary = []
-    total_cards = 0
-    media_count = 0
+        now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+        decks_summary = []
+        total_cards = 0
+        media_count = 0
 
-    with get_conn() as local_conn:
-        local_cur = local_conn.cursor()
-        for did, nids in sorted(deck_to_nids.items(), key=lambda x: decks.get(str(x[0]), {}).get("name", "")):
-            dname = decks.get(str(did), {}).get("name", "")
-            if dname == "Default" or not nids:
-                continue
-            clean_title = clean_deck_title(dname)
-
-            local_cur.execute(
-                "INSERT OR IGNORE INTO flashcard_decks (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
-                (clean_title, f"由 {user_name} 自 {file_path.name} 一鍵分類匯入", user_name, now_str)
-            )
-            local_cur.execute("SELECT id FROM flashcard_decks WHERE name = ?", (clean_title,))
-            deck_id = local_cur.fetchone()[0]
-
-            # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
-            local_cur.execute("SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
-            existing_fronts = {row[0] for row in local_cur.fetchall()}
-
-            cards_batch = []
-            for nid in nids:
-                n = notes_dict.get(nid)
-                if not n:
+        with get_conn() as local_conn:
+            local_cur = local_conn.cursor()
+            for did, nids in sorted(deck_to_nids.items(), key=lambda x: decks.get(str(x[0]), {}).get("name", "")):
+                dname = decks.get(str(did), {}).get("name", "")
+                if dname == "Default" or not nids:
                     continue
-                mid = str(n["mid"])
-                m = models.get(mid, {})
-                fld_names = [f["name"] for f in m.get("flds", [])]
-                flds = n["flds"].split("\x1f")
-                card_dict = dict(zip(fld_names, flds)) if fld_names else {}
+                clean_title = clean_deck_title(dname)
 
-                if "VocabKanji" in card_dict and "VocabFurigana" in card_dict:
-                    front = card_dict.get("VocabKanji") or card_dict.get("VocabFurigana", "")
-                    reading = card_dict.get("VocabFurigana", "")
-                    pitch = card_dict.get("VocabPitch", "")
-                    pos = card_dict.get("VocabPoS", "")
-                    back = card_dict.get("VocabDefTC") or card_dict.get("VocabDefSC", "")
-                    ex_jp = clean_anki_html(card_dict.get("SentFurigana1") or card_dict.get("SentKanji1", ""))
-                    ex_zh = card_dict.get("SentDefTC1") or card_dict.get("SentDefSC1", "")
-                    notes = clean_anki_html(card_dict.get("VocabPlus", ""))
-                    audio_raw = card_dict.get("VocabAudio", "")
-                else:
-                    clean_flds = [clean_anki_html(f) for f in flds]
-                    if not clean_flds or not clean_flds[0]:
+                local_cur.execute(
+                    "INSERT OR IGNORE INTO flashcard_decks (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
+                    (clean_title, f"由 {user_name} 自 {source_name} 一鍵分類匯入", user_name, now_str)
+                )
+                local_cur.execute("SELECT id FROM flashcard_decks WHERE name = ?", (clean_title,))
+                deck_id = local_cur.fetchone()[0]
+
+                # 讀取該牌組已存在之單字，避免重複匯入 (Deduplication)
+                local_cur.execute("SELECT front FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
+                existing_fronts = {row[0] for row in local_cur.fetchall()}
+
+                cards_batch = []
+                for nid in nids:
+                    n = notes_dict.get(nid)
+                    if not n:
                         continue
-                    front = clean_flds[0]
-                    reading = clean_flds[1] if len(clean_flds) > 1 else ""
-                    back = clean_flds[2] if len(clean_flds) > 2 else ""
-                    ex_jp = clean_flds[3] if len(clean_flds) > 3 else ""
-                    ex_zh = clean_flds[4] if len(clean_flds) > 4 else ""
-                    pitch = ""
-                    pos = ""
-                    notes = ""
-                    audio_raw = n["flds"]
+                    parsed = _parse_anki_note_fields(n, models)
+                    if not parsed or not parsed["front"]:
+                        continue
+                    front = parsed["front"]
+                    if front in existing_fronts:
+                        continue
+                    existing_fronts.add(front)
 
-                if not front:
-                    continue
-                if front in existing_fronts:
-                    continue
-                existing_fronts.add(front)
+                    audio_fn = ""
+                    image_fn = ""
+                    if extract_media and name_to_entry:
+                        audio_fn, image_fn, extracted = _extract_anki_media(
+                            zf, namelist, name_to_entry, deck_id, nid, parsed["audio_raw"], n["flds"]
+                        )
+                        media_count += extracted
+                    else:
+                        m_sound = re.search(r"\[sound:([^\]]+)\]", parsed["audio_raw"])
+                        if m_sound:
+                            sound_ref = m_sound.group(1).strip()
+                            if sound_ref in name_to_entry:
+                                audio_fn = f"audio_{deck_id}_{nid}.mp3"
 
-                audio_fn = ""
-                m_sound = re.search(r"\[sound:([^\]]+)\]", audio_raw)
-                if m_sound:
-                    sound_ref = m_sound.group(1).strip()
-                    if sound_ref in name_to_entry:
-                        audio_fn = f"audio_{deck_id}_{nid}.mp3"
+                    cards_batch.append((
+                        deck_id,
+                        front,
+                        parsed["reading"],
+                        parsed["back"],
+                        parsed["ex_jp"],
+                        parsed["ex_zh"],
+                        parsed["notes"],
+                        image_fn,
+                        "both",
+                        audio_fn,
+                        parsed["pos"],
+                        parsed["pitch"],
+                        now_str,
+                    ))
 
-                cards_batch.append((
-                    deck_id, front, reading, back, ex_jp, ex_zh, notes,
-                    "", "both", audio_fn, pos, pitch, now_str
-                ))
+                if cards_batch:
+                    local_cur.executemany("""
+                        INSERT INTO flashcard_cards
+                        (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, cards_batch)
 
-            if cards_batch:
-                local_cur.executemany("""
-                    INSERT INTO flashcard_cards
-                    (deck_id, front, reading, back, example_jp, example_zh, notes, image_filename, image_side, audio_filename, pos, pitch, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, cards_batch)
+                local_cur.execute("SELECT count(*) FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
+                current_total = local_cur.fetchone()[0]
 
-            local_cur.execute("SELECT count(*) FROM flashcard_cards WHERE deck_id = ?", (deck_id,))
-            current_total = local_cur.fetchone()[0]
+                decks_summary.append({
+                    "id": deck_id,
+                    "name": clean_title,
+                    "new_count": len(cards_batch),
+                    "card_count": current_total
+                })
+                total_cards += len(cards_batch)
 
-            decks_summary.append({
-                "id": deck_id,
-                "name": clean_title,
-                "new_count": len(cards_batch),
-                "card_count": current_total
-            })
-            total_cards += len(cards_batch)
-
-        local_conn.commit()
+            local_conn.commit()
 
     return {
         "success": True,

@@ -1,9 +1,12 @@
 """Tests for assistant_db, rpg_engine, flashcard_engine, game_wiki_engine, safety_guardrail, and video_engine."""
 
+import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -140,6 +143,81 @@ class TestDatabaseAndEngines(unittest.TestCase):
         self.assertEqual(video_engine.extract_youtube_video_id("https://youtu.be/dQw4w9WgXcQ"), "dQw4w9WgXcQ")
         self.assertEqual(video_engine.extract_youtube_video_id("https://youtube.com/shorts/abcdefghijk"), "abcdefghijk")
         self.assertEqual(video_engine.format_duration(125), "2 分 5 秒")
+
+    def _build_sample_apkg(self, apkg_path: Path) -> None:
+        db_path = Path(self.tmpdir.name) / "collection.anki21"
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE col (decks TEXT, models TEXT)")
+        cur.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, mid INTEGER, flds TEXT, tags TEXT)")
+        cur.execute("CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER)")
+
+        decks = {
+            "1": {"id": 1, "name": "Default"},
+            "1001": {"id": 1001, "name": "eggrolls-JLPT10k-v3.5::5-N1::3-低频"},
+            "1002": {"id": 1002, "name": "eggrolls-JLPT10k-v3.5::1-N5"},
+        }
+        models = {
+            "2001": {
+                "id": 2001,
+                "flds": [
+                    {"name": "VocabKanji"},
+                    {"name": "VocabFurigana"},
+                    {"name": "VocabDefTC"},
+                    {"name": "VocabAudio"},
+                ],
+            }
+        }
+        cur.execute("INSERT INTO col VALUES (?, ?)", (json.dumps(decks), json.dumps(models)))
+        cur.execute("INSERT INTO notes VALUES (?, ?, ?, ?)", (11, 2001, "桜\x1fさくら\x1f櫻花\x1f[sound:sakura.mp3]", ""))
+        cur.execute("INSERT INTO notes VALUES (?, ?, ?, ?)", (12, 2001, "齟齬\x1fそご\x1f齟齬、分歧\x1f[sound:sogo.mp3]", ""))
+        cur.execute("INSERT INTO cards VALUES (?, ?, ?)", (101, 11, 1002))
+        cur.execute("INSERT INTO cards VALUES (?, ?, ?)", (102, 12, 1001))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        with zipfile.ZipFile(apkg_path, "w") as zf:
+            zf.write(db_path, arcname="collection.anki21")
+            zf.writestr("media", json.dumps({"0": "sakura.mp3", "1": "sogo.mp3"}))
+            zf.writestr("0", b"FAKE_MP3_0")
+            zf.writestr("1", b"FAKE_MP3_1")
+
+    def test_apkg_multi_subdeck_auto_split_and_delete_media(self):
+        apkg_path = Path(self.tmpdir.name) / "multi.apkg"
+        self._build_sample_apkg(apkg_path)
+
+        # Unfiltered multi-subdeck import auto-splits into separate decks
+        res_all = flashcard_engine.import_anki_apkg(file_path=apkg_path, user_name="Tester")
+        self.assertTrue(res_all["success"])
+        self.assertTrue(res_all.get("is_batch_all"))
+        self.assertEqual(res_all["total_decks"], 2)
+        self.assertEqual(res_all["total_cards"], 2)
+        deck_names = {d["name"] for d in res_all["decks_summary"]}
+        self.assertEqual(deck_names, {"🌸 JLPT N5 核心單字", "🌸 JLPT N1 低頻單字"})
+
+        # Unmatched subdeck filter returns error instead of importing everything
+        res_bad = flashcard_engine.import_anki_apkg(file_path=apkg_path, subdeck_filter="N9", user_name="Tester")
+        self.assertFalse(res_bad["success"])
+
+        # Filtered single-subdeck import extracts media and delete_deck cleans both image and audio files
+        res_n5 = flashcard_engine.import_anki_apkg(
+            file_path=apkg_path,
+            subdeck_filter="N5",
+            target_deck_name="N5 單獨測試",
+            user_name="Tester",
+            extract_media=True,
+        )
+        self.assertTrue(res_n5["success"])
+        self.assertEqual(res_n5["imported_count"], 1)
+        cards = flashcard_engine.get_cards_in_deck(res_n5["deck_id"])
+        self.assertEqual(len(cards), 1)
+        audio_fn = cards[0]["audio_filename"]
+        self.assertTrue(audio_fn)
+        self.assertTrue((flashcard_engine.MEDIA_DIR / audio_fn).is_file())
+
+        self.assertTrue(flashcard_engine.delete_deck(res_n5["deck_id"]))
+        self.assertFalse((flashcard_engine.MEDIA_DIR / audio_fn).is_file())
 
 
 if __name__ == "__main__":

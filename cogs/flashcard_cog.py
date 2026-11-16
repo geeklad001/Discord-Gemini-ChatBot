@@ -343,7 +343,7 @@ class FlashcardCog(commands.Cog):
                     deck_lines.append(f"• **{d['name']}**：現有 `{d['card_count']}` 張（已存在，無重複新增）")
             title_str = "🎉 Anki 全牌組一鍵全自動分類匯入成功！" if new_added > 0 else "ℹ️ Anki 全牌組掃描與去重檢查完畢！"
             desc_str = (
-                f"已掃描 `{source_label}` 並維護 **{res['total_decks']}** 個等級牌組（本次新增 **{new_added}** 張單字卡）！\n\n"
+                f"已掃描 {source_label} 並維護 **{res['total_decks']}** 個等級牌組（本次新增 **{new_added}** 張單字卡）！\n\n"
                 f"**各等級牌組清單：**\n" + "\n".join(deck_lines) + "\n\n"
                 f"👉 隨時輸入 `!card <等級名稱>`（例如 `!card N5` 或 `!card N3高頻`）即可開始複習！\n"
                 f"👉 或輸入 `!decks` 查看所有牌組清單～🌸"
@@ -423,8 +423,9 @@ class FlashcardCog(commands.Cog):
         if "兩人的日常收藏" in target["name"]:
             await ctx.send("⚠️ 這是系統預設收納箱，不能刪除喔！")
             return
-        flashcard_engine.delete_deck(target["id"])
-        await ctx.send(f"🗑️ 已刪除牌組「**{target['name']}**」及其所有卡片。")
+        async with ctx.channel.typing():
+            await asyncio.to_thread(flashcard_engine.delete_deck, target["id"])
+        await ctx.send(f"🗑️ 已刪除牌組「**{target['name']}**」及其所有卡片與關聯媒體檔。")
 
     async def _handle_import(self, ctx: commands.Context, arg: Optional[str]) -> None:
         raw_arg = (arg or "").strip()
@@ -478,7 +479,8 @@ class FlashcardCog(commands.Cog):
                 async with ctx.channel.typing():
                     try:
                         if fname.endswith(".apkg"):
-                            res = flashcard_engine.import_anki_apkg(
+                            res = await asyncio.to_thread(
+                                flashcard_engine.import_anki_apkg,
                                 file_path=local_path,
                                 subdeck_filter=subdeck_filter,
                                 target_deck_name=custom_deck_name,
@@ -562,7 +564,8 @@ class FlashcardCog(commands.Cog):
                         )
                         return
                     file_bytes = await att.read()
-                    res = flashcard_engine.import_anki_apkg_bytes(
+                    res = await asyncio.to_thread(
+                        flashcard_engine.import_anki_apkg_bytes,
                         file_bytes,
                         target_deck_name=target_deck_name,
                         user_name=ctx.author.display_name,

@@ -103,6 +103,7 @@ class BotSettings:
     enable_japanese_mode: bool = True
     enable_flashcard_mode: bool = True
     enable_game_wiki: bool = True
+    enable_board_games: bool = True
     enable_safety_guardrail: bool = True
     disable_safety_settings: bool = True
     primary_model: str = "gemini-3.8-flash"
@@ -149,6 +150,7 @@ def load_settings(env_file: str = ".env", logger: Optional[logging.Logger] = Non
         enable_japanese_mode=_parse_bool(os.getenv("ENABLE_JAPANESE_MODE"), default=True),
         enable_flashcard_mode=_parse_bool(os.getenv("ENABLE_FLASHCARD_MODE"), default=True),
         enable_game_wiki=_parse_bool(os.getenv("ENABLE_GAME_WIKI"), default=True),
+        enable_board_games=_parse_bool(os.getenv("ENABLE_BOARD_GAMES"), default=True),
         enable_safety_guardrail=_parse_bool(os.getenv("ENABLE_SAFETY_GUARDRAIL"), default=True),
         disable_safety_settings=_parse_bool(os.getenv("DISABLE_SAFETY_SETTINGS"), default=True),
         primary_model=(os.getenv("PRIMARY_MODEL", "gemini-3.8-flash") or "gemini-3.8-flash").strip(),

@@ -12,6 +12,7 @@ from google.genai import types
 
 import assistant_db
 import assistant_tools
+import boardgame_engine
 import game_wiki_engine
 import rpg_engine
 import safety_guardrail
@@ -131,6 +132,14 @@ def build_dynamic_system_instruction(
                 message.channel.id, message.author.id, message.author.display_name
             )
             extra_parts.append(f"\n\n{rpg_context}")
+
+        if settings.enable_board_games:
+            active_bg = boardgame_engine.get_active_game(message.channel.id)
+            if active_bg or boardgame_engine.is_boardgame_intent(message.clean_content):
+                bg_summary = boardgame_engine.get_board_status_summary_for_llm(message.channel.id)
+                extra_parts.append(
+                    f"\n\n【本機權威棋盤桌遊狀態（嚴禁文字手畫棋盤或作弊）】\n{bg_summary}"
+                )
 
     return "".join(extra_parts)
 
@@ -410,10 +419,18 @@ async def prepare_and_generate_chat_response(
 
     recent_text = _extract_recent_context_text(contents)
     in_rpg = is_rpg_context(message.channel, message.clean_content)
+    in_boardgame = bool(
+        settings.enable_board_games
+        and (
+            boardgame_engine.get_active_game(message.channel.id) is not None
+            or boardgame_engine.is_boardgame_intent(message.clean_content)
+        )
+    )
     scoped_tools = assistant_tools.get_scoped_tools(
         enable_flashcards=settings.enable_flashcard_mode,
         include_rpg=in_rpg,
         enable_game_wiki=settings.enable_game_wiki,
+        include_boardgames=in_boardgame,
     )
 
     is_factual_game_query = bool(
@@ -466,6 +483,46 @@ async def prepare_and_generate_chat_response(
     raise RuntimeError(f"({context_label}) 無法回應訊息。")
 
 
+async def _flush_pending_board_cards(
+    bot: discord.Client,
+    channel: discord.abc.Messageable,
+    pending_updates: list,
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """將自然語言工具呼叫產生的最新棋盤狀態（含非同步 LLM 對手回合）渲染為圖形卡片並附在對話下方。"""
+    if not pending_updates:
+        return
+    latest_items: dict[int, dict] = {}
+    for item in pending_updates:
+        if isinstance(item, dict):
+            gid = item["game_id"]
+            prev = latest_items.get(gid)
+            latest_items[gid] = {
+                "game_id": gid,
+                "note": item.get("note", ""),
+                "run_ai": bool(item.get("run_ai")) or (bool(prev.get("run_ai")) if prev else False),
+            }
+        else:
+            gid, note = item
+            latest_items[gid] = {"game_id": gid, "note": note, "run_ai": False}
+
+    bg_cog = bot.get_cog("BoardGameCog") if hasattr(bot, "get_cog") else None
+    if not bg_cog:
+        return
+    for gid, info in latest_items.items():
+        try:
+            game = boardgame_engine.get_game_by_id(gid)
+            if not game:
+                continue
+            note = info["note"]
+            if info["run_ai"] and game["status"] == "active" and game["mode"] == "pve" and game["turn"] == 2:
+                game, note = await bg_cog._run_pve_turn_if_needed(game, note)
+            await bg_cog.send_game_card(channel, game, last_note=note)
+        except Exception as e:
+            if logger:
+                logger.error(f"❌ 發送圖形棋盤卡失敗 (game_id={gid}): {e}", exc_info=True)
+
+
 async def handle_general_chat(
     bot: discord.Client,
     gemini_client: genai.Client,
@@ -479,6 +536,8 @@ async def handle_general_chat(
         logger.info(f"💬 收到來自 [{author_name}] 的日常閒聊: {message.clean_content}")
 
     async with message.channel.typing():
+        pending_cards: list[tuple[int, str]] = []
+        bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -502,11 +561,14 @@ async def handle_general_chat(
                 logger=logger,
             )
             await send_split_messages(message.channel, reply_text)
+            await _flush_pending_board_cards(bot, message.channel, pending_cards, logger=logger)
 
         except Exception as e:
             if logger:
                 logger.error(f"❌ 日常群聊呼叫 Gemini 失敗: {e}", exc_info=True)
             await message.channel.send("抱歉，我剛才斷線了一下，請再說一次。")
+        finally:
+            boardgame_engine.pending_board_card_updates.reset(bg_token)
 
 
 async def handle_japanese_learning_chat(
@@ -555,6 +617,8 @@ async def handle_japanese_learning_chat(
                     logger.error(f"❌ 鏡像小卡發送至綜合頻道失敗: {e}")
 
     async with message.channel.typing():
+        pending_cards: list[tuple[int, str]] = []
+        bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -578,8 +642,11 @@ async def handle_japanese_learning_chat(
                 logger=logger,
             )
             await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
+            await _flush_pending_board_cards(bot, message.channel, pending_cards, logger=logger)
 
         except Exception as e:
             if logger:
                 logger.error(f"❌ 日語共學呼叫 Gemini 失敗: {e}", exc_info=True)
             await message.channel.send("すみません、剛才稍微斷線了一下，請再傳一次試試看。")
+        finally:
+            boardgame_engine.pending_board_card_updates.reset(bg_token)

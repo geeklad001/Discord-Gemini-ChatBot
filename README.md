@@ -46,7 +46,7 @@
 * **新手自架／好友分享版（`.env.starter.example` + `general_prompt_starter.txt`）**：搭配 `1_設定金鑰_Setup_Env.bat` ➔ `2_一鍵安裝_Install.bat` ➔ `3_一鍵啟動_Start_Bot.bat` 三步驟快速開張！
 * **社群跑團與群聊版（`start_community_bot.bat` / `.env.community.example`）**：關閉日語與單字卡（`ENABLE_JAPANESE_MODE=false`、`ENABLE_FLASHCARD_MODE=false`），可選擇開啟遊戲知識庫（`ENABLE_GAME_WIKI`）與防注入護欄（`ENABLE_SAFETY_GUARDRAIL`），獨立連結 `data/community.db`。
 * **雙語共學管家版（`start_bot.bat` / `.env.example`）**：開啟日語雙頻道（`ENABLE_JAPANESE_MODE=true`）與 Anki 單字卡（`ENABLE_FLASHCARD_MODE=true`），獨立連結 `data/assistant.db`。
-* 常用彈性開關：`ENABLE_GAME_WIKI`、`ENABLE_SAFETY_GUARDRAIL`（本地安全/防注入護欄）、`DISABLE_SAFETY_SETTINGS`（暢聊放鬆 Gemini 安全過濾）、`FALLBACK_MODELS`（自訂備援模型順序）。
+* 常用彈性開關：`ENABLE_GAME_WIKI`、`ENABLE_BOARD_GAMES`、`ENABLE_SAFETY_GUARDRAIL`（本地安全/防注入護欄）、`DISABLE_SAFETY_SETTINGS`（暢聊放鬆 Gemini 安全過濾）、`FALLBACK_MODELS`（自訂備援模型順序）。
 
 ---
 
@@ -82,6 +82,8 @@
 | `!card import [檔名/等級/all]` | 貼上文字、讀取 `data/imports/`（支援一鍵全分類 `all` 或指定 `N3高頻`） | `!card import all`、`!card import N3高頻` |
 | `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
+| `!play` / `!game` | 開啟圖形化桌遊大廳或開局（黑白棋、西洋棋、四子棋、五子棋；支援 PvP、本地 AI ＆ 🧠 LLM） | `!play`、`!play chess llm`、`!play 黑白棋 pvp @好友` |
+| `!m <棋步>` | （輔助捷徑）落子座標；對局中亦可用按鈕選單與口語進行上一步悔棋、投降、看戰績與重貼面板 | `!m d3`、`!m e2e4` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |
 | `!remember <事實>` | 直接寫入長期記憶庫 | `!remember 喜歡抹茶拿鐵` |
 | `!forget <編號>` | 刪除某一條長期記憶 | `!forget 1` |

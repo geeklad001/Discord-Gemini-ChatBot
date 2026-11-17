@@ -13,11 +13,13 @@ from core.config import init_runtime_env, load_settings
 env_file = init_runtime_env()
 
 import assistant_db
+import boardgame_engine
 import flashcard_engine
 import game_wiki_engine
 import rpg_engine
 import safety_guardrail
 from cogs.assistant_cog import AssistantCog
+from cogs.boardgame_cog import BoardGameCog
 from cogs.flashcard_cog import FlashcardCog
 from cogs.rpg_cog import RpgCog
 from cogs.wiki_cog import WikiCog
@@ -52,12 +54,16 @@ if not settings.enable_flashcard_mode:
     logger.info("🎴 單字卡與搶答測驗功能已關閉。")
 if not settings.enable_game_wiki:
     logger.info("🧟 《殭屍學園》知識庫與專屬檢索功能已關閉。")
+if not settings.enable_board_games:
+    logger.info("🎲 棋盤桌遊系統已關閉。")
 if not settings.enable_safety_guardrail:
     logger.info("🔓 本地安全與防濫用護欄已關閉 (暢聊不受限制)。")
 
 # 初始化各引擎資料表與本地知識庫
 assistant_db.init_db()
 rpg_engine.init_rpg_tables()
+if settings.enable_board_games:
+    boardgame_engine.init_boardgame_tables()
 if settings.enable_flashcard_mode:
     flashcard_engine.init_flashcard_tables()
 if settings.enable_game_wiki:
@@ -91,6 +97,8 @@ class GeminiBot(commands.Bot):
     async def setup_hook(self) -> None:
         await self.add_cog(AssistantCog(self, settings, logger))
         await self.add_cog(RpgCog(self, settings, logger))
+        if settings.enable_board_games:
+            await self.add_cog(BoardGameCog(self, gemini_client, settings, logger))
         if settings.enable_flashcard_mode:
             await self.add_cog(FlashcardCog(self, gemini_client, settings, logger))
         if settings.enable_game_wiki:

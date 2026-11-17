@@ -5,6 +5,7 @@ from typing import Optional
 import discord
 
 import assistant_db
+import boardgame_engine
 import rpg_engine
 import flashcard_engine
 import game_wiki_engine
@@ -191,15 +192,180 @@ def lookup_game_wiki(query: str) -> str:
     return game_wiki_engine.lookup_game_wiki_tool_impl(query)
 
 
+def _queue_board_card_update(game_id: int, note: str, run_ai: bool = False) -> None:
+    pending = boardgame_engine.pending_board_card_updates.get()
+    if pending is not None:
+        pending.append({"game_id": game_id, "note": note, "run_ai": run_ai})
+
+
+def boardgame_get_state() -> str:
+    """
+    查詢當前頻道進行中的棋盤桌遊（黑白棋、西洋棋、四子棋、五子棋）權威盤面、棋子座標分布與所有合法著法。
+    當使用者用自然語言描述想移動哪顆棋子或想落子在哪裡時，必須先呼叫此工具對照合法座標與盤面，嚴禁自己猜測或編造棋盤狀態！
+    """
+    msg = current_discord_msg.get()
+    channel_id = msg.channel.id if msg else 0
+    return boardgame_engine.get_board_status_summary_for_llm(channel_id)
+
+
+def boardgame_start(
+    game_type: str,
+    mode: str = "pve",
+    difficulty: str = "normal",
+) -> str:
+    """
+    在當前頻道開啟一場新的圖形化棋盤桌遊對局，並自動貼出附帶座標圖與互動按鈕的棋盤卡片。
+    參數:
+      game_type: 遊戲名稱（支援 'othello'/'黑白棋'、'chess'/'西洋棋'、'connect4'/'四子棋'、'gomoku'/'五子棋'）。
+      mode: 對戰模式，'pve'（對戰電腦或 LLM，預設）或 'pvp'（雙人公開挑戰）。
+      difficulty: PvE 難度，可填 'easy'（簡單）、'normal'（普通，預設）、'hard'（困難）或 'llm'（與後端 Gemini LLM 對戰且防作弊）。
+    """
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    gtype = boardgame_engine.resolve_game_type(game_type)
+    if not gtype:
+        return f"❓ 找不到遊戲 `{game_type}`。目前支援：黑白棋 (othello)、西洋棋 (chess)、四子棋 (connect4)、五子棋 (gomoku)。"
+    clean_mode = "pvp" if (mode or "").strip().lower() in ("pvp", "雙人", "對戰") else "pve"
+    clean_diff = boardgame_engine.resolve_difficulty(difficulty)
+    try:
+        game = boardgame_engine.create_game(
+            channel_id=msg.channel.id,
+            game_type=gtype,
+            mode=clean_mode,
+            p1_id=msg.author.id,
+            p1_name=msg.author.display_name,
+            difficulty=clean_diff,
+        )
+    except ValueError as e:
+        return f"⚠️ 開局失敗：{e}"
+
+    _queue_board_card_update(game["id"], f"由 {msg.author.display_name} 透過對話開啟新局！")
+    return (
+        f"✅ 已成功開啟【{boardgame_engine.GAME_CATALOG[gtype]['name']}】"
+        f"（模式：{clean_mode.upper()} | 對手：{boardgame_engine.DIFFICULTY_LABELS[clean_diff] if clean_mode == 'pve' else '等待好友加入'}）！\n"
+        f"系統將在你的回覆下方自動貼出高清座標棋盤卡片與點擊互動選單。\n"
+        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+    )
+
+
+def boardgame_play_move(move_str: str) -> str:
+    """
+    依玩家在自然語言中的指令，對當前頻道的棋局執行一步棋並由 Python 引擎進行 100% 合法性校驗。
+    若為 PvE 模式，執行完玩家這步後會自動由本地 AI 或後端 LLM 回應下一步並更新圖形棋盤卡。
+    參數:
+      move_str: 棋步字串（黑白棋/五子棋填座標如 'D3'、'G7'；四子棋填欄號 '1'~'7'；西洋棋填如 'e2e4'、'Nf3'、'O-O'）。
+    """
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    active = boardgame_engine.get_active_game(msg.channel.id)
+    if not active or active["status"] != "active":
+        return "⚠️ 目前此頻道沒有進行中的對局。若玩家想玩，可先呼叫 `boardgame_start` 開局。"
+    try:
+        updated, note = boardgame_engine.apply_move(active["id"], msg.author.id, move_str)
+    except ValueError as e:
+        legal_hint = boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)
+        return f"⚠️ 該步不合法：{e}\n{legal_hint}"
+
+    if updated["mode"] == "pve" and updated.get("difficulty") == "llm" and updated["status"] == "active":
+        _queue_board_card_update(updated["id"], note, run_ai=True)
+        return (
+            f"✅ 玩家步法已通過校驗並落子：{note}\n"
+            f"系統將在回覆後自動由 LLM 對手落子（經防作弊規則裁判）並貼出最新圖形棋盤卡！"
+        )
+
+    updated, full_note = boardgame_engine.play_pve_ai_turn_sync(updated, note)
+    _queue_board_card_update(updated["id"], full_note, run_ai=False)
+    status_tail = "🎉 對局已分出勝負／結束！" if updated["status"] == "finished" else "系統已更新圖形棋盤卡並貼在回覆下方。"
+    return (
+        f"✅ 已落子並完成規則校驗！\n{full_note}\n{status_tail}\n"
+        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+    )
+
+
+def boardgame_undo() -> str:
+    """
+    為當前發言的人類玩家申請或同意「退回上一步（悔棋）」。
+    嚴格限制：只有實際參賽的玩家本人可呼叫，且需該局全體參賽玩家皆同意方能執行（PvP 雙人需雙方各自同意後才會回溯）。
+    """
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    active = boardgame_engine.get_active_game(msg.channel.id)
+    if not active or active["status"] != "active":
+        return "⚠️ 目前沒有進行中的對局可退回上一步。"
+    try:
+        updated, undo_status = boardgame_engine.request_or_approve_undo(active["id"], msg.author.id)
+    except ValueError as e:
+        return f"⚠️ 無法執行悔棋：{e}"
+
+    if undo_status == "already_approved":
+        return "ℹ️ 你已經同意退回上一步，請等待對手點擊卡片上的「✅ 同意上一步」或說他也同意悔棋。"
+    if undo_status == "pending":
+        _queue_board_card_update(updated["id"], f"{msg.author.display_name} 申請退回上一步（等待全體玩家同意）")
+        return "↩️ 已記錄你的悔棋請求（目前同意 1/2）。因為需要全體參賽玩家同意，已貼出含「✅ 同意上一步」按鈕的卡片等待對手確認！"
+
+    _queue_board_card_update(updated["id"], f"↩️ 全體玩家已同意，棋盤已退回上一步（第 {updated['move_count']} 手）！")
+    return (
+        f"↩️ 全體參賽玩家皆已同意，棋盤已安全退回上一步！\n"
+        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+    )
+
+
+def boardgame_resign() -> str:
+    """讓當前發言玩家在目前進行中的棋盤桌遊認輸／投降或取消等待中挑戰，並更新結束棋盤卡。"""
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    active = boardgame_engine.get_active_game(msg.channel.id)
+    if not active:
+        return "ℹ️ 目前此頻道沒有進行中的對局。"
+    try:
+        updated = boardgame_engine.resign_game(active["id"], msg.author.id)
+    except ValueError as e:
+        return f"⚠️ 無法投降：{e}"
+    _queue_board_card_update(updated["id"], f"{msg.author.display_name} 選擇投降。")
+    return f"🏳️ 已為 {msg.author.display_name} 辦理認輸／結束對局，最新結果卡片將附在回覆下方。"
+
+
+def boardgame_refresh_board() -> str:
+    """重新將當前頻道進行中的圖形化棋盤卡片與互動按鈕貼到聊天室最下方。"""
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    active = boardgame_engine.get_active_game(msg.channel.id)
+    if not active:
+        return "🎲 目前此頻道沒有進行中或等待中的棋局，要開一局嗎？"
+    _queue_board_card_update(active["id"], "已依請求重新顯示最新棋盤面板")
+    return "✅ 已排程將最新棋盤卡片與按鈕重新貼在回覆下方。"
+
+
+def boardgame_stats() -> str:
+    """查詢當前發言玩家的桌遊勝敗和戰績紀錄。"""
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    rows = boardgame_engine.get_user_stats(msg.author.id, limit=15)
+    if not rows:
+        return f"🏆 {msg.author.display_name} 目前尚無已完成的桌遊戰績紀錄。"
+    lines = [f"🏆 {msg.author.display_name} 的桌遊戰績："]
+    for r in rows:
+        meta = boardgame_engine.GAME_CATALOG.get(r["game_type"], {"short": r["game_type"]})
+        lines.append(f"- {meta['short']} [{r['mode'].upper()}]：{r['wins']} 勝 / {r['losses']} 敗 / {r['draws']} 和")
+    return "\n".join(lines)
+
+
 def get_scoped_tools(
     enable_flashcards: bool = True,
     include_rpg: bool = False,
     enable_game_wiki: bool = True,
+    include_boardgames: bool = False,
 ) -> list:
     """
     【小模型 Tool Scoping 動態工具瘦身】
-    針對 gemini-flash-lite 等輕量模型，在非 TRPG 跑團情境下自動卸載 6 個龐大的 RPG 專用工具，
-    並依功能開關決定是否掛載單字卡與《殭屍學園》知識庫工具，避免無關 Tool Schema 稀釋注意力。
+    針對 gemini-flash-lite 等輕量模型，在非 TRPG 跑團情境下自動卸載 RPG 工具，
+    並僅在啟用對應模組且處於相關情境時才掛載單字卡、《殭屍學園》知識庫與桌遊管理引擎工具。
     """
     tools = [
         record_memory,
@@ -210,6 +376,16 @@ def get_scoped_tools(
     ]
     if enable_game_wiki:
         tools.insert(0, lookup_game_wiki)
+    if include_boardgames:
+        tools.extend([
+            boardgame_get_state,
+            boardgame_start,
+            boardgame_play_move,
+            boardgame_undo,
+            boardgame_resign,
+            boardgame_refresh_board,
+            boardgame_stats,
+        ])
     if include_rpg:
         tools.extend([
             rpg_engine.rpg_roll_check,
@@ -225,11 +401,16 @@ def get_scoped_tools(
 
 
 # 工具函式清單建立函式，支援依模式切換 (向下相容保留完整清單)
-def get_assistant_tools(enable_flashcards: bool = True, enable_game_wiki: bool = True) -> list:
+def get_assistant_tools(
+    enable_flashcards: bool = True,
+    enable_game_wiki: bool = True,
+    enable_board_games: bool = True,
+) -> list:
     return get_scoped_tools(
         enable_flashcards=enable_flashcards,
         include_rpg=True,
         enable_game_wiki=enable_game_wiki,
+        include_boardgames=enable_board_games,
     )
 
 

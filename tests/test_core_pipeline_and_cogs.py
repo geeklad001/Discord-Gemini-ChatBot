@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from cogs.assistant_cog import AssistantCog
+from cogs.boardgame_cog import BoardGameCog
 from cogs.flashcard_cog import FlashcardCog, check_quiz_answer_match
 from cogs.rpg_cog import RpgCog
 from cogs.wiki_cog import WikiCog
@@ -153,8 +154,12 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
 
         await bot.add_cog(FlashcardCog(bot, client, settings, logger))
         await bot.add_cog(WikiCog(bot, client, settings, logger))
+        await bot.add_cog(BoardGameCog(bot, client, settings, logger))
         self.assertIsNotNone(bot.get_command("card"))
         self.assertIsNotNone(bot.get_command("wiki"))
+        self.assertIsNotNone(bot.get_command("play"))
+        self.assertIsNotNone(bot.get_command("m"))
+        self.assertIsNone(bot.get_command("resign"))
         await bot.close()
 
     def test_quiz_answer_match(self):

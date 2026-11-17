@@ -34,10 +34,16 @@ def init_rpg_tables():
                 location TEXT DEFAULT '冒險公會大廳',
                 current_quest TEXT DEFAULT '挑選第一個委託任務',
                 profile_json TEXT DEFAULT '{}',
+                is_in_party INTEGER DEFAULT 1,
                 updated_at TEXT NOT NULL,
                 UNIQUE(channel_id, user_id)
             )
         """)
+        # 舊版資料庫平滑遷移：補上 is_in_party 欄位（既有角色維持在隊伍中）
+        cursor.execute("PRAGMA table_info(rpg_characters)")
+        existing_cols = {r[1] for r in cursor.fetchall()}
+        if "is_in_party" not in existing_cols:
+            cursor.execute("ALTER TABLE rpg_characters ADD COLUMN is_in_party INTEGER DEFAULT 1")
         # 2. 動態世界觀設定集 (Lorebook / World Info)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS lorebook (
@@ -138,52 +144,172 @@ def is_rpg_session_active(channel_id: int) -> bool:
 # -------------------------------------------------------------
 # 1. 權威角色狀態管理 (Authoritative RPG State)
 # -------------------------------------------------------------
-def get_or_create_rpg_character(channel_id: int, user_id: int, user_name: str) -> dict:
-    """取得或建立指定玩家在該頻道的 RPG 角色狀態"""
+def _deserialize_rpg_char(row) -> dict:
+    """將 sqlite3.Row 轉換為標準化角色狀態字典"""
+    char = dict(row)
+    try:
+        char["inventory"] = json.loads(char["inventory"])
+    except Exception:
+        char["inventory"] = ["隨身小刀", "火把x1"]
+    try:
+        char["profile"] = json.loads(char.get("profile_json") or "{}")
+    except Exception:
+        char["profile"] = {}
+    in_party_raw = char.get("is_in_party")
+    char["is_in_party"] = True if in_party_raw is None else bool(in_party_raw)
+    return char
+
+
+def get_rpg_character(channel_id: int, user_id: int) -> Optional[dict]:
+    """純查詢指定玩家在該頻道的 RPG 角色狀態（不會自動建立角色）"""
     init_rpg_tables()
-    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT * FROM rpg_characters WHERE channel_id = ? AND user_id = ?",
-            (channel_id, user_id)
+            (channel_id, user_id),
         )
         row = cursor.fetchone()
-        if row:
-            char = dict(row)
-            try:
-                char["inventory"] = json.loads(char["inventory"])
-            except Exception:
-                char["inventory"] = ["隨身小刀", "火把x1"]
-            try:
-                char["profile"] = json.loads(char.get("profile_json") or "{}")
-            except Exception:
-                char["profile"] = {}
-            return char
+        return _deserialize_rpg_char(row) if row else None
 
-        # 預設建立新角色
-        default_inv = ["隨身小刀", "火把x1", "乾糧x2"]
+
+def get_or_create_rpg_character(
+    channel_id: int,
+    user_id: int,
+    user_name: str,
+    is_in_party: bool = True,
+) -> dict:
+    """取得或建立指定玩家在該頻道的 RPG 角色狀態"""
+    init_rpg_tables()
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    existing = get_rpg_character(channel_id, user_id)
+    if existing:
+        return existing
+
+    default_inv = ["隨身小刀", "火把x1", "乾糧x2"]
+    in_party_int = 1 if is_in_party else 0
+    with get_conn() as conn:
+        cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO rpg_characters 
-               (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, updated_at)
-               VALUES (?, ?, ?, '冒險者', '見習冒險者', 100, 100, ?, '冒險者酒館', '展開新冒險', '{}', ?)""",
-            (channel_id, user_id, user_name, json.dumps(default_inv, ensure_ascii=False), now_str)
+            """INSERT INTO rpg_characters
+               (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, is_in_party, updated_at)
+               VALUES (?, ?, ?, '冒險者', '見習冒險者', 100, 100, ?, '冒險者酒館', '展開新冒險', '{}', ?, ?)""",
+            (channel_id, user_id, user_name, json.dumps(default_inv, ensure_ascii=False), in_party_int, now_str),
         )
         conn.commit()
-        return {
-            "channel_id": channel_id,
-            "user_id": user_id,
-            "user_name": user_name,
-            "char_name": "冒險者",
-            "char_class": "見習冒險者",
-            "hp": 100,
-            "max_hp": 100,
-            "inventory": default_inv,
-            "location": "冒險者酒館",
-            "current_quest": "展開新冒險",
-            "profile": {},
-            "updated_at": now_str
-        }
+    return {
+        "channel_id": channel_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "char_name": "冒險者",
+        "char_class": "見習冒險者",
+        "hp": 100,
+        "max_hp": 100,
+        "inventory": default_inv,
+        "location": "冒險者酒館",
+        "current_quest": "展開新冒險",
+        "profile": {},
+        "is_in_party": bool(is_in_party),
+        "updated_at": now_str,
+    }
+
+
+def join_rpg_party(channel_id: int, user_id: int, user_name: str) -> tuple[dict, bool]:
+    """
+    主動加入當前頻道/討論串的冒險隊伍。
+    回傳 (角色字典, whether_already_in_party)。
+    若隊伍中已有其他成員，初次加入或重新歸隊時會同步當前小隊地點與任務目標。
+    """
+    init_rpg_tables()
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    active_party = get_all_characters_in_channel(channel_id, only_in_party=True)
+    party_location = active_party[0]["location"] if active_party else None
+    party_quest = active_party[0]["current_quest"] if active_party else None
+
+    existing = get_rpg_character(channel_id, user_id)
+    if existing:
+        if existing["is_in_party"]:
+            if user_name and existing["user_name"] != user_name:
+                with get_conn() as conn:
+                    conn.execute(
+                        "UPDATE rpg_characters SET user_name = ?, updated_at = ? WHERE channel_id = ? AND user_id = ?",
+                        (user_name, now_str, channel_id, user_id),
+                    )
+                    conn.commit()
+                existing["user_name"] = user_name
+            return existing, True
+
+        new_loc = party_location or existing["location"]
+        new_quest = party_quest or existing["current_quest"]
+        with get_conn() as conn:
+            conn.execute(
+                """UPDATE rpg_characters
+                   SET is_in_party = 1, user_name = ?, location = ?, current_quest = ?, updated_at = ?
+                   WHERE channel_id = ? AND user_id = ?""",
+                (user_name or existing["user_name"], new_loc, new_quest, now_str, channel_id, user_id),
+            )
+            conn.commit()
+        updated = get_rpg_character(channel_id, user_id) or existing
+        return updated, False
+
+    char = get_or_create_rpg_character(channel_id, user_id, user_name, is_in_party=True)
+    if party_location or party_quest:
+        char = update_rpg_character(
+            channel_id=channel_id,
+            user_id=user_id,
+            user_name=user_name,
+            location=party_location,
+            current_quest=party_quest,
+            ensure_in_party=True,
+        )
+    return char, False
+
+
+def leave_rpg_party(channel_id: int, user_id: int) -> Optional[dict]:
+    """
+    退出當前頻道/討論串的冒險隊伍（保留角色卡數據與裝備，不影響其他隊友與共用旅程手記）。
+    若玩家原本就未在隊伍中，回傳 None。
+    """
+    init_rpg_tables()
+    existing = get_rpg_character(channel_id, user_id)
+    if not existing or not existing["is_in_party"]:
+        return None
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE rpg_characters SET is_in_party = 0, updated_at = ? WHERE channel_id = ? AND user_id = ?",
+            (now_str, channel_id, user_id),
+        )
+        conn.commit()
+    existing["is_in_party"] = False
+    return existing
+
+
+def kick_rpg_member(channel_id: int, target_query: str) -> Optional[dict]:
+    """依 @mention ID、玩家顯示名稱或角色名稱將指定隊員移出當前隊伍"""
+    q = (target_query or "").strip()
+    if not q:
+        return None
+    all_chars = get_all_characters_in_channel(channel_id, only_in_party=True)
+    if not all_chars:
+        return None
+
+    m_mention = re.match(r"^<@!?(\d+)>$", q)
+    if m_mention:
+        uid = int(m_mention.group(1))
+        for c in all_chars:
+            if c["user_id"] == uid:
+                return leave_rpg_party(channel_id, uid)
+        return None
+
+    q_lower = q.lower()
+    for c in all_chars:
+        if q_lower == c["char_name"].lower() or q_lower == c["user_name"].lower():
+            return leave_rpg_party(channel_id, c["user_id"])
+    for c in all_chars:
+        if q_lower in c["char_name"].lower() or q_lower in c["user_name"].lower():
+            return leave_rpg_party(channel_id, c["user_id"])
+    return None
 
 
 def update_rpg_character(
@@ -200,11 +326,14 @@ def update_rpg_character(
     set_items: Optional[list[str]] = None,
     location: Optional[str] = None,
     current_quest: Optional[str] = None,
-    profile: Optional[dict] = None
+    profile: Optional[dict] = None,
+    ensure_in_party: bool = True,
 ) -> dict:
     """更新玩家角色的血量、背包物品、地點、任務與詳細角色設定"""
-    char = get_or_create_rpg_character(channel_id, user_id, user_name)
+    char = get_or_create_rpg_character(channel_id, user_id, user_name, is_in_party=ensure_in_party)
     now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    in_party_val = 1 if (ensure_in_party or char.get("is_in_party", True)) else 0
+    char["is_in_party"] = bool(in_party_val)
 
     # 更新名稱與職業
     if char_name:
@@ -256,7 +385,7 @@ def update_rpg_character(
         cursor = conn.cursor()
         cursor.execute(
             """UPDATE rpg_characters 
-               SET char_name = ?, char_class = ?, hp = ?, max_hp = ?, inventory = ?, location = ?, current_quest = ?, profile_json = ?, updated_at = ?
+               SET char_name = ?, char_class = ?, hp = ?, max_hp = ?, inventory = ?, location = ?, current_quest = ?, profile_json = ?, is_in_party = ?, updated_at = ?
                WHERE channel_id = ? AND user_id = ?""",
             (
                 char["char_name"],
@@ -267,6 +396,7 @@ def update_rpg_character(
                 char["location"],
                 char["current_quest"],
                 json.dumps(char.get("profile", {}), ensure_ascii=False),
+                in_party_val,
                 now_str,
                 channel_id,
                 user_id
@@ -286,25 +416,22 @@ def reset_rpg_character(channel_id: int, user_id: int):
     clear_journey_notes(channel_id)
 
 
-def get_all_characters_in_channel(channel_id: int) -> list[dict]:
-    """取得指定頻道中所有玩家的角色狀態"""
+def get_all_characters_in_channel(channel_id: int, only_in_party: bool = True) -> list[dict]:
+    """取得指定頻道中冒險者角色狀態（預設僅列出已主動入隊的活躍成員）"""
     init_rpg_tables()
     with get_conn() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM rpg_characters WHERE channel_id = ? ORDER BY id ASC", (channel_id,))
-        chars = []
-        for row in cursor.fetchall():
-            c = dict(row)
-            try:
-                c["inventory"] = json.loads(c["inventory"])
-            except Exception:
-                c["inventory"] = []
-            try:
-                c["profile"] = json.loads(c.get("profile_json") or "{}")
-            except Exception:
-                c["profile"] = {}
-            chars.append(c)
-        return chars
+        if only_in_party:
+            cursor.execute(
+                "SELECT * FROM rpg_characters WHERE channel_id = ? AND COALESCE(is_in_party, 1) = 1 ORDER BY id ASC",
+                (channel_id,),
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM rpg_characters WHERE channel_id = ? ORDER BY id ASC",
+                (channel_id,),
+            )
+        return [_deserialize_rpg_char(row) for row in cursor.fetchall()]
 
 
 def format_char_rpg_summary(c: dict) -> str:
@@ -359,12 +486,30 @@ def format_char_rpg_summary(c: dict) -> str:
 
 
 def format_rpg_context_for_prompt(channel_id: int, user_id: int, user_name: str) -> str:
-    """產生用於注入 System Prompt 的權威遊戲狀態（支援單人或多人組隊冒險）與當前旅程手記"""
-    current_char = get_or_create_rpg_character(channel_id, user_id, user_name)
-    all_chars = get_all_characters_in_channel(channel_id)
+    """產生用於注入 System Prompt 的權威遊戲狀態（僅包含主動入隊成員）與當前旅程手記"""
+    all_chars = get_all_characters_in_channel(channel_id, only_in_party=True)
+    current_char = next((c for c in all_chars if c["user_id"] == user_id), None)
 
     parts = []
-    if len(all_chars) <= 1:
+    if not all_chars:
+        parts.append(
+            f"【本機權威 RPG 遊戲狀態（尚未有正式入隊成員）】\n"
+            f"目前此頻道／討論串尚未有任何玩家加入冒險隊伍（發言者【{user_name}】目前也尚未入隊）。\n"
+            f"👉 處理指引：若 {user_name} 想開啟或參加 TRPG 冒險，請親切引導他輸入 `!rpg start [主題]`（建立專屬討論串）、`!rpg join`（加入目前頻道隊伍）或直接貼上 `!sheet <角色設定>` 帶卡參戰！\n"
+            f"👉 嚴禁在玩家正式入隊前為其虛構角色數值或呼叫 `rpg_update_state`。"
+        )
+    elif current_char is None:
+        party_lines = [
+            f"【本機權威 RPG 冒險小隊狀態（當前隊伍共有 {len(all_chars)} 位已入隊冒險者）】\n"
+            f"👉 重要提醒：本輪發言者【{user_name}】目前「尚未加入」這支冒險隊伍（屬於場外對話或旁觀者）！\n"
+            f"   - 嚴禁將【{user_name}】視為隊伍角色推進戰鬥／檢定，也嚴禁對他呼叫 `rpg_update_state`。\n"
+            f"   - 若對方看來想一起玩或接手角色行動，請親切提醒他輸入 `!rpg join`（或 `!party join`）即可立刻入隊！\n\n"
+            f"👥 目前正式入隊成員名冊："
+        ]
+        for idx, c in enumerate(all_chars, 1):
+            party_lines.append(f"{idx}. 玩家：{c['user_name']}\n{format_char_rpg_summary(c)}")
+        parts.append("\n\n".join(party_lines))
+    elif len(all_chars) == 1:
         # 單人模式
         char_summary = format_char_rpg_summary(current_char)
         parts.append(
@@ -376,7 +521,7 @@ def format_rpg_context_for_prompt(channel_id: int, user_id: int, user_name: str)
     else:
         # 多人組隊合作模式 (Party Cooperative TRPG)
         party_lines = [
-            f"【本機權威 RPG 冒險小隊狀態（當前隊伍共有 {len(all_chars)} 位冒險者共同組隊）】\n"
+            f"【本機權威 RPG 冒險小隊狀態（當前隊伍共有 {len(all_chars)} 位已入隊冒險者共同組隊）】\n"
             f"（AI 扮演地下城主持者 DM，請描寫兩人/多人的默契配合、相互掩護或技能組合，傷害與掉落物可分配給不同隊友）：\n"
             f"👉 敘事原則（極度重要）：嚴禁重複、總結或換句話說複述玩家剛剛說過的話或動作！直接推進劇情，描寫世界環境變化、NPC 即時反應與新突發狀況！\n"
             f"👉 本輪發言行動者：【{current_char['user_name']}】（角色：{current_char['char_name']}）\n\n"
@@ -763,8 +908,8 @@ def load_game(channel_id: int, user_id: int, user_name: str, save_name: str) -> 
                 prof_json = json.dumps(p.get("profile", {}), ensure_ascii=False) if isinstance(p.get("profile"), dict) else p.get("profile_json", "{}")
                 cursor.execute(
                     """INSERT INTO rpg_characters 
-                       (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, is_in_party, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                        ON CONFLICT(channel_id, user_id) DO UPDATE SET
                        char_name=excluded.char_name,
                        char_class=excluded.char_class,
@@ -774,6 +919,7 @@ def load_game(channel_id: int, user_id: int, user_name: str, save_name: str) -> 
                        location=excluded.location,
                        current_quest=excluded.current_quest,
                        profile_json=excluded.profile_json,
+                       is_in_party=1,
                        updated_at=excluded.updated_at
                     """,
                     (
@@ -795,8 +941,8 @@ def load_game(channel_id: int, user_id: int, user_name: str, save_name: str) -> 
             prof_json = save_data.get("profile_json", "{}")
             cursor.execute(
                 """INSERT INTO rpg_characters 
-                   (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   (channel_id, user_id, user_name, char_name, char_class, hp, max_hp, inventory, location, current_quest, profile_json, is_in_party, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                    ON CONFLICT(channel_id, user_id) DO UPDATE SET
                    char_name=excluded.char_name,
                    char_class=excluded.char_class,
@@ -806,6 +952,7 @@ def load_game(channel_id: int, user_id: int, user_name: str, save_name: str) -> 
                    location=excluded.location,
                    current_quest=excluded.current_quest,
                    profile_json=excluded.profile_json,
+                   is_in_party=1,
                    updated_at=excluded.updated_at
                 """,
                 (
@@ -959,30 +1106,60 @@ def rpg_update_state(
     sender_id = msg.author.id if msg else 0
     sender_name = msg.author.display_name if msg else "玩家"
 
-    all_chars = get_all_characters_in_channel(channel_id)
-    target_id = sender_id
-    target_name = sender_name
+    all_chars = get_all_characters_in_channel(channel_id, only_in_party=True)
+    if not all_chars:
+        return (
+            f"⚠️ 目前此頻道／討論串尚未有任何玩家加入冒險隊伍，無法更新狀態。"
+            f"請先讓【{sender_name}】輸入 `!rpg join` 或 `!party join`（或 `!sheet <角色設定>`）加入隊伍！"
+        )
 
-    # 判斷是否指定特定隊友
-    if target_player and all_chars:
-        tp_clean = target_player.strip().lower()
-        if tp_clean not in ("全隊", "隊伍", "team", "party", "everyone", "all"):
-            for c in all_chars:
-                if tp_clean in c["char_name"].lower() or tp_clean in c["user_name"].lower():
-                    target_id = c["user_id"]
-                    target_name = c["user_name"]
-                    break
+    active_ids = {c["user_id"] for c in all_chars}
+    tp_clean = (target_player or "").strip().lower()
+    is_team_wide = tp_clean in ("全隊", "隊伍", "team", "party", "everyone", "all")
 
-    # 若為全隊更新地點或任務目標，同步更新全隊所有人
-    if target_player and target_player.strip().lower() in ("全隊", "隊伍", "team", "party", "everyone", "all"):
+    if is_team_wide:
+        updated_members = []
         for c in all_chars:
-            update_rpg_character(
+            upd = update_rpg_character(
                 channel_id=channel_id,
                 user_id=c["user_id"],
                 user_name=c["user_name"],
+                hp_delta=hp_change if c["user_id"] == sender_id else 0,
+                add_items=add_items if c["user_id"] == sender_id else None,
+                remove_items=remove_items if c["user_id"] == sender_id else None,
                 location=new_location,
-                current_quest=new_quest
+                current_quest=new_quest,
             )
+            updated_members.append(upd)
+        ref_char = next((u for u in updated_members if u["user_id"] == sender_id), updated_members[0])
+        names_str = "、".join(u["char_name"] for u in updated_members)
+        return (
+            f"✅ 已同步更新全隊（{names_str}）狀態：\n"
+            f"📍 地點：{ref_char['location']} | 🎯 目標：{ref_char['current_quest']}\n"
+            f"⚡【權威狀態覆蓋提示】：本回合狀態已更新！請直接以此最新數值與位置覆蓋 System Prompt 中的舊狀態快照進行敘事，切勿引用舊數值！"
+        )
+
+    target_id = sender_id
+    target_name = sender_name
+    matched_explicit = False
+    if tp_clean:
+        for c in all_chars:
+            if tp_clean in c["char_name"].lower() or tp_clean in c["user_name"].lower():
+                target_id = c["user_id"]
+                target_name = c["user_name"]
+                matched_explicit = True
+                break
+        if not matched_explicit and sender_id not in active_ids:
+            return (
+                f"⚠️ 找不到已入隊成員「{target_player}」，且發言者【{sender_name}】也尚未加入隊伍。"
+                f"請先輸入 `!rpg join` 或 `!party join` 加入隊伍！"
+            )
+
+    if target_id not in active_ids:
+        return (
+            f"⚠️ 【{target_name}】目前尚未加入此冒險隊伍，無法變更角色狀態或背包。"
+            f"請先輸入 `!rpg join` 或 `!party join` 加入隊伍！"
+        )
 
     updated = update_rpg_character(
         channel_id=channel_id,

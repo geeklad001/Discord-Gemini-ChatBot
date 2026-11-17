@@ -21,13 +21,11 @@
 • `!remember <事實>`：新增記憶 ｜ `!forget <編號>`：刪除記憶
 
 🗡️ **RPG 文字冒險與組隊 (!rpg / !party / !sheet / !roll)**
-• `!rpg start [主題]`：建立專屬獨立討論串開局
-• `!sheet`：查看個人詳細角色卡
-• `!sheet [文字/檔名]`：匯入角色卡（支援貼文字、`data/imports/` 或附檔）
-• `!rpg`：查看個人冒險狀態卡 ｜ `!party`：查看小隊全員面板
+• `!rpg start [主題]`：建立討論串開局 ｜ `!rpg join` / `leave`：主動入隊或單獨退隊
+• `!party` / `!party kick @隊友`：查看小隊全員面板或請離成員
+• `!sheet [文字/檔名]`：查看或匯入角色卡（匯入即入隊） ｜ `!rpg`：查看個人狀態
 • `!rpg name <名>` / `!rpg class <職業>`：修改名稱或職業
-• `!roll [表達式]`：D20 或自訂擲骰檢定（如 `!roll 2d6`）
-• `!rpg reset`：重置當前頻道冒險進度
+• `!roll [表達式]`：D20 或自訂擲骰（如 `!roll 2d6`） ｜ `!rpg reset`：重置本局冒險
 
 💾 **冒險存讀檔與手記 (!save / !load / !note / !lore)**
 • `!save <名>` / `!load <名>`：保存或載入全隊進度與手記快照

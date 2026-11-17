@@ -219,6 +219,95 @@ class TestDatabaseAndEngines(unittest.TestCase):
         self.assertTrue(flashcard_engine.delete_deck(res_n5["deck_id"]))
         self.assertFalse((flashcard_engine.MEDIA_DIR / audio_fn).is_file())
 
+    def test_rpg_opt_in_party_join_leave_kick_and_guard(self):
+        from types import SimpleNamespace
+
+        # Bystander message in an empty RPG channel must NOT auto-create a character
+        empty_prompt = rpg_engine.format_rpg_context_for_prompt(900, 101, "路人甲")
+        self.assertIn("!rpg join", empty_prompt)
+        self.assertEqual(rpg_engine.get_all_characters_in_channel(900), [])
+        self.assertIsNone(rpg_engine.get_rpg_character(900, 101))
+
+        # Starter explicitly joins and updates party location/quest; add shared journey note
+        c1, already1 = rpg_engine.join_rpg_party(900, 101, "Alice")
+        self.assertFalse(already1)
+        rpg_engine.update_rpg_character(
+            900, 101, "Alice", char_name="艾莉絲", location="古堡密室", current_quest="尋找銀鑰匙"
+        )
+        rpg_engine.add_journey_note(900, 101, "Alice", "牆上有秘密機關")
+
+        # Bystander Bob speaks in channel -> still NOT added to party, DM warned not to update Bob
+        bystander_prompt = rpg_engine.format_rpg_context_for_prompt(900, 202, "Bob")
+        self.assertIn("尚未加入", bystander_prompt)
+        self.assertIsNone(rpg_engine.get_rpg_character(900, 202))
+        self.assertEqual(len(rpg_engine.get_all_characters_in_channel(900)), 1)
+
+        # rpg_update_state refuses to auto-create/update non-member Bob
+        fake_msg = SimpleNamespace(
+            channel=SimpleNamespace(id=900),
+            author=SimpleNamespace(id=202, display_name="Bob"),
+        )
+        token = rpg_engine.current_discord_msg.set(fake_msg)
+        try:
+            guard_reply = rpg_engine.rpg_update_state(hp_change=-10)
+            self.assertIn("尚未加入", guard_reply)
+            self.assertIsNone(rpg_engine.get_rpg_character(900, 202))
+        finally:
+            rpg_engine.current_discord_msg.reset(token)
+
+        # Bob explicitly joins -> syncs to Alice's party location/quest
+        c2, already2 = rpg_engine.join_rpg_party(900, 202, "Bob")
+        self.assertFalse(already2)
+        self.assertEqual(c2["location"], "古堡密室")
+        self.assertEqual(c2["current_quest"], "尋找銀鑰匙")
+        _, already2_again = rpg_engine.join_rpg_party(900, 202, "Bob")
+        self.assertTrue(already2_again)
+        self.assertEqual(len(rpg_engine.get_all_characters_in_channel(900)), 2)
+
+        # Bob leaves -> removed from active party, character preserved, Alice & shared notes intact
+        left = rpg_engine.leave_rpg_party(900, 202)
+        self.assertIsNotNone(left)
+        self.assertIsNone(rpg_engine.leave_rpg_party(900, 202))
+        self.assertEqual([c["user_id"] for c in rpg_engine.get_all_characters_in_channel(900)], [101])
+        self.assertFalse(rpg_engine.get_rpg_character(900, 202)["is_in_party"])
+        self.assertEqual(len(rpg_engine.get_journey_notes(900)), 1)
+
+        # Rejoin & kick via @mention
+        rpg_engine.join_rpg_party(900, 202, "Bob")
+        kicked = rpg_engine.kick_rpg_member(900, "<@!202>")
+        self.assertIsNotNone(kicked)
+        self.assertEqual([c["user_id"] for c in rpg_engine.get_all_characters_in_channel(900)], [101])
+
+    def test_legacy_rpg_table_migration_adds_is_in_party(self):
+        with patch.dict(os.environ, {"DB_NAME": "legacy_rpg_mig.db"}):
+            rpg_engine._initialized_rpg_dbs.clear()
+            with rpg_engine.assistant_db.get_conn() if hasattr(rpg_engine, "assistant_db") else __import__("assistant_db").get_conn() as conn:
+                conn.execute("""
+                    CREATE TABLE rpg_characters (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        channel_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        user_name TEXT NOT NULL,
+                        char_name TEXT DEFAULT '冒險者',
+                        char_class TEXT DEFAULT '初級冒險者',
+                        hp INTEGER DEFAULT 100,
+                        max_hp INTEGER DEFAULT 100,
+                        inventory TEXT DEFAULT '[]',
+                        location TEXT DEFAULT '酒館',
+                        current_quest TEXT DEFAULT '任務',
+                        profile_json TEXT DEFAULT '{}',
+                        updated_at TEXT NOT NULL,
+                        UNIQUE(channel_id, user_id)
+                    )
+                """)
+                conn.execute(
+                    "INSERT INTO rpg_characters (channel_id, user_id, user_name, updated_at) VALUES (1, 10, 'LegacyUser', '2026-01-01')"
+                )
+            rpg_engine.init_rpg_tables()
+            chars = rpg_engine.get_all_characters_in_channel(1)
+            self.assertEqual(len(chars), 1)
+            self.assertTrue(chars[0]["is_in_party"])
+
 
 if __name__ == "__main__":
     unittest.main()

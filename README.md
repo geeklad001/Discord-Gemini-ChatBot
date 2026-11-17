@@ -65,6 +65,7 @@
 | `!reminds` | 查看所有尚未觸發的預約提醒 | `!reminds` |
 | `!remind del <編號>` | 取消某個預約提醒 | `!remind del 1` |
 | `!rpg start [主題]` | 自動建立專屬獨立討論串開啟冒險 | `!rpg start 迷霧森林遺跡` |
+| `!rpg join` / `!rpg leave` | 主動加入或單獨退出冒險隊伍（也可 `!party join` / `leave`、`kick`） | `!rpg join`、`!rpg leave` |
 | `!rpg` / `!party` | 查看個人冒險狀態卡 / 冒險小隊全員面板 | `!rpg`、`!party` |
 | `!sheet [文字/檔名/附檔]` | 查看或匯入自適應角色卡 | `!sheet`、`!sheet char.txt` |
 | `!save <名>` / `!load <名>` | 保存或載入全隊冒險快照與手記 | `!save 第一章`、`!load 第一章` |

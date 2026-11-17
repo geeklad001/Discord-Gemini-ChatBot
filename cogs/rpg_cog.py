@@ -66,7 +66,7 @@ class RpgCog(commands.Cog):
 
         uname = ctx.author.display_name
         rpg_engine.set_rpg_session_active(thread.id, True)
-        char = rpg_engine.get_or_create_rpg_character(thread.id, ctx.author.id, uname)
+        char, _ = rpg_engine.join_rpg_party(thread.id, ctx.author.id, uname)
 
         opening_embed = discord.Embed(
             title=f"🗡️ 【{adventure_topic}】冒險篇章正式展開！",
@@ -74,8 +74,9 @@ class RpgCog(commands.Cog):
                 f"歡迎來到全新的冒險世界，**{uname}**！\n\n"
                 f"🏰 **冒險起點**：`{char['location']}`\n"
                 f"🎯 **當前使命**：`{char['current_quest']}`\n\n"
-                f"✨ **獨立隔離特性**：\n"
+                f"✨ **獨立隔離與組隊機制**：\n"
                 f"• 在此討論串內的所有對話、背包物品與故事線索均為**專屬獨立**，絕不干擾日常群聊！\n"
+                f"• 其他群友想參戰請輸入 **`!rpg join`**（或 `!party join`）入隊，想暫離或退隊請輸入 **`!rpg leave`**。\n"
                 f"• 隨時輸入 `!save <存檔名>` 保存進度，或在未來開新討論串輸入 `!load <存檔名>` 繼承進度。\n"
                 f"• 輸入 `!note <線索>` 記錄旅程筆記，或輸入 `!roll` 擲骰判定！"
             ),
@@ -94,6 +95,9 @@ class RpgCog(commands.Cog):
             return
         if not save_name:
             await ctx.send("❓ 請提供存檔名稱，例如：`!save 森林遺跡` 或 `!save 第一章通關`")
+            return
+        if not rpg_engine.get_all_characters_in_channel(ctx.channel.id):
+            await ctx.send("🏕️ 目前隊伍中尚無任何已入隊的冒險者，無法存檔！請先輸入 `!rpg join` 或 `!rpg start [主題]`。")
             return
         res = rpg_engine.save_game(ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name)
         embed = discord.Embed(
@@ -202,14 +206,79 @@ class RpgCog(commands.Cog):
         embed.set_footer(text="💡 新增請輸入 !note <內容>，刪除請輸入 !rpg delnote <編號>")
         await ctx.send(embed=embed)
 
+    async def _handle_party_join(self, ctx: commands.Context):
+        """讓玩家主動加入當前頻道/討論串的冒險隊伍。"""
+        cid = ctx.channel.id
+        uid = ctx.author.id
+        uname = ctx.author.display_name
+        char, already_in = rpg_engine.join_rpg_party(cid, uid, uname)
+        all_chars = rpg_engine.get_all_characters_in_channel(cid)
+        if already_in:
+            await ctx.send(
+                f"⚔️ **{uname}**（角色：**{char['char_name']}**）已經在冒險隊伍中囉！目前隊伍共有 **{len(all_chars)}** 位成員（輸入 `!party` 查看）。"
+            )
+            return
+        embed = discord.Embed(
+            title="🛡️ 冒險者已正式加入隊伍！",
+            description=(
+                f"**{uname}** 以「**{char['char_name']}**（{char['char_class']}）」之姿加入本頻道／討論串的冒險小隊！\n\n"
+                f"📍 **隊伍地點**：`{char['location']}`\n"
+                f"🎯 **當前使命**：`{char['current_quest']}`\n"
+                f"👥 **目前小隊人數**：`{len(all_chars)}` 人"
+            ),
+            color=0x06D6A0,
+        )
+        embed.set_footer(text="💡 輸入 !sheet <人設> 可匯入自訂角色卡 | 隨時輸入 !rpg leave 可單獨退隊")
+        await ctx.send(embed=embed)
+
+    async def _handle_party_leave(self, ctx: commands.Context):
+        """讓玩家單獨退出當前冒險隊伍（保留角色設定與其他隊友的進度）。"""
+        cid = ctx.channel.id
+        uid = ctx.author.id
+        uname = ctx.author.display_name
+        left_char = rpg_engine.leave_rpg_party(cid, uid)
+        if not left_char:
+            await ctx.send(f"ℹ️ **{uname}** 目前原本就不在這個頻道／討論串的冒險隊伍中喔。")
+            return
+        remaining = rpg_engine.get_all_characters_in_channel(cid)
+        await ctx.send(
+            f"👋 **{uname}**（**{left_char['char_name']}**）已退出本頻道／討論串的冒險隊伍（已保留角色卡設定與其餘隊友的旅程手記）。\n"
+            f"👥 目前隊伍剩餘 **{len(remaining)}** 位成員；隨時輸入 `!rpg join` 即可再次歸隊！"
+        )
+
+    async def _handle_party_kick(self, ctx: commands.Context, target_query: Optional[str]):
+        """將指定成員（可 @mention 或輸入名稱）移出當前冒險隊伍。"""
+        if not target_query or not target_query.strip():
+            await ctx.send("❓ 請指定要移出隊伍的對象，例如：`!party kick @隊友` 或 `!party kick 亞瑟`")
+            return
+        kicked = rpg_engine.kick_rpg_member(ctx.channel.id, target_query)
+        if not kicked:
+            await ctx.send(f"❌ 在目前入隊名單中找不到符合 `{target_query.strip()}` 的成員。")
+            return
+        remaining = rpg_engine.get_all_characters_in_channel(ctx.channel.id)
+        await ctx.send(
+            f"👢 已將 **{kicked['user_name']}**（**{kicked['char_name']}**）移出當前冒險隊伍。目前剩餘 **{len(remaining)}** 位成員（對方隨時可輸入 `!rpg join` 歸隊）。"
+        )
+
     @commands.command(name="party", aliases=["team", "隊伍", "小隊"])
-    async def party_command(self, ctx: commands.Context):
-        """查看當前冒險小隊全員狀態卡：!party"""
+    async def party_command(self, ctx: commands.Context, action: str = None, *, arg: str = None):
+        """冒險小隊管理與狀態看板：!party / !party join / !party leave / !party kick <對象>"""
         if not is_target_channel(ctx.channel, self.settings):
             return
+        act = (action or "").lower()
+        if act in ("join", "加入", "入隊", "參戰"):
+            await self._handle_party_join(ctx)
+            return
+        if act in ("leave", "quit", "exit", "退出", "離隊", "離開"):
+            await self._handle_party_leave(ctx)
+            return
+        if act in ("kick", "remove", "踢出", "請離"):
+            await self._handle_party_kick(ctx, arg)
+            return
+
         chars = rpg_engine.get_all_characters_in_channel(ctx.channel.id)
         if not chars:
-            await ctx.send("🏕️ 當前頻道或討論串中尚未有任何冒險者就位。輸入 `!rpg` 即可建立角色出發！")
+            await ctx.send("🏕️ 當前頻道或討論串中尚未有任何冒險者入隊。輸入 `!rpg join` 加入隊伍，或 `!rpg start [主題]` 開局！")
             return
         embed = discord.Embed(
             title=f"👥 冒險小隊隊伍名冊（共 {len(chars)} 位冒險者）",
@@ -227,7 +296,7 @@ class RpgCog(commands.Cog):
                 inline=False,
             )
         notes = rpg_engine.get_journey_notes(ctx.channel.id)
-        embed.set_footer(text=f"📓 本趟旅程共累積 {len(notes)} 條線索手記（輸入 !journal 查看）| 保存隊伍進度 !save <存檔名>")
+        embed.set_footer(text=f"📓 本趟旅程共 {len(notes)} 條線索 | 入隊 !party join / 退隊 !party leave / 存檔 !save <名>")
         await ctx.send(embed=embed)
 
     @commands.command(name="adventure", aliases=["adv", "冒險"])
@@ -346,11 +415,15 @@ class RpgCog(commands.Cog):
         if content:
             parsed = rpg_engine.parse_character_sheet(content, default_name=uname)
             applied = rpg_engine.apply_character_sheet(cid, uid, uname, parsed)
-            await self.send_sheet_embed(ctx, applied, title_prefix="✨ 角色卡匯入成功！")
+            await self.send_sheet_embed(ctx, applied, title_prefix="✨ 角色卡匯入並入隊成功！")
             return
 
-        char = rpg_engine.get_or_create_rpg_character(cid, uid, uname)
-        await self.send_sheet_embed(ctx, char, title_prefix="👑 極詳細冒險者角色卡")
+        char = rpg_engine.get_rpg_character(cid, uid)
+        if not char:
+            await ctx.send("🏕️ 你尚未在這個頻道／討論串建立或加入角色。請輸入 `!rpg join` 加入隊伍，或輸入 `!sheet <角色設定>` 直接帶卡參戰！")
+            return
+        prefix = "👑 極詳細冒險者角色卡" if char["is_in_party"] else "👑 冒險者角色卡（目前暫離隊伍，輸入 !rpg join 可歸隊）"
+        await self.send_sheet_embed(ctx, char, title_prefix=prefix)
 
     @commands.command(name="rpg", aliases=["status", "角色", "狀態"])
     async def rpg_command(self, ctx: commands.Context, action: str = None, *, arg: str = None):
@@ -369,8 +442,20 @@ class RpgCog(commands.Cog):
         if act in ("start", "new", "adv", "adventure", "開局", "開始"):
             await self.handle_start_adventure(ctx, arg)
             return
+        if act in ("join", "加入", "入隊", "參戰"):
+            await self._handle_party_join(ctx)
+            return
+        if act in ("leave", "quit", "exit", "退出", "離隊", "離開"):
+            await self._handle_party_leave(ctx)
+            return
+        if act in ("kick", "remove", "踢出", "請離"):
+            await self._handle_party_kick(ctx, arg)
+            return
         if act in ("party", "team", "隊伍", "小隊", "全員"):
-            await self.party_command(ctx)
+            p_parts = arg.split(None, 1) if arg else []
+            p_action = p_parts[0] if p_parts else None
+            p_arg = p_parts[1] if len(p_parts) > 1 else None
+            await self.party_command(ctx, action=p_action, arg=p_arg)
             return
         if act in ("save", "存檔", "儲存"):
             await self.save_command(ctx, save_name=arg)
@@ -415,6 +500,10 @@ class RpgCog(commands.Cog):
             if not arg:
                 await ctx.send("❓ 請輸入新角色名，例如：`!rpg name 艾莉絲`")
                 return
+            existing = rpg_engine.get_rpg_character(cid, uid)
+            if not existing or not existing["is_in_party"]:
+                await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改角色名稱。")
+                return
             char = rpg_engine.update_rpg_character(cid, uid, uname, char_name=arg.strip())
             await ctx.send(f"✅ 角色名稱已更改為：**{char['char_name']}**")
             return
@@ -422,11 +511,28 @@ class RpgCog(commands.Cog):
             if not arg:
                 await ctx.send("❓ 請輸入新職業名稱，例如：`!rpg class 精靈弓箭手`")
                 return
+            existing = rpg_engine.get_rpg_character(cid, uid)
+            if not existing or not existing["is_in_party"]:
+                await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改職業稱號。")
+                return
             char = rpg_engine.update_rpg_character(cid, uid, uname, char_class=arg.strip())
             await ctx.send(f"✅ 角色職業已更改為：**{char['char_class']}**")
             return
 
-        char = rpg_engine.get_or_create_rpg_character(cid, uid, uname)
+        char = rpg_engine.get_rpg_character(cid, uid)
+        if not char:
+            await ctx.send(
+                "🏕️ 你尚未加入本頻道／討論串的冒險隊伍！\n"
+                "👉 輸入 `!rpg join`（或 `!party join`）加入當前冒險\n"
+                "👉 或輸入 `!rpg start [主題]` 開啟專屬討論串，亦可直接 `!sheet <角色設定>` 帶卡參戰！"
+            )
+            return
+        if not char["is_in_party"]:
+            await ctx.send(
+                f"👋 **{uname}** 目前已暫離本頻道／討論串的冒險隊伍（保留角色：**{char['char_name']}**）。\n"
+                f"👉 隨時輸入 `!rpg join` 即可重新歸隊繼續冒險！"
+            )
+            return
         notes = rpg_engine.get_journey_notes(cid)
         inv_str = "、".join(char["inventory"]) if char["inventory"] else "（背包空空如也）"
 

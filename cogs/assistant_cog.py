@@ -54,8 +54,9 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
         name="🗡️ TRPG 跑團冒險 (`!rpg` / `!sheet` / `!roll`)",
         value=(
             "`!rpg start [主題]` — 開啟專屬討論串跑團（`!rpg reset` 重置）\n"
+            "`!rpg join` / `!rpg leave` — 主動加入或單獨退出當前冒險隊伍\n"
             "`!rpg` / `!party` — 查看個人狀態卡 ／ 小隊全員面板\n"
-            "`!sheet [文字或附檔]` — 查看或匯入詳細角色卡\n"
+            "`!sheet [文字或附檔]` — 查看或匯入詳細角色卡（匯入即入隊）\n"
             "`!save <名>` / `!load <名>` / `!saves` — 存檔與讀檔\n"
             "`!note <線索>` / `!journal` / `!roll [1d20]` — 手記與擲骰"
         ),

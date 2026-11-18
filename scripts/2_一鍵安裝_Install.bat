@@ -1,6 +1,6 @@
 @echo off
 title Discord Gemini Bot - Installer
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ========================================================
 echo   Discord Gemini Bot - Environment Installer

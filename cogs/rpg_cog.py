@@ -8,8 +8,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-import assistant_db
-import rpg_engine
+from engines import assistant_db, rpg_engine
 from core.chat_pipeline import is_target_channel
 from core.config import MAX_TEXT_ATTACHMENT_BYTES, BotSettings, truncate_embed_text
 

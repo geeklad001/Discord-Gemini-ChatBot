@@ -13,7 +13,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from assistant_db import DATA_DIR, TZ_TAIPEI, get_conn, get_db_path
+from engines.assistant_db import DATA_DIR, TZ_TAIPEI, get_conn, get_db_path
 
 _initialized_ls_dbs: set[str] = set()
 _world_cache: Optional[list[dict]] = None
@@ -89,7 +89,7 @@ def load_world_demographics() -> list[dict]:
         return _world_cache
     path = DATA_DIR / "world_demographics.json"
     if not path.is_file():
-        path = Path(__file__).parent / "data" / "world_demographics.json"
+        path = Path(__file__).resolve().parent.parent / "data" / "world_demographics.json"
     if not path.is_file():
         raise FileNotFoundError(f"找不到全球人口統計資料檔：{path}")
     _world_cache = json.loads(path.read_text(encoding="utf-8"))

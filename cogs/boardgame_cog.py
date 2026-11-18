@@ -10,8 +10,8 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-import boardgame_engine as bg
-import lifesim_engine as ls
+from engines import boardgame_engine as bg
+from engines import lifesim_engine as ls
 from core.chat_pipeline import is_target_channel
 from core.config import BotSettings, truncate_embed_text
 from core.llm_client import generate_with_fallback, get_safety_settings

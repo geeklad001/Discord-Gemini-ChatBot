@@ -10,6 +10,7 @@ env/
 !.env.community.example
 !.env.starter.example
 *_personal.txt
+prompts/*_personal.txt
 
 # Database & Persistent Data (keep curated static assets tracked)
 data/*

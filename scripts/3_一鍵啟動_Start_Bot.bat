@@ -1,6 +1,6 @@
 @echo off
 title Discord Gemini Bot
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ========================================================
 echo   Discord Gemini Bot - Starting...
@@ -37,7 +37,7 @@ exit /b 1
 
 :auto_install
 echo [INFO] .venv not found. Running installer first...
-for %%f in (*Install*.bat) do call "%%f"
+for %%f in (scripts\*Install*.bat) do call "%%f"
 if exist ".venv\Scripts\python.exe" goto start_bot
 echo [ERROR] Failed to set up environment.
 pause

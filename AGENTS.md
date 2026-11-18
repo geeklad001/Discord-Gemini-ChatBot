@@ -22,7 +22,7 @@
 - SQLite 建表 (`init_*_tables()`) 應在啟動時執行一次，**禁止**在每個高頻率查詢函式內重複執行 `CREATE TABLE` 或 `ALTER TABLE`。
 
 ### 4. 修改後強制驗證 (Mandatory Post-Edit Verification)
-- 每次修改完 Python 檔案後，Agent **必須**執行語法與單元測試檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py assistant_db.py assistant_tools.py rpg_engine.py flashcard_engine.py video_engine.py game_wiki_engine.py safety_guardrail.py core/*.py cogs/*.py` 與 `.venv\Scripts\python.exe -m unittest discover -s tests -v`），確認零語法錯誤與全數測試通過後才算完成。
+- 每次修改完 Python 檔案後，Agent **必須**執行語法與單元測試檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py core/*.py cogs/*.py engines/*.py` 與 `.venv\Scripts\python.exe -m unittest discover -s tests -v`），確認零語法錯誤與全數測試通過後才算完成。
 
 ---
 
@@ -92,9 +92,9 @@
 
 | 變更類型 | 必須同步更新的文件清單 |
 | :--- | :--- |
-| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `cogs/assistant_cog.py` 中的 `build_help_overview_embed`（依啟用開關動態呈現的 `!help` Embed 面板） |
-| **新增 / 修改 RPG 機制、角色卡欄位、存讀檔或擲骰規則** | 1. `RPG_GUIDE.md`（RPG 專屬指南與速查表）<br>2. `COMMANDS.md` & `README.md`<br>3. `general_prompt.txt`、`general_prompt_community.txt`、`general_prompt_starter.txt` |
-| **新增 / 修改 Gemini Function Calling 工具 (`assistant_tools.py` / `rpg_engine.py`)** | 1. 對應的函數 Docstring（Gemini 直接讀取 Docstring 作為 Tool Schema）<br>2. `general_prompt.txt`、`general_prompt_community.txt`、`general_prompt_starter.txt`、`system_prompt.txt`<br>3. `assistant_tools.py` 的 `get_scoped_tools()` / `get_assistant_tools()` 註冊清單 |
+| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `docs/COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `cogs/assistant_cog.py` 中的 `build_help_overview_embed`（依啟用開關動態呈現的 `!help` Embed 面板） |
+| **新增 / 修改 RPG 機制、角色卡欄位、存讀檔或擲骰規則** | 1. `docs/RPG_GUIDE.md`（RPG 專屬指南與速查表）<br>2. `docs/COMMANDS.md` & `README.md`<br>3. `prompts/general_prompt.txt`、`prompts/general_prompt_community.txt`、`prompts/general_prompt_starter.txt` |
+| **新增 / 修改 Gemini Function Calling 工具 (`engines/assistant_tools.py` / `engines/rpg_engine.py`)** | 1. 對應的函數 Docstring（Gemini 直接讀取 Docstring 作為 Tool Schema）<br>2. `prompts/general_prompt.txt`、`prompts/general_prompt_community.txt`、`prompts/general_prompt_starter.txt`、`prompts/system_prompt.txt`<br>3. `engines/assistant_tools.py` 的 `get_scoped_tools()` / `get_assistant_tools()` 註冊清單 |
 | **新增 / 修改環境變數 (`.env` 開關或設定)** | 1. `.env.example`（雙語共學版範本）<br>2. `.env.community.example`（社群版範本）<br>3. `.env.starter.example`（新手一鍵分享版範本）<br>4. `core/config.py` & `README.md` |
 | **新增外部 Python 套件 `import`** | 1. `requirements.txt`（必須明確列出所有直接 import 的第三方套件與版本下限） |
 

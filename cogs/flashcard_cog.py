@@ -13,8 +13,7 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-import assistant_db
-import flashcard_engine
+from engines import assistant_db, flashcard_engine
 from core.chat_pipeline import is_target_channel
 from core.config import (
     MAX_APKG_ATTACHMENT_BYTES,

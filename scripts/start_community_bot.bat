@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 title Discord Gemini Bot [Community]
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 if not exist ".venv\Scripts\python.exe" (
     echo [ERROR] Virtual environment .venv not found!

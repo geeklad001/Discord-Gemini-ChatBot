@@ -12,13 +12,15 @@ from core.config import init_runtime_env, load_settings
 
 env_file = init_runtime_env()
 
-import assistant_db
-import boardgame_engine
-import flashcard_engine
-import game_wiki_engine
-import lifesim_engine
-import rpg_engine
-import safety_guardrail
+from engines import (
+    assistant_db,
+    boardgame_engine,
+    flashcard_engine,
+    game_wiki_engine,
+    lifesim_engine,
+    rpg_engine,
+    safety_guardrail,
+)
 from cogs.assistant_cog import AssistantCog
 from cogs.boardgame_cog import BoardGameCog
 from cogs.flashcard_cog import FlashcardCog

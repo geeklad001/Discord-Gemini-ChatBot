@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from assistant_db import get_conn, get_db_path, TZ_TAIPEI, IMPORTS_DIR, MEDIA_DIR
+from engines.assistant_db import get_conn, get_db_path, TZ_TAIPEI, IMPORTS_DIR, MEDIA_DIR
 
 _initialized_dbs: set[str] = set()
 

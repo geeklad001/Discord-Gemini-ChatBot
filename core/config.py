@@ -167,3 +167,17 @@ def truncate_embed_text(text: str, max_len: int = 3800) -> str:
     if len(text) <= max_len:
         return text
     return text[:max_len] + "\n\n*...（內容過長已自動截斷顯示）*"
+
+
+def resolve_prompt_path(prompt_filename: str) -> Path:
+    """Resolve prompt file under prompts/ (preferred) or legacy root path (e.g., *_personal.txt)."""
+    clean_name = Path((prompt_filename or "").strip()).name
+    if not clean_name:
+        return BASE_DIR / "prompts" / "general_prompt.txt"
+    prompts_candidate = BASE_DIR / "prompts" / clean_name
+    if prompts_candidate.is_file():
+        return prompts_candidate
+    legacy_candidate = BASE_DIR / clean_name
+    if legacy_candidate.is_file():
+        return legacy_candidate
+    return prompts_candidate

@@ -14,7 +14,7 @@ import httpx
 from google.genai import types
 from PIL import Image
 
-import video_engine
+from engines import video_engine
 from core.config import MAX_IMAGE_ATTACHMENT_BYTES
 
 

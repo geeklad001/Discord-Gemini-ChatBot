@@ -93,11 +93,11 @@
 
 ## 📦 第五步：設定與一鍵啟動機器人
 
-下載專案資料夾解壓縮後，你會看到資料夾內有準備好的小幫手：
+下載專案資料夾解壓縮後，請打開 `scripts/` 資料夾，裡面有準備好的小幫手：
 
 ### 1. 產生並填寫設定檔
-- 雙擊執行資料夾中的 **`1_設定金鑰_Setup_Env.bat`**。
-- 它會自動以安全的新手入門範本（`.env.starter.example` + `general_prompt_starter.txt`）建立 `.env` 與你的專屬人設檔（若尚未存在），並用「記事本」幫你打開 `.env`。
+- 雙擊執行 **`scripts/1_設定金鑰_Setup_Env.bat`**。
+- 它會自動以安全的新手入門範本（`.env.starter.example` + `prompts/general_prompt_starter.txt`）建立 `.env` 與你的專屬人設檔（若尚未存在），並用「記事本」幫你打開 `.env`。
 - 請在對應的位置貼上剛才準備好的三串金鑰與 ID（**等號後面不要留空格**）：
   ```env
   GEMINI_API_KEY=貼上你的Gemini_API_Key
@@ -111,12 +111,12 @@
 - 按鍵盤 `Ctrl + S` 存檔，然後關閉記事本。
 
 ### 2. 一鍵安裝依賴套件（只需執行一次）
-- 雙擊執行 **`2_一鍵安裝_Install.bat`**。
+- 雙擊執行 **`scripts/2_一鍵安裝_Install.bat`**。
 - 黑色視窗會自動為你建立 `.venv` 專屬虛擬環境並安裝 `requirements.txt` 所需的套件（如 discord.py、google-genai 等）。
 - 過程中請耐心等待 1~3 分鐘，直到視窗顯示安裝完成後按任意鍵關閉即可。
 
 ### 3. 一鍵啟動機器人！
-- 雙擊執行 **`3_一鍵啟動_Start_Bot.bat`**。
+- 雙擊執行 **`scripts/3_一鍵啟動_Start_Bot.bat`**。
 - 視窗會顯示正在啟動，並出現：
   ```
   [INFO] 🚀 DiscordGeminiBot 登入成功！已連線身分: ...

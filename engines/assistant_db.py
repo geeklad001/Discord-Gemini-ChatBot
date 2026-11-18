@@ -9,7 +9,7 @@ import discord
 
 # 台灣時區 (UTC+8)
 TZ_TAIPEI = timezone(timedelta(hours=8))
-DB_DIR = Path(__file__).parent / "data"
+DB_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR = DB_DIR
 IMPORTS_DIR = DATA_DIR / "imports"
 MEDIA_DIR = DATA_DIR / "media"

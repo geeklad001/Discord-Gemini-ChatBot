@@ -4,12 +4,14 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 import discord
 
-import assistant_db
-import boardgame_engine
-import flashcard_engine
-import game_wiki_engine
-import lifesim_engine
-import rpg_engine
+from engines import (
+    assistant_db,
+    boardgame_engine,
+    flashcard_engine,
+    game_wiki_engine,
+    lifesim_engine,
+    rpg_engine,
+)
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg = assistant_db.current_discord_msg

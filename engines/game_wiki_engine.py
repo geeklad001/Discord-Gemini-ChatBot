@@ -8,7 +8,7 @@ from google.genai import types
 
 logger = logging.getLogger("DiscordGeminiBot.GameWiki")
 
-WIKI_DIR = Path(__file__).parent / "data" / "game_wiki"
+WIKI_DIR = Path(__file__).resolve().parent.parent / "data" / "game_wiki"
 CHAR_CSV_PATH = WIKI_DIR / "character_translations_tw.csv"
 COMMUNITY_WIKI_PATH = WIKI_DIR / "community_contributions.md"
 

@@ -1,6 +1,6 @@
 @echo off
 title Discord Gemini Bot - Setup .env
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ========================================================
 echo   Discord Gemini Bot - Setup .env

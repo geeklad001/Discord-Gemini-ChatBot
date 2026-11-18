@@ -10,15 +10,17 @@ import discord
 from google import genai
 from google.genai import types
 
-import assistant_db
-import assistant_tools
-import boardgame_engine
-import game_wiki_engine
-import lifesim_engine
-import rpg_engine
-import safety_guardrail
-import video_engine
-from core.config import BASE_DIR, BotSettings, truncate_embed_text
+from engines import (
+    assistant_db,
+    assistant_tools,
+    boardgame_engine,
+    game_wiki_engine,
+    lifesim_engine,
+    rpg_engine,
+    safety_guardrail,
+    video_engine,
+)
+from core.config import BASE_DIR, BotSettings, resolve_prompt_path, truncate_embed_text
 from core.llm_client import generate_with_fallback, get_safety_settings
 from core.media import build_current_message_media_parts, fetch_url_preview, is_gif_or_media_share_url
 
@@ -99,8 +101,7 @@ def build_dynamic_system_instruction(
     include_rpg_state: bool = True,
 ) -> str:
     """統一封裝動態 System Instruction 組裝邏輯（人設檔、安全護欄、時間、長期記憶、Lorebook、Wiki RAG、RPG 狀態卡）。"""
-    p_name = Path(prompt_filename.strip()).name
-    prompt_path = BASE_DIR / p_name
+    prompt_path = resolve_prompt_path(prompt_filename)
     base_prompt = ""
     if prompt_path.exists():
         try:

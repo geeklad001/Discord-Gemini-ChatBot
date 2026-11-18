@@ -14,7 +14,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from assistant_db import TZ_TAIPEI, get_conn, get_db_path
+from engines.assistant_db import TZ_TAIPEI, get_conn, get_db_path
 
 _initialized_bg_dbs: set[str] = set()
 pending_board_card_updates: contextvars.ContextVar[Optional[list[tuple[int, str]]]] = contextvars.ContextVar(

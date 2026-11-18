@@ -8,11 +8,9 @@ from typing import Optional
 import discord
 from discord.ext import commands, tasks
 
-import assistant_db
-import assistant_tools
-import game_wiki_engine
+from engines import assistant_db, assistant_tools, game_wiki_engine
 from core.chat_pipeline import is_target_channel, record_channel_reset_timestamp
-from core.config import BASE_DIR, BotSettings, truncate_embed_text
+from core.config import BASE_DIR, BotSettings, resolve_prompt_path, truncate_embed_text
 
 
 def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
@@ -205,7 +203,7 @@ class AssistantCog(commands.Cog):
             prompt_files.append(self.settings.system_prompt_file)
 
         for fname in prompt_files:
-            p_path = BASE_DIR / Path(fname.strip()).name
+            p_path = resolve_prompt_path(fname)
             if p_path.is_file():
                 try:
                     content = p_path.read_text(encoding="utf-8").strip()

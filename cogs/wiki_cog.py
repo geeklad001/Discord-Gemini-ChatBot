@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 from google import genai
 
-import game_wiki_engine
+from engines import game_wiki_engine
 from core.chat_pipeline import is_target_channel
 from core.config import MAX_TEXT_ATTACHMENT_BYTES, BotSettings, truncate_embed_text
 

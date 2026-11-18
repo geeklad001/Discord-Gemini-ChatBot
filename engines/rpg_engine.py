@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from assistant_db import get_conn, get_db_path, TZ_TAIPEI, current_discord_msg
+from engines.assistant_db import get_conn, get_db_path, TZ_TAIPEI, current_discord_msg
 
 _initialized_rpg_dbs: set[str] = set()
 

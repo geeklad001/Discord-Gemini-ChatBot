@@ -15,12 +15,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import assistant_db
-import flashcard_engine
-import game_wiki_engine
-import rpg_engine
-import safety_guardrail
-import video_engine
+from engines import (
+    assistant_db,
+    flashcard_engine,
+    game_wiki_engine,
+    rpg_engine,
+    safety_guardrail,
+    video_engine,
+)
 
 
 class TestDatabaseAndEngines(unittest.TestCase):
@@ -281,7 +283,7 @@ class TestDatabaseAndEngines(unittest.TestCase):
     def test_legacy_rpg_table_migration_adds_is_in_party(self):
         with patch.dict(os.environ, {"DB_NAME": "legacy_rpg_mig.db"}):
             rpg_engine._initialized_rpg_dbs.clear()
-            with rpg_engine.assistant_db.get_conn() if hasattr(rpg_engine, "assistant_db") else __import__("assistant_db").get_conn() as conn:
+            with assistant_db.get_conn() as conn:
                 conn.execute("""
                     CREATE TABLE rpg_characters (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,

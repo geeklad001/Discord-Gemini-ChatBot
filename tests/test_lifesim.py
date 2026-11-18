@@ -2,14 +2,18 @@
 
 import asyncio
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-import assistant_db
-import assistant_tools
-import lifesim_engine as ls
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engines import assistant_db, assistant_tools
+from engines import lifesim_engine as ls
 
 
 class LifeSimEngineTests(unittest.TestCase):

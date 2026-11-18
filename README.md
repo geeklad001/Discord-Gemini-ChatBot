@@ -42,10 +42,10 @@ Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最
 * **Kotoba 限時搶答（`!quiz`）**：多人拼刀限時搶答假名讀音或中文意思，附即時排行榜結算。
 
 ### 8. 🌐 單一程式碼庫 × 功能開關與多實例隔離
-本專案透過模組化套件（`core/`、`cogs/`、`*_engine.py`）與 `.env` 功能開關，一套程式碼即可切換三種開箱模式並完全隔離資料庫：
-* **新手自架／好友分享版（`.env.starter.example` + `general_prompt_starter.txt`）**：搭配 `1_設定金鑰_Setup_Env.bat` ➔ `2_一鍵安裝_Install.bat` ➔ `3_一鍵啟動_Start_Bot.bat` 三步驟快速開張！
-* **社群跑團與群聊版（`start_community_bot.bat` / `.env.community.example`）**：關閉日語與單字卡（`ENABLE_JAPANESE_MODE=false`、`ENABLE_FLASHCARD_MODE=false`），可選擇開啟遊戲知識庫（`ENABLE_GAME_WIKI`）與防注入護欄（`ENABLE_SAFETY_GUARDRAIL`），獨立連結 `data/community.db`。
-* **雙語共學管家版（`start_bot.bat` / `.env.example`）**：開啟日語雙頻道（`ENABLE_JAPANESE_MODE=true`）與 Anki 單字卡（`ENABLE_FLASHCARD_MODE=true`），獨立連結 `data/assistant.db`。
+本專案透過模組化套件（`core/`、`cogs/`、`engines/`、`prompts/`、`scripts/`）與 `.env` 功能開關，一套程式碼即可切換三種開箱模式並完全隔離資料庫：
+* **新手自架／好友分享版（`.env.starter.example` + `prompts/general_prompt_starter.txt`）**：搭配 `scripts/1_設定金鑰_Setup_Env.bat` ➔ `scripts/2_一鍵安裝_Install.bat` ➔ `scripts/3_一鍵啟動_Start_Bot.bat` 三步驟快速開張！
+* **社群跑團與群聊版（`scripts/start_community_bot.bat` / `.env.community.example`）**：關閉日語與單字卡（`ENABLE_JAPANESE_MODE=false`、`ENABLE_FLASHCARD_MODE=false`），可選擇開啟遊戲知識庫（`ENABLE_GAME_WIKI`）與防注入護欄（`ENABLE_SAFETY_GUARDRAIL`），獨立連結 `data/community.db`。
+* **雙語共學管家版（`scripts/start_bot.bat` / `.env.example`）**：開啟日語雙頻道（`ENABLE_JAPANESE_MODE=true`）與 Anki 單字卡（`ENABLE_FLASHCARD_MODE=true`），獨立連結 `data/assistant.db`。
 * 常用彈性開關：`ENABLE_GAME_WIKI`、`ENABLE_BOARD_GAMES`、`ENABLE_SAFETY_GUARDRAIL`（本地安全/防注入護欄）、`DISABLE_SAFETY_SETTINGS`（暢聊放鬆 Gemini 安全過濾）、`FALLBACK_MODELS`（自訂備援模型順序）。
 
 ---
@@ -93,7 +93,7 @@ Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最
 
 ## 🚀 快速啟動
 
-* **第一次新手自架（一鍵引導）**：依序雙擊 **`1_設定金鑰_Setup_Env.bat`** ➔ **`2_一鍵安裝_Install.bat`** ➔ **`3_一鍵啟動_Start_Bot.bat`**（詳見 [新手架設指南](COMMUNITY_SETUP_GUIDE.md)）
+* **第一次新手自架（一鍵引導）**：依序雙擊 `scripts/` 內的 **`1_設定金鑰_Setup_Env.bat`** ➔ **`2_一鍵安裝_Install.bat`** ➔ **`3_一鍵啟動_Start_Bot.bat`**（詳見 [新手架設指南](docs/COMMUNITY_SETUP_GUIDE.md)｜[指令簡表](docs/COMMANDS.md)｜[TRPG 指南](docs/RPG_GUIDE.md)）
 * **已有 `.venv` 的雙實例進階啟動**：
-  * 主實例：雙擊 **`start_bot.bat`**（載入 `.env`）
-  * 社群實例：雙擊 **`start_community_bot.bat`**（載入 `.env.community`）
+  * 主實例：雙擊 **`scripts/start_bot.bat`**（載入 `.env`）
+  * 社群實例：雙擊 **`scripts/start_community_bot.bat`**（載入 `.env.community`）

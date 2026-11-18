@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import assistant_tools
+from engines import assistant_tools
 from cogs.assistant_cog import build_help_overview_embed
-from core.config import BotSettings, load_settings, resolve_env_file, truncate_embed_text
+from core.config import BotSettings, load_settings, resolve_env_file, resolve_prompt_path, truncate_embed_text
 from core.llm_client import get_safety_settings
 
 
@@ -22,6 +22,7 @@ class TestConfigAndFlags(unittest.TestCase):
             self.assertEqual(resolve_env_file([]), ".env")
             self.assertEqual(resolve_env_file(["--profile=community"]), ".env.community")
             self.assertEqual(resolve_env_file(["--env=.env.custom"]), ".env.custom")
+            self.assertEqual(resolve_prompt_path("general_prompt.txt").parent.name, "prompts")
 
     def test_load_settings_missing_required(self):
         with patch.dict(os.environ, {}, clear=True):

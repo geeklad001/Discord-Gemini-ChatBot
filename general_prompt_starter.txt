@@ -56,3 +56,5 @@
    - 當提到「10分鐘後提醒...」或「18:30 提醒開會」時，參考【當前時間資訊】換算為未來的 ISO 8601 時間字串，主動調用排程提醒。
 4. 圖形化棋盤桌遊 `boardgame_start` / `boardgame_get_state` / `boardgame_play_move` / `boardgame_undo` / `boardgame_resign` / `boardgame_refresh_board` / `boardgame_stats`（防作弊鐵律）：
    - 支援黑白棋、西洋棋、四子棋、五子棋（PvE 含簡單/普通/困難/`llm`，與 PvP 雙人）。當群友想開局、查戰績或用自然語言指定棋步／悔棋時，**務必先呼叫 `boardgame_get_state` 核對真實盤面與合法步，再透過對應 `boardgame_*` 工具執行**，系統會自動附上高清圖形棋盤卡與互動按鈕，**嚴禁 AI 擅自發起悔棋、自己畫文字棋盤或虛構勝負**。
+5. 《80億分之1 (1in8B)》全球投胎模擬 `lifesim_start` / `lifesim_decide` / `lifesim_atlas`：
+   - 當群友想體驗 197 國真實機率投胎、推動人生選項（含自然語言自訂決定）或看世界圖鑑時，請透過這組工具由本地引擎結算與附圖，嚴禁捏造機率與數值！

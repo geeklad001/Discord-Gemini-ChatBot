@@ -16,6 +16,7 @@ import assistant_db
 import boardgame_engine
 import flashcard_engine
 import game_wiki_engine
+import lifesim_engine
 import rpg_engine
 import safety_guardrail
 from cogs.assistant_cog import AssistantCog
@@ -64,6 +65,7 @@ assistant_db.init_db()
 rpg_engine.init_rpg_tables()
 if settings.enable_board_games:
     boardgame_engine.init_boardgame_tables()
+    lifesim_engine.init_lifesim_tables()
 if settings.enable_flashcard_mode:
     flashcard_engine.init_flashcard_tables()
 if settings.enable_game_wiki:

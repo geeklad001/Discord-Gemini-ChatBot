@@ -82,8 +82,8 @@ Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最
 | `!card import [檔名/等級/all]` | 貼上文字、讀取 `data/imports/`（支援一鍵全分類 `all` 或指定 `N3高頻`） | `!card import all`、`!card import N3高頻` |
 | `!card generate <主題> [數]` | 由 AI 量身打造主題單字牌組 | `!card generate 居酒屋菜單 8` |
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
-| `!play` / `!game` | 開啟圖形化桌遊大廳或開局（黑白棋、西洋棋、四子棋、五子棋；支援 PvP、本地 AI ＆ 🧠 LLM） | `!play`、`!play chess llm`、`!play 黑白棋 pvp @好友` |
-| `!m <棋步>` | （輔助捷徑）落子座標；對局中亦可用按鈕選單與口語進行上一步悔棋、投降、看戰績與重貼面板 | `!m d3`、`!m e2e4` |
+| `!play` / `!game` | 開啟遊戲大廳或開局（黑白棋、西洋棋、四子棋、五子棋 ＆ 🌍 **80億分之1** 197國寫實人生模擬；支援 PvP、本地 AI、🧠 LLM ＆ `!play 圖鑑`） | `!play`、`!play chess llm`、`!play 1in8b llm` |
+| `!m <棋步>` | （輔助捷徑）落子座標；遊戲中皆可用卡片按鈕與口語下棋、悔棋、做人生抉擇與查戰績/圖鑑 | `!m d3`、`!m e2e4` |
 | `!memory` | 查看所有保存的長期記憶清單 | `!memory` |
 | `!remember <事實>` | 直接寫入長期記憶庫 | `!remember 喜歡抹茶拿鐵` |
 | `!forget <編號>` | 刪除某一條長期記憶 | `!forget 1` |

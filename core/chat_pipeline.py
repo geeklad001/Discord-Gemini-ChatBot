@@ -14,6 +14,7 @@ import assistant_db
 import assistant_tools
 import boardgame_engine
 import game_wiki_engine
+import lifesim_engine
 import rpg_engine
 import safety_guardrail
 import video_engine
@@ -155,6 +156,13 @@ def build_dynamic_system_instruction(
                 extra_parts.append(
                     f"\n\n【本機權威棋盤桌遊狀態（嚴禁文字手畫棋盤或作弊）】\n{bg_summary}"
                 )
+            active_life = lifesim_engine.get_active_life_run(bg_cid, user_id=message.author.id)
+            if active_life:
+                life_summary = lifesim_engine.format_lifesim_status_for_llm(bg_cid, user_id=message.author.id)
+                if life_summary:
+                    extra_parts.append(
+                        f"\n\n【《80億分之1》權威人生狀態（請使用 lifesim_start / lifesim_decide / lifesim_atlas，嚴禁自行編造數值或國籍結果）】\n{life_summary}"
+                    )
 
     return "".join(extra_parts)
 
@@ -247,7 +255,12 @@ async def build_chat_history_contents(
                 embed = msg.embeds[0]
                 footer_txt = embed.footer.text if embed.footer and embed.footer.text else ""
                 title_txt = embed.title or ""
-                if footer_txt.startswith("棋局 #") or "桌遊與棋盤大廳" in title_txt:
+                if (
+                    footer_txt.startswith("棋局 #")
+                    or footer_txt.startswith("人生 #")
+                    or "桌遊與棋盤大廳" in title_txt
+                    or "Discord 遊戲大廳" in title_txt
+                ):
                     moves_field = next((f.value for f in (embed.fields or []) if "最近著法" in (f.name or "")), "")
                     summary_line = f"（系統已貼出{title_txt}｜近期著法：{moves_field}）" if moves_field else f"（系統已貼出{title_txt}）"
                     parts.append(types.Part.from_text(text=summary_line))
@@ -465,11 +478,20 @@ async def prepare_and_generate_chat_response(
             or boardgame_engine.is_boardgame_intent(recent_text)
         )
     )
+    in_lifesim = bool(
+        settings.enable_board_games
+        and (
+            lifesim_engine.get_active_life_run(bg_cid, user_id=message.author.id) is not None
+            or lifesim_engine.is_lifesim_intent(message.clean_content)
+            or lifesim_engine.is_lifesim_intent(recent_text)
+        )
+    )
     scoped_tools = assistant_tools.get_scoped_tools(
         enable_flashcards=settings.enable_flashcard_mode,
         include_rpg=in_rpg,
         enable_game_wiki=settings.enable_game_wiki,
         include_boardgames=in_boardgame,
+        include_lifesim=in_lifesim,
     )
 
     is_factual_game_query = bool(
@@ -603,6 +625,75 @@ async def _flush_pending_board_cards(
     return sent_reply_with_card
 
 
+async def _flush_pending_lifesim_cards(
+    bot: discord.Client,
+    channel: discord.abc.Messageable,
+    pending_updates: list[dict],
+    reply_text: str = "",
+    logger: Optional[logging.Logger] = None,
+) -> bool:
+    """將自然語言觸發的《80億分之1》人生卡片（含非同步 LLM 劇情/自訂判定）與回覆合併發送。"""
+    if not pending_updates:
+        return False
+    bg_cog = bot.get_cog("BoardGameCog") if hasattr(bot, "get_cog") else None
+    if not bg_cog:
+        return False
+
+    latest_by_run: dict[int, dict] = {}
+    for item in pending_updates:
+        rid = item.get("run_id")
+        if not rid:
+            continue
+        prev = latest_by_run.get(rid) or {}
+        latest_by_run[rid] = {
+            "run_id": rid,
+            "note": item.get("note") or prev.get("note", ""),
+            "include_birth_cert": bool(item.get("include_birth_cert")) or bool(prev.get("include_birth_cert")),
+            "custom_decision": item.get("custom_decision") or prev.get("custom_decision", ""),
+            "needs_llm_next": bool(item.get("needs_llm_next")) or bool(prev.get("needs_llm_next")),
+        }
+
+    cleaned_reply = _strip_hallucinated_board_card_echo(reply_text)
+    sent_reply_with_card = False
+    items_list = list(latest_by_run.items())
+
+    for idx, (rid, info) in enumerate(items_list):
+        try:
+            run = lifesim_engine.get_life_run_by_id(rid)
+            if not run:
+                continue
+            note = info["note"]
+            if info["custom_decision"] and run["status"] == "active":
+                outcome, deltas = await bg_cog.evaluate_llm_custom_choice(run, info["custom_decision"])
+                run, note = lifesim_engine.resolve_life_step(
+                    rid,
+                    run["user_id"],
+                    custom_deltas=deltas,
+                    custom_outcome_text=outcome,
+                )
+            if info["needs_llm_next"] and run["status"] == "active" and run["story_mode"] == "llm":
+                run = await bg_cog.populate_llm_next_event(run)
+
+            merged_content = cleaned_reply if (idx == 0 and cleaned_reply) else ""
+            if merged_content and len(merged_content) > 1900:
+                await send_split_messages(channel, merged_content)
+                merged_content = ""
+
+            await bg_cog.send_life_card(
+                channel,
+                run,
+                note=note,
+                include_birth_cert=info["include_birth_cert"],
+                content_text=merged_content,
+            )
+            if idx == 0:
+                sent_reply_with_card = True
+        except Exception as e:
+            if logger:
+                logger.error(f"❌ 發送《80億分之1》人生卡片失敗 (run_id={rid}): {e}", exc_info=True)
+    return sent_reply_with_card
+
+
 async def handle_general_chat(
     bot: discord.Client,
     gemini_client: genai.Client,
@@ -617,7 +708,9 @@ async def handle_general_chat(
 
     async with message.channel.typing():
         pending_cards: list = []
+        pending_life: list = []
         bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
+        ls_token = lifesim_engine.pending_lifesim_card_updates.set(pending_life)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -643,7 +736,14 @@ async def handle_general_chat(
             sent_with_card = await _flush_pending_board_cards(
                 bot, message.channel, pending_cards, reply_text=reply_text, logger=logger
             )
-            if not sent_with_card:
+            sent_with_life = await _flush_pending_lifesim_cards(
+                bot,
+                message.channel,
+                pending_life,
+                reply_text="" if sent_with_card else reply_text,
+                logger=logger,
+            )
+            if not sent_with_card and not sent_with_life:
                 await send_split_messages(message.channel, _strip_hallucinated_board_card_echo(reply_text) or reply_text)
 
         except Exception as e:
@@ -652,6 +752,7 @@ async def handle_general_chat(
             await message.channel.send("抱歉，我剛才斷線了一下，請再說一次。")
         finally:
             boardgame_engine.pending_board_card_updates.reset(bg_token)
+            lifesim_engine.pending_lifesim_card_updates.reset(ls_token)
 
 
 async def handle_japanese_learning_chat(
@@ -700,8 +801,10 @@ async def handle_japanese_learning_chat(
                     logger.error(f"❌ 鏡像小卡發送至綜合頻道失敗: {e}")
 
     async with message.channel.typing():
-        pending_cards: list[tuple[int, str]] = []
+        pending_cards: list = []
+        pending_life: list = []
         bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
+        ls_token = lifesim_engine.pending_lifesim_card_updates.set(pending_life)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -724,7 +827,7 @@ async def handle_japanese_learning_chat(
                 context_label="日語共學",
                 logger=logger,
             )
-            if pending_cards:
+            if pending_cards or pending_life:
                 if "[ZH]" in reply_text:
                     jp_raw, zh_raw = reply_text.split("[ZH]", 1)
                     jp_clean = _strip_hallucinated_board_card_echo(jp_raw.replace("[JP]", "").strip())
@@ -740,7 +843,14 @@ async def handle_japanese_learning_chat(
                 sent_with_card = await _flush_pending_board_cards(
                     bot, message.channel, pending_cards, reply_text=merged_reply, logger=logger
                 )
-                if not sent_with_card:
+                sent_with_life = await _flush_pending_lifesim_cards(
+                    bot,
+                    message.channel,
+                    pending_life,
+                    reply_text="" if sent_with_card else merged_reply,
+                    logger=logger,
+                )
+                if not sent_with_card and not sent_with_life:
                     await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
             else:
                 await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
@@ -751,3 +861,4 @@ async def handle_japanese_learning_chat(
             await message.channel.send("すみません、剛才稍微斷線了一下，請再傳一次試試看。")
         finally:
             boardgame_engine.pending_board_card_updates.reset(bg_token)
+            lifesim_engine.pending_lifesim_card_updates.reset(ls_token)

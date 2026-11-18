@@ -1,0 +1,3576 @@
+[
+  {
+    "code": "IN",
+    "name_zh": "印度",
+    "name_en": "India",
+    "region": "南亞",
+    "birth_weight": 23100,
+    "pop_weight": 1441.0,
+    "life_exp": 72.0,
+    "infant_surv": 0.971,
+    "gdp_pc": 2730,
+    "edu_years": 11.9,
+    "urban_pct": 36,
+    "tier": "lower_mid",
+    "cities": [
+      "孟買",
+      "新德里",
+      "邦加羅爾",
+      "加爾各答"
+    ]
+  },
+  {
+    "code": "PK",
+    "name_zh": "巴基斯坦",
+    "name_en": "Pakistan",
+    "region": "南亞",
+    "birth_weight": 6880,
+    "pop_weight": 245.0,
+    "life_exp": 67.6,
+    "infant_surv": 0.938,
+    "gdp_pc": 1590,
+    "edu_years": 8.7,
+    "urban_pct": 38,
+    "tier": "lower_mid",
+    "cities": [
+      "喀拉蚩",
+      "拉合爾",
+      "伊斯蘭馬巴德"
+    ]
+  },
+  {
+    "code": "BD",
+    "name_zh": "孟加拉",
+    "name_en": "Bangladesh",
+    "region": "南亞",
+    "birth_weight": 2950,
+    "pop_weight": 173.0,
+    "life_exp": 74.3,
+    "infant_surv": 0.971,
+    "gdp_pc": 2650,
+    "edu_years": 11.9,
+    "urban_pct": 41,
+    "tier": "lower_mid",
+    "cities": [
+      "達卡",
+      "吉大港",
+      "庫爾納"
+    ]
+  },
+  {
+    "code": "AF",
+    "name_zh": "阿富汗",
+    "name_en": "Afghanistan",
+    "region": "南亞",
+    "birth_weight": 1450,
+    "pop_weight": 42.6,
+    "life_exp": 66.0,
+    "infant_surv": 0.942,
+    "gdp_pc": 410,
+    "edu_years": 10.3,
+    "urban_pct": 27,
+    "tier": "low",
+    "cities": [
+      "喀布爾",
+      "坎達哈",
+      "赫拉特"
+    ]
+  },
+  {
+    "code": "NP",
+    "name_zh": "尼泊爾",
+    "name_en": "Nepal",
+    "region": "南亞",
+    "birth_weight": 580,
+    "pop_weight": 30.9,
+    "life_exp": 70.5,
+    "infant_surv": 0.972,
+    "gdp_pc": 1380,
+    "edu_years": 12.6,
+    "urban_pct": 22,
+    "tier": "low",
+    "cities": [
+      "加德滿都",
+      "波卡拉",
+      "拉利特普爾"
+    ]
+  },
+  {
+    "code": "LK",
+    "name_zh": "斯里蘭卡",
+    "name_en": "Sri Lanka",
+    "region": "南亞",
+    "birth_weight": 310,
+    "pop_weight": 21.9,
+    "life_exp": 77.5,
+    "infant_surv": 0.993,
+    "gdp_pc": 3830,
+    "edu_years": 14.1,
+    "urban_pct": 19,
+    "tier": "lower_mid",
+    "cities": [
+      "可倫坡",
+      "康提",
+      "加勒"
+    ]
+  },
+  {
+    "code": "BT",
+    "name_zh": "不丹",
+    "name_en": "Bhutan",
+    "region": "南亞",
+    "birth_weight": 10,
+    "pop_weight": 0.79,
+    "life_exp": 72.9,
+    "infant_surv": 0.974,
+    "gdp_pc": 3700,
+    "edu_years": 13.1,
+    "urban_pct": 44,
+    "tier": "lower_mid",
+    "cities": [
+      "廷布",
+      "帕羅",
+      "普那卡"
+    ]
+  },
+  {
+    "code": "MV",
+    "name_zh": "馬爾地夫",
+    "name_en": "Maldives",
+    "region": "南亞",
+    "birth_weight": 7,
+    "pop_weight": 0.52,
+    "life_exp": 81.0,
+    "infant_surv": 0.994,
+    "gdp_pc": 12700,
+    "edu_years": 12.6,
+    "urban_pct": 42,
+    "tier": "upper_mid",
+    "cities": [
+      "馬列",
+      "阿杜市"
+    ]
+  },
+  {
+    "code": "CN",
+    "name_zh": "中國",
+    "name_en": "China",
+    "region": "東亞",
+    "birth_weight": 9020,
+    "pop_weight": 1410.0,
+    "life_exp": 78.6,
+    "infant_surv": 0.993,
+    "gdp_pc": 12700,
+    "edu_years": 15.2,
+    "urban_pct": 65,
+    "tier": "upper_mid",
+    "cities": [
+      "上海",
+      "北京",
+      "廣州",
+      "成都",
+      "深圳"
+    ]
+  },
+  {
+    "code": "JP",
+    "name_zh": "日本",
+    "name_en": "Japan",
+    "region": "東亞",
+    "birth_weight": 730,
+    "pop_weight": 123.7,
+    "life_exp": 84.8,
+    "infant_surv": 0.998,
+    "gdp_pc": 33800,
+    "edu_years": 15.3,
+    "urban_pct": 92,
+    "tier": "high",
+    "cities": [
+      "東京",
+      "大阪",
+      "札幌",
+      "福岡",
+      "名古屋"
+    ]
+  },
+  {
+    "code": "KR",
+    "name_zh": "韓國",
+    "name_en": "South Korea",
+    "region": "東亞",
+    "birth_weight": 235,
+    "pop_weight": 51.7,
+    "life_exp": 84.3,
+    "infant_surv": 0.997,
+    "gdp_pc": 33100,
+    "edu_years": 16.5,
+    "urban_pct": 81,
+    "tier": "high",
+    "cities": [
+      "首爾",
+      "釜山",
+      "仁川",
+      "大邱"
+    ]
+  },
+  {
+    "code": "KP",
+    "name_zh": "北韓",
+    "name_en": "North Korea",
+    "region": "東亞",
+    "birth_weight": 340,
+    "pop_weight": 26.2,
+    "life_exp": 73.6,
+    "infant_surv": 0.985,
+    "gdp_pc": 650,
+    "edu_years": 10.8,
+    "urban_pct": 63,
+    "tier": "low",
+    "cities": [
+      "平壤",
+      "咸興",
+      "清津"
+    ]
+  },
+  {
+    "code": "TW",
+    "name_zh": "台灣",
+    "name_en": "Taiwan",
+    "region": "東亞",
+    "birth_weight": 135,
+    "pop_weight": 23.4,
+    "life_exp": 80.8,
+    "infant_surv": 0.996,
+    "gdp_pc": 33900,
+    "edu_years": 16.5,
+    "urban_pct": 79,
+    "tier": "high",
+    "cities": [
+      "台北",
+      "新北",
+      "台中",
+      "高雄",
+      "台南"
+    ]
+  },
+  {
+    "code": "MN",
+    "name_zh": "蒙古",
+    "name_en": "Mongolia",
+    "region": "東亞",
+    "birth_weight": 72,
+    "pop_weight": 3.48,
+    "life_exp": 71.9,
+    "infant_surv": 0.986,
+    "gdp_pc": 5800,
+    "edu_years": 14.5,
+    "urban_pct": 69,
+    "tier": "upper_mid",
+    "cities": [
+      "烏蘭巴托",
+      "額爾登特"
+    ]
+  },
+  {
+    "code": "HK",
+    "name_zh": "香港",
+    "name_en": "Hong Kong",
+    "region": "東亞",
+    "birth_weight": 33,
+    "pop_weight": 7.5,
+    "life_exp": 85.5,
+    "infant_surv": 0.998,
+    "gdp_pc": 51100,
+    "edu_years": 17.3,
+    "urban_pct": 100,
+    "tier": "high",
+    "cities": [
+      "中環",
+      "九龍",
+      "沙田"
+    ]
+  },
+  {
+    "code": "MO",
+    "name_zh": "澳門",
+    "name_en": "Macau",
+    "region": "東亞",
+    "birth_weight": 4,
+    "pop_weight": 0.69,
+    "life_exp": 83.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 67500,
+    "edu_years": 15.1,
+    "urban_pct": 100,
+    "tier": "high",
+    "cities": [
+      "澳門半島",
+      "氹仔"
+    ]
+  },
+  {
+    "code": "ID",
+    "name_zh": "印尼",
+    "name_en": "Indonesia",
+    "region": "東南亞",
+    "birth_weight": 4480,
+    "pop_weight": 279.0,
+    "life_exp": 71.1,
+    "infant_surv": 0.979,
+    "gdp_pc": 4940,
+    "edu_years": 14.0,
+    "urban_pct": 59,
+    "tier": "lower_mid",
+    "cities": [
+      "雅加達",
+      "泗水",
+      "萬隆",
+      "棉蘭"
+    ]
+  },
+  {
+    "code": "PH",
+    "name_zh": "菲律賓",
+    "name_en": "Philippines",
+    "region": "東南亞",
+    "birth_weight": 2450,
+    "pop_weight": 115.0,
+    "life_exp": 69.8,
+    "infant_surv": 0.973,
+    "gdp_pc": 3860,
+    "edu_years": 12.8,
+    "urban_pct": 48,
+    "tier": "lower_mid",
+    "cities": [
+      "馬尼拉",
+      "宿霧",
+      "達沃"
+    ]
+  },
+  {
+    "code": "VN",
+    "name_zh": "越南",
+    "name_en": "Vietnam",
+    "region": "東南亞",
+    "birth_weight": 1460,
+    "pop_weight": 100.3,
+    "life_exp": 74.6,
+    "infant_surv": 0.98,
+    "gdp_pc": 4350,
+    "edu_years": 13.0,
+    "urban_pct": 40,
+    "tier": "lower_mid",
+    "cities": [
+      "胡志明市",
+      "河內",
+      "峴港"
+    ]
+  },
+  {
+    "code": "MM",
+    "name_zh": "緬甸",
+    "name_en": "Myanmar",
+    "region": "東南亞",
+    "birth_weight": 920,
+    "pop_weight": 54.5,
+    "life_exp": 66.9,
+    "infant_surv": 0.959,
+    "gdp_pc": 1210,
+    "edu_years": 11.0,
+    "urban_pct": 32,
+    "tier": "low",
+    "cities": [
+      "仰光",
+      "曼德勒",
+      "奈比多"
+    ]
+  },
+  {
+    "code": "TH",
+    "name_zh": "泰國",
+    "name_en": "Thailand",
+    "region": "東南亞",
+    "birth_weight": 520,
+    "pop_weight": 71.7,
+    "life_exp": 76.4,
+    "infant_surv": 0.992,
+    "gdp_pc": 7290,
+    "edu_years": 15.6,
+    "urban_pct": 54,
+    "tier": "upper_mid",
+    "cities": [
+      "曼谷",
+      "清邁",
+      "普吉"
+    ]
+  },
+  {
+    "code": "MY",
+    "name_zh": "馬來西亞",
+    "name_en": "Malaysia",
+    "region": "東南亞",
+    "birth_weight": 510,
+    "pop_weight": 35.1,
+    "life_exp": 76.7,
+    "infant_surv": 0.992,
+    "gdp_pc": 11650,
+    "edu_years": 13.7,
+    "urban_pct": 79,
+    "tier": "upper_mid",
+    "cities": [
+      "吉隆坡",
+      "檳城",
+      "新山"
+    ]
+  },
+  {
+    "code": "KH",
+    "name_zh": "柬埔寨",
+    "name_en": "Cambodia",
+    "region": "東南亞",
+    "birth_weight": 320,
+    "pop_weight": 17.4,
+    "life_exp": 70.7,
+    "infant_surv": 0.976,
+    "gdp_pc": 1910,
+    "edu_years": 11.6,
+    "urban_pct": 26,
+    "tier": "lower_mid",
+    "cities": [
+      "金邊",
+      "暹粒",
+      "馬德望"
+    ]
+  },
+  {
+    "code": "LA",
+    "name_zh": "寮國",
+    "name_en": "Laos",
+    "region": "東南亞",
+    "birth_weight": 165,
+    "pop_weight": 7.7,
+    "life_exp": 69.0,
+    "infant_surv": 0.961,
+    "gdp_pc": 2070,
+    "edu_years": 10.2,
+    "urban_pct": 38,
+    "tier": "lower_mid",
+    "cities": [
+      "永珍",
+      "龍坡邦"
+    ]
+  },
+  {
+    "code": "TL",
+    "name_zh": "東帝汶",
+    "name_en": "Timor-Leste",
+    "region": "東南亞",
+    "birth_weight": 33,
+    "pop_weight": 1.38,
+    "life_exp": 67.7,
+    "infant_surv": 0.952,
+    "gdp_pc": 1500,
+    "edu_years": 12.8,
+    "urban_pct": 32,
+    "tier": "lower_mid",
+    "cities": [
+      "帝力",
+      "包考"
+    ]
+  },
+  {
+    "code": "SG",
+    "name_zh": "新加坡",
+    "name_en": "Singapore",
+    "region": "東南亞",
+    "birth_weight": 34,
+    "pop_weight": 6.0,
+    "life_exp": 83.7,
+    "infant_surv": 0.998,
+    "gdp_pc": 84700,
+    "edu_years": 16.9,
+    "urban_pct": 100,
+    "tier": "high",
+    "cities": [
+      "新加坡"
+    ]
+  },
+  {
+    "code": "BN",
+    "name_zh": "汶萊",
+    "name_en": "Brunei",
+    "region": "東南亞",
+    "birth_weight": 6,
+    "pop_weight": 0.46,
+    "life_exp": 75.3,
+    "infant_surv": 0.99,
+    "gdp_pc": 33400,
+    "edu_years": 13.9,
+    "urban_pct": 79,
+    "tier": "high",
+    "cities": [
+      "斯里巴加灣市"
+    ]
+  },
+  {
+    "code": "TR",
+    "name_zh": "土耳其",
+    "name_en": "Türkiye",
+    "region": "西亞",
+    "birth_weight": 1180,
+    "pop_weight": 85.4,
+    "life_exp": 77.2,
+    "infant_surv": 0.991,
+    "gdp_pc": 13100,
+    "edu_years": 18.3,
+    "urban_pct": 77,
+    "tier": "upper_mid",
+    "cities": [
+      "伊斯坦堡",
+      "安卡拉",
+      "伊茲密爾"
+    ]
+  },
+  {
+    "code": "IQ",
+    "name_zh": "伊拉克",
+    "name_en": "Iraq",
+    "region": "西亞",
+    "birth_weight": 1190,
+    "pop_weight": 45.5,
+    "life_exp": 72.3,
+    "infant_surv": 0.976,
+    "gdp_pc": 5510,
+    "edu_years": 12.1,
+    "urban_pct": 72,
+    "tier": "upper_mid",
+    "cities": [
+      "巴格達",
+      "巴斯拉",
+      "艾比爾"
+    ]
+  },
+  {
+    "code": "IR",
+    "name_zh": "伊朗",
+    "name_en": "Iran",
+    "region": "西亞",
+    "birth_weight": 1150,
+    "pop_weight": 90.6,
+    "life_exp": 77.7,
+    "infant_surv": 0.988,
+    "gdp_pc": 4500,
+    "edu_years": 14.8,
+    "urban_pct": 77,
+    "tier": "lower_mid",
+    "cities": [
+      "德黑蘭",
+      "馬什哈德",
+      "伊斯法罕"
+    ]
+  },
+  {
+    "code": "YE",
+    "name_zh": "葉門",
+    "name_en": "Yemen",
+    "region": "西亞",
+    "birth_weight": 1180,
+    "pop_weight": 39.4,
+    "life_exp": 69.3,
+    "infant_surv": 0.958,
+    "gdp_pc": 530,
+    "edu_years": 9.1,
+    "urban_pct": 40,
+    "tier": "low",
+    "cities": [
+      "沙那",
+      "亞丁",
+      "塔伊茲"
+    ]
+  },
+  {
+    "code": "SA",
+    "name_zh": "沙烏地阿拉伯",
+    "name_en": "Saudi Arabia",
+    "region": "西亞",
+    "birth_weight": 560,
+    "pop_weight": 33.3,
+    "life_exp": 78.7,
+    "infant_surv": 0.994,
+    "gdp_pc": 32500,
+    "edu_years": 16.1,
+    "urban_pct": 85,
+    "tier": "high",
+    "cities": [
+      "利雅德",
+      "吉達",
+      "麥加"
+    ]
+  },
+  {
+    "code": "SY",
+    "name_zh": "敘利亞",
+    "name_en": "Syria",
+    "region": "西亞",
+    "birth_weight": 480,
+    "pop_weight": 23.6,
+    "life_exp": 72.1,
+    "infant_surv": 0.978,
+    "gdp_pc": 840,
+    "edu_years": 8.9,
+    "urban_pct": 57,
+    "tier": "low",
+    "cities": [
+      "大馬士革",
+      "阿勒坡",
+      "霍姆斯"
+    ]
+  },
+  {
+    "code": "JO",
+    "name_zh": "約旦",
+    "name_en": "Jordan",
+    "region": "西亞",
+    "birth_weight": 240,
+    "pop_weight": 11.4,
+    "life_exp": 77.8,
+    "infant_surv": 0.986,
+    "gdp_pc": 4440,
+    "edu_years": 10.6,
+    "urban_pct": 92,
+    "tier": "lower_mid",
+    "cities": [
+      "安曼",
+      "伊爾比德"
+    ]
+  },
+  {
+    "code": "IL",
+    "name_zh": "以色列",
+    "name_en": "Israel",
+    "region": "西亞",
+    "birth_weight": 180,
+    "pop_weight": 9.8,
+    "life_exp": 83.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 52200,
+    "edu_years": 16.2,
+    "urban_pct": 93,
+    "tier": "high",
+    "cities": [
+      "特拉維夫",
+      "耶路撒冷",
+      "海法"
+    ]
+  },
+  {
+    "code": "PS",
+    "name_zh": "巴勒斯坦",
+    "name_en": "Palestine",
+    "region": "西亞",
+    "birth_weight": 145,
+    "pop_weight": 5.4,
+    "life_exp": 65.2,
+    "infant_surv": 0.984,
+    "gdp_pc": 3370,
+    "edu_years": 13.4,
+    "urban_pct": 78,
+    "tier": "lower_mid",
+    "cities": [
+      "拉馬拉",
+      "加薩",
+      "希伯崙"
+    ]
+  },
+  {
+    "code": "AZ",
+    "name_zh": "亞塞拜然",
+    "name_en": "Azerbaijan",
+    "region": "西亞",
+    "birth_weight": 125,
+    "pop_weight": 10.3,
+    "life_exp": 74.4,
+    "infant_surv": 0.982,
+    "gdp_pc": 7150,
+    "edu_years": 13.5,
+    "urban_pct": 58,
+    "tier": "upper_mid",
+    "cities": [
+      "巴庫",
+      "甘賈"
+    ]
+  },
+  {
+    "code": "AE",
+    "name_zh": "阿聯酋",
+    "name_en": "United Arab Emirates",
+    "region": "西亞",
+    "birth_weight": 98,
+    "pop_weight": 10.6,
+    "life_exp": 82.9,
+    "infant_surv": 0.995,
+    "gdp_pc": 50600,
+    "edu_years": 17.2,
+    "urban_pct": 88,
+    "tier": "high",
+    "cities": [
+      "杜拜",
+      "阿布達比",
+      "沙迦"
+    ]
+  },
+  {
+    "code": "LB",
+    "name_zh": "黎巴嫩",
+    "name_en": "Lebanon",
+    "region": "西亞",
+    "birth_weight": 82,
+    "pop_weight": 5.7,
+    "life_exp": 77.8,
+    "infant_surv": 0.991,
+    "gdp_pc": 3350,
+    "edu_years": 11.5,
+    "urban_pct": 89,
+    "tier": "lower_mid",
+    "cities": [
+      "貝魯特",
+      "的黎波里"
+    ]
+  },
+  {
+    "code": "OM",
+    "name_zh": "阿曼",
+    "name_en": "Oman",
+    "region": "西亞",
+    "birth_weight": 84,
+    "pop_weight": 5.1,
+    "life_exp": 80.0,
+    "infant_surv": 0.99,
+    "gdp_pc": 21500,
+    "edu_years": 14.7,
+    "urban_pct": 88,
+    "tier": "high",
+    "cities": [
+      "馬斯喀特",
+      "塞拉萊"
+    ]
+  },
+  {
+    "code": "KW",
+    "name_zh": "科威特",
+    "name_en": "Kuwait",
+    "region": "西亞",
+    "birth_weight": 48,
+    "pop_weight": 4.8,
+    "life_exp": 80.4,
+    "infant_surv": 0.992,
+    "gdp_pc": 33700,
+    "edu_years": 15.7,
+    "urban_pct": 100,
+    "tier": "high",
+    "cities": [
+      "科威特市"
+    ]
+  },
+  {
+    "code": "GE",
+    "name_zh": "喬治亞",
+    "name_en": "Georgia",
+    "region": "西亞",
+    "birth_weight": 44,
+    "pop_weight": 3.8,
+    "life_exp": 74.5,
+    "infant_surv": 0.991,
+    "gdp_pc": 8210,
+    "edu_years": 15.6,
+    "urban_pct": 61,
+    "tier": "upper_mid",
+    "cities": [
+      "提比里斯",
+      "巴統"
+    ]
+  },
+  {
+    "code": "AM",
+    "name_zh": "亞美尼亞",
+    "name_en": "Armenia",
+    "region": "西亞",
+    "birth_weight": 36,
+    "pop_weight": 2.9,
+    "life_exp": 75.7,
+    "infant_surv": 0.99,
+    "gdp_pc": 8220,
+    "edu_years": 13.2,
+    "urban_pct": 64,
+    "tier": "upper_mid",
+    "cities": [
+      "葉里溫",
+      "久姆里"
+    ]
+  },
+  {
+    "code": "QA",
+    "name_zh": "卡達",
+    "name_en": "Qatar",
+    "region": "西亞",
+    "birth_weight": 29,
+    "pop_weight": 3.0,
+    "life_exp": 82.4,
+    "infant_surv": 0.995,
+    "gdp_pc": 81900,
+    "edu_years": 13.1,
+    "urban_pct": 99,
+    "tier": "high",
+    "cities": [
+      "杜哈"
+    ]
+  },
+  {
+    "code": "BH",
+    "name_zh": "巴林",
+    "name_en": "Bahrain",
+    "region": "西亞",
+    "birth_weight": 18,
+    "pop_weight": 1.6,
+    "life_exp": 81.3,
+    "infant_surv": 0.994,
+    "gdp_pc": 29100,
+    "edu_years": 16.3,
+    "urban_pct": 90,
+    "tier": "high",
+    "cities": [
+      "麥納瑪"
+    ]
+  },
+  {
+    "code": "CY",
+    "name_zh": "賽普勒斯",
+    "name_en": "Cyprus",
+    "region": "西亞",
+    "birth_weight": 13,
+    "pop_weight": 1.35,
+    "life_exp": 81.6,
+    "infant_surv": 0.997,
+    "gdp_pc": 34700,
+    "edu_years": 15.6,
+    "urban_pct": 67,
+    "tier": "high",
+    "cities": [
+      "尼古西亞",
+      "利馬索爾"
+    ]
+  },
+  {
+    "code": "UZ",
+    "name_zh": "烏茲別克",
+    "name_en": "Uzbekistan",
+    "region": "中亞",
+    "birth_weight": 920,
+    "pop_weight": 36.4,
+    "life_exp": 72.4,
+    "infant_surv": 0.986,
+    "gdp_pc": 2500,
+    "edu_years": 12.5,
+    "urban_pct": 51,
+    "tier": "lower_mid",
+    "cities": [
+      "塔什干",
+      "撒馬爾罕",
+      "布哈拉"
+    ]
+  },
+  {
+    "code": "KZ",
+    "name_zh": "哈薩克",
+    "name_en": "Kazakhstan",
+    "region": "中亞",
+    "birth_weight": 390,
+    "pop_weight": 20.3,
+    "life_exp": 74.4,
+    "infant_surv": 0.99,
+    "gdp_pc": 13300,
+    "edu_years": 15.8,
+    "urban_pct": 58,
+    "tier": "upper_mid",
+    "cities": [
+      "阿斯塔納",
+      "阿拉木圖",
+      "奇姆肯特"
+    ]
+  },
+  {
+    "code": "TJ",
+    "name_zh": "塔吉克",
+    "name_en": "Tajikistan",
+    "region": "中亞",
+    "birth_weight": 265,
+    "pop_weight": 10.4,
+    "life_exp": 71.8,
+    "infant_surv": 0.97,
+    "gdp_pc": 1180,
+    "edu_years": 11.7,
+    "urban_pct": 28,
+    "tier": "low",
+    "cities": [
+      "杜尚別",
+      "苦盞"
+    ]
+  },
+  {
+    "code": "KG",
+    "name_zh": "吉爾吉斯",
+    "name_en": "Kyrgyzstan",
+    "region": "中亞",
+    "birth_weight": 155,
+    "pop_weight": 7.1,
+    "life_exp": 71.7,
+    "infant_surv": 0.983,
+    "gdp_pc": 1970,
+    "edu_years": 13.2,
+    "urban_pct": 38,
+    "tier": "lower_mid",
+    "cities": [
+      "比什凱克",
+      "奧什"
+    ]
+  },
+  {
+    "code": "TM",
+    "name_zh": "土庫曼",
+    "name_en": "Turkmenistan",
+    "region": "中亞",
+    "birth_weight": 145,
+    "pop_weight": 7.4,
+    "life_exp": 70.1,
+    "infant_surv": 0.961,
+    "gdp_pc": 8500,
+    "edu_years": 13.2,
+    "urban_pct": 54,
+    "tier": "upper_mid",
+    "cities": [
+      "阿什哈巴德",
+      "土庫曼納巴德"
+    ]
+  },
+  {
+    "code": "NG",
+    "name_zh": "奈及利亞",
+    "name_en": "Nigeria",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 7520,
+    "pop_weight": 227.0,
+    "life_exp": 54.5,
+    "infant_surv": 0.892,
+    "gdp_pc": 1620,
+    "edu_years": 10.5,
+    "urban_pct": 54,
+    "tier": "lower_mid",
+    "cities": [
+      "拉哥斯",
+      "阿布賈",
+      "卡諾",
+      "伊巴丹"
+    ]
+  },
+  {
+    "code": "ET",
+    "name_zh": "衣索比亞",
+    "name_en": "Ethiopia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 4050,
+    "pop_weight": 128.0,
+    "life_exp": 67.3,
+    "infant_surv": 0.954,
+    "gdp_pc": 1470,
+    "edu_years": 9.7,
+    "urban_pct": 23,
+    "tier": "low",
+    "cities": [
+      "阿迪斯阿貝巴",
+      "德雷達瓦"
+    ]
+  },
+  {
+    "code": "CD",
+    "name_zh": "剛果民主共和國",
+    "name_en": "DR Congo",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 4250,
+    "pop_weight": 105.0,
+    "life_exp": 61.9,
+    "infant_surv": 0.925,
+    "gdp_pc": 675,
+    "edu_years": 9.6,
+    "urban_pct": 47,
+    "tier": "low",
+    "cities": [
+      "金夏沙",
+      "盧本巴希",
+      "戈馬"
+    ]
+  },
+  {
+    "code": "TZ",
+    "name_zh": "坦尚尼亞",
+    "name_en": "Tanzania",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 2380,
+    "pop_weight": 66.6,
+    "life_exp": 67.0,
+    "infant_surv": 0.958,
+    "gdp_pc": 1220,
+    "edu_years": 9.2,
+    "urban_pct": 37,
+    "tier": "low",
+    "cities": [
+      "三蘭港",
+      "阿魯沙",
+      "杜篤瑪"
+    ]
+  },
+  {
+    "code": "KE",
+    "name_zh": "肯亞",
+    "name_en": "Kenya",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1510,
+    "pop_weight": 55.3,
+    "life_exp": 63.6,
+    "infant_surv": 0.96,
+    "gdp_pc": 1950,
+    "edu_years": 11.4,
+    "urban_pct": 29,
+    "tier": "lower_mid",
+    "cities": [
+      "奈洛比",
+      "蒙巴薩",
+      "基蘇木"
+    ]
+  },
+  {
+    "code": "UG",
+    "name_zh": "烏干達",
+    "name_en": "Uganda",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1740,
+    "pop_weight": 48.7,
+    "life_exp": 68.3,
+    "infant_surv": 0.959,
+    "gdp_pc": 1050,
+    "edu_years": 11.5,
+    "urban_pct": 27,
+    "tier": "low",
+    "cities": [
+      "坎帕拉",
+      "恩德培"
+    ]
+  },
+  {
+    "code": "SD",
+    "name_zh": "蘇丹",
+    "name_en": "Sudan",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1620,
+    "pop_weight": 50.0,
+    "life_exp": 66.3,
+    "infant_surv": 0.949,
+    "gdp_pc": 760,
+    "edu_years": 8.5,
+    "urban_pct": 36,
+    "tier": "low",
+    "cities": [
+      "喀土穆",
+      "恩圖曼",
+      "蘇丹港"
+    ]
+  },
+  {
+    "code": "ZA",
+    "name_zh": "南非",
+    "name_en": "South Africa",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1160,
+    "pop_weight": 63.2,
+    "life_exp": 66.1,
+    "infant_surv": 0.966,
+    "gdp_pc": 6190,
+    "edu_years": 13.6,
+    "urban_pct": 69,
+    "tier": "upper_mid",
+    "cities": [
+      "約翰尼斯堡",
+      "開普敦",
+      "德班"
+    ]
+  },
+  {
+    "code": "AO",
+    "name_zh": "安哥拉",
+    "name_en": "Angola",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1370,
+    "pop_weight": 36.7,
+    "life_exp": 64.6,
+    "infant_surv": 0.931,
+    "gdp_pc": 2550,
+    "edu_years": 12.2,
+    "urban_pct": 69,
+    "tier": "lower_mid",
+    "cities": [
+      "魯安達",
+      "萬博"
+    ]
+  },
+  {
+    "code": "MZ",
+    "name_zh": "莫三比克",
+    "name_en": "Mozambique",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1220,
+    "pop_weight": 33.6,
+    "life_exp": 63.6,
+    "infant_surv": 0.934,
+    "gdp_pc": 620,
+    "edu_years": 10.7,
+    "urban_pct": 39,
+    "tier": "low",
+    "cities": [
+      "馬布多",
+      "貝拉"
+    ]
+  },
+  {
+    "code": "GH",
+    "name_zh": "迦納",
+    "name_en": "Ghana",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 910,
+    "pop_weight": 33.8,
+    "life_exp": 65.5,
+    "infant_surv": 0.957,
+    "gdp_pc": 2240,
+    "edu_years": 11.6,
+    "urban_pct": 59,
+    "tier": "lower_mid",
+    "cities": [
+      "阿克拉",
+      "庫馬西"
+    ]
+  },
+  {
+    "code": "NE",
+    "name_zh": "尼日",
+    "name_en": "Niger",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1190,
+    "pop_weight": 26.2,
+    "life_exp": 61.2,
+    "infant_surv": 0.885,
+    "gdp_pc": 640,
+    "edu_years": 7.2,
+    "urban_pct": 17,
+    "tier": "low",
+    "cities": [
+      "尼阿美",
+      "津德爾"
+    ]
+  },
+  {
+    "code": "MG",
+    "name_zh": "馬達加斯加",
+    "name_en": "Madagascar",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 970,
+    "pop_weight": 31.2,
+    "life_exp": 63.6,
+    "infant_surv": 0.935,
+    "gdp_pc": 530,
+    "edu_years": 9.2,
+    "urban_pct": 41,
+    "tier": "low",
+    "cities": [
+      "安塔那那利佛",
+      "圖阿馬西納"
+    ]
+  },
+  {
+    "code": "CM",
+    "name_zh": "喀麥隆",
+    "name_en": "Cameroon",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 980,
+    "pop_weight": 28.4,
+    "life_exp": 63.7,
+    "infant_surv": 0.93,
+    "gdp_pc": 1720,
+    "edu_years": 13.1,
+    "urban_pct": 59,
+    "tier": "lower_mid",
+    "cities": [
+      "雅溫得",
+      "杜阿拉"
+    ]
+  },
+  {
+    "code": "CI",
+    "name_zh": "象牙海岸",
+    "name_en": "Côte d'Ivoire",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 990,
+    "pop_weight": 31.2,
+    "life_exp": 61.9,
+    "infant_surv": 0.928,
+    "gdp_pc": 2730,
+    "edu_years": 10.7,
+    "urban_pct": 53,
+    "tier": "lower_mid",
+    "cities": [
+      "阿比讓",
+      "亞穆蘇克羅"
+    ]
+  },
+  {
+    "code": "ML",
+    "name_zh": "馬利",
+    "name_en": "Mali",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 970,
+    "pop_weight": 23.8,
+    "life_exp": 60.4,
+    "infant_surv": 0.905,
+    "gdp_pc": 910,
+    "edu_years": 7.0,
+    "urban_pct": 46,
+    "tier": "low",
+    "cities": [
+      "巴馬科",
+      "錫卡索"
+    ]
+  },
+  {
+    "code": "BF",
+    "name_zh": "布吉納法索",
+    "name_en": "Burkina Faso",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 790,
+    "pop_weight": 23.0,
+    "life_exp": 61.1,
+    "infant_surv": 0.918,
+    "gdp_pc": 875,
+    "edu_years": 9.1,
+    "urban_pct": 33,
+    "tier": "low",
+    "cities": [
+      "瓦加杜古",
+      "博博迪烏拉索"
+    ]
+  },
+  {
+    "code": "MW",
+    "name_zh": "馬拉威",
+    "name_en": "Malawi",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 680,
+    "pop_weight": 21.1,
+    "life_exp": 67.4,
+    "infant_surv": 0.96,
+    "gdp_pc": 600,
+    "edu_years": 12.7,
+    "urban_pct": 18,
+    "tier": "low",
+    "cities": [
+      "里朗威",
+      "布蘭太爾"
+    ]
+  },
+  {
+    "code": "ZM",
+    "name_zh": "尚比亞",
+    "name_en": "Zambia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 700,
+    "pop_weight": 20.7,
+    "life_exp": 66.3,
+    "infant_surv": 0.945,
+    "gdp_pc": 1370,
+    "edu_years": 11.0,
+    "urban_pct": 46,
+    "tier": "low",
+    "cities": [
+      "路沙卡",
+      "基特韋"
+    ]
+  },
+  {
+    "code": "TD",
+    "name_zh": "查德",
+    "name_en": "Chad",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 820,
+    "pop_weight": 19.3,
+    "life_exp": 55.1,
+    "infant_surv": 0.892,
+    "gdp_pc": 710,
+    "edu_years": 8.2,
+    "urban_pct": 24,
+    "tier": "low",
+    "cities": [
+      "恩將納",
+      "蒙杜"
+    ]
+  },
+  {
+    "code": "SO",
+    "name_zh": "索馬利亞",
+    "name_en": "Somalia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 800,
+    "pop_weight": 18.4,
+    "life_exp": 58.8,
+    "infant_surv": 0.894,
+    "gdp_pc": 640,
+    "edu_years": 7.6,
+    "urban_pct": 48,
+    "tier": "low",
+    "cities": [
+      "摩加迪休",
+      "哈爾格薩"
+    ]
+  },
+  {
+    "code": "SN",
+    "name_zh": "塞內加爾",
+    "name_en": "Senegal",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 560,
+    "pop_weight": 18.1,
+    "life_exp": 68.7,
+    "infant_surv": 0.961,
+    "gdp_pc": 1710,
+    "edu_years": 9.0,
+    "urban_pct": 50,
+    "tier": "lower_mid",
+    "cities": [
+      "達卡",
+      "圖巴"
+    ]
+  },
+  {
+    "code": "ZW",
+    "name_zh": "辛巴威",
+    "name_en": "Zimbabwe",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 490,
+    "pop_weight": 16.3,
+    "life_exp": 62.8,
+    "infant_surv": 0.952,
+    "gdp_pc": 2150,
+    "edu_years": 11.0,
+    "urban_pct": 33,
+    "tier": "lower_mid",
+    "cities": [
+      "哈拉雷",
+      "布拉瓦約"
+    ]
+  },
+  {
+    "code": "GN",
+    "name_zh": "幾內亞",
+    "name_en": "Guinea",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 480,
+    "pop_weight": 14.4,
+    "life_exp": 60.7,
+    "infant_surv": 0.904,
+    "gdp_pc": 1540,
+    "edu_years": 10.4,
+    "urban_pct": 38,
+    "tier": "lower_mid",
+    "cities": [
+      "柯那克里",
+      "坎坎"
+    ]
+  },
+  {
+    "code": "RW",
+    "name_zh": "盧安達",
+    "name_en": "Rwanda",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 410,
+    "pop_weight": 13.9,
+    "life_exp": 67.8,
+    "infant_surv": 0.962,
+    "gdp_pc": 1000,
+    "edu_years": 11.4,
+    "urban_pct": 18,
+    "tier": "low",
+    "cities": [
+      "吉佳利",
+      "布塔雷"
+    ]
+  },
+  {
+    "code": "BJ",
+    "name_zh": "貝南",
+    "name_en": "Benin",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 470,
+    "pop_weight": 14.1,
+    "life_exp": 60.8,
+    "infant_surv": 0.919,
+    "gdp_pc": 1450,
+    "edu_years": 11.5,
+    "urban_pct": 50,
+    "tier": "low",
+    "cities": [
+      "科托努",
+      "波多諾伏"
+    ]
+  },
+  {
+    "code": "BI",
+    "name_zh": "蒲隆地",
+    "name_en": "Burundi",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 450,
+    "pop_weight": 13.7,
+    "life_exp": 63.7,
+    "infant_surv": 0.95,
+    "gdp_pc": 250,
+    "edu_years": 10.5,
+    "urban_pct": 15,
+    "tier": "low",
+    "cities": [
+      "布松布拉",
+      "基特加"
+    ]
+  },
+  {
+    "code": "SS",
+    "name_zh": "南蘇丹",
+    "name_en": "South Sudan",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 340,
+    "pop_weight": 11.5,
+    "life_exp": 57.6,
+    "infant_surv": 0.901,
+    "gdp_pc": 420,
+    "edu_years": 5.6,
+    "urban_pct": 21,
+    "tier": "low",
+    "cities": [
+      "朱巴",
+      "瓦烏"
+    ]
+  },
+  {
+    "code": "TG",
+    "name_zh": "多哥",
+    "name_en": "Togo",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 280,
+    "pop_weight": 9.3,
+    "life_exp": 62.7,
+    "infant_surv": 0.94,
+    "gdp_pc": 1010,
+    "edu_years": 13.0,
+    "urban_pct": 44,
+    "tier": "low",
+    "cities": [
+      "洛美",
+      "索科德"
+    ]
+  },
+  {
+    "code": "SL",
+    "name_zh": "獅子山",
+    "name_en": "Sierra Leone",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 270,
+    "pop_weight": 8.5,
+    "life_exp": 61.8,
+    "infant_surv": 0.899,
+    "gdp_pc": 520,
+    "edu_years": 9.0,
+    "urban_pct": 44,
+    "tier": "low",
+    "cities": [
+      "自由城",
+      "博城"
+    ]
+  },
+  {
+    "code": "CG",
+    "name_zh": "剛果共和國",
+    "name_en": "Republic of the Congo",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 185,
+    "pop_weight": 6.2,
+    "life_exp": 65.8,
+    "infant_surv": 0.959,
+    "gdp_pc": 2500,
+    "edu_years": 12.4,
+    "urban_pct": 69,
+    "tier": "lower_mid",
+    "cities": [
+      "布拉薩",
+      "黑角"
+    ]
+  },
+  {
+    "code": "LR",
+    "name_zh": "賴比瑞亞",
+    "name_en": "Liberia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 170,
+    "pop_weight": 5.5,
+    "life_exp": 62.2,
+    "infant_surv": 0.927,
+    "gdp_pc": 800,
+    "edu_years": 10.4,
+    "urban_pct": 54,
+    "tier": "low",
+    "cities": [
+      "蒙羅維亞",
+      "邦加"
+    ]
+  },
+  {
+    "code": "CF",
+    "name_zh": "中非共和國",
+    "name_en": "Central African Republic",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 230,
+    "pop_weight": 5.2,
+    "life_exp": 57.4,
+    "infant_surv": 0.903,
+    "gdp_pc": 500,
+    "edu_years": 7.3,
+    "urban_pct": 44,
+    "tier": "low",
+    "cities": [
+      "班吉",
+      "賓波"
+    ]
+  },
+  {
+    "code": "MR",
+    "name_zh": "茅利塔尼亞",
+    "name_en": "Mauritania",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 160,
+    "pop_weight": 5.0,
+    "life_exp": 68.5,
+    "infant_surv": 0.96,
+    "gdp_pc": 2150,
+    "edu_years": 8.1,
+    "urban_pct": 58,
+    "tier": "lower_mid",
+    "cities": [
+      "諾克少",
+      "諾瓦迪布"
+    ]
+  },
+  {
+    "code": "ER",
+    "name_zh": "厄利垂亞",
+    "name_en": "Eritrea",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 98,
+    "pop_weight": 3.5,
+    "life_exp": 68.6,
+    "infant_surv": 0.963,
+    "gdp_pc": 650,
+    "edu_years": 7.3,
+    "urban_pct": 43,
+    "tier": "low",
+    "cities": [
+      "阿斯馬拉",
+      "凱倫"
+    ]
+  },
+  {
+    "code": "GM",
+    "name_zh": "甘比亞",
+    "name_en": "Gambia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 88,
+    "pop_weight": 2.7,
+    "life_exp": 65.9,
+    "infant_surv": 0.955,
+    "gdp_pc": 890,
+    "edu_years": 9.0,
+    "urban_pct": 65,
+    "tier": "low",
+    "cities": [
+      "班竹",
+      "薩拉昆達"
+    ]
+  },
+  {
+    "code": "BW",
+    "name_zh": "波札那",
+    "name_en": "Botswana",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 60,
+    "pop_weight": 2.5,
+    "life_exp": 69.2,
+    "infant_surv": 0.964,
+    "gdp_pc": 7800,
+    "edu_years": 11.4,
+    "urban_pct": 73,
+    "tier": "upper_mid",
+    "cities": [
+      "嘉柏隆里",
+      "法蘭西斯敦"
+    ]
+  },
+  {
+    "code": "NA",
+    "name_zh": "納米比亞",
+    "name_en": "Namibia",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 74,
+    "pop_weight": 2.9,
+    "life_exp": 67.4,
+    "infant_surv": 0.963,
+    "gdp_pc": 4300,
+    "edu_years": 11.8,
+    "urban_pct": 55,
+    "tier": "lower_mid",
+    "cities": [
+      "溫荷克",
+      "鯨灣港"
+    ]
+  },
+  {
+    "code": "GA",
+    "name_zh": "加彭",
+    "name_en": "Gabon",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 66,
+    "pop_weight": 2.5,
+    "life_exp": 68.3,
+    "infant_surv": 0.961,
+    "gdp_pc": 8400,
+    "edu_years": 12.4,
+    "urban_pct": 91,
+    "tier": "upper_mid",
+    "cities": [
+      "自由市",
+      "讓蒂爾港"
+    ]
+  },
+  {
+    "code": "LS",
+    "name_zh": "賴索托",
+    "name_en": "Lesotho",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 56,
+    "pop_weight": 2.3,
+    "life_exp": 57.4,
+    "infant_surv": 0.93,
+    "gdp_pc": 1090,
+    "edu_years": 11.1,
+    "urban_pct": 30,
+    "tier": "low",
+    "cities": [
+      "馬賽魯"
+    ]
+  },
+  {
+    "code": "GW",
+    "name_zh": "幾內亞比索",
+    "name_en": "Guinea-Bissau",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 66,
+    "pop_weight": 2.2,
+    "life_exp": 64.1,
+    "infant_surv": 0.928,
+    "gdp_pc": 960,
+    "edu_years": 10.6,
+    "urban_pct": 46,
+    "tier": "low",
+    "cities": [
+      "比索"
+    ]
+  },
+  {
+    "code": "GQ",
+    "name_zh": "赤道幾內亞",
+    "name_en": "Equatorial Guinea",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 54,
+    "pop_weight": 1.8,
+    "life_exp": 63.7,
+    "infant_surv": 0.925,
+    "gdp_pc": 7060,
+    "edu_years": 12.1,
+    "urban_pct": 74,
+    "tier": "upper_mid",
+    "cities": [
+      "馬拉博",
+      "巴塔"
+    ]
+  },
+  {
+    "code": "MU",
+    "name_zh": "模里西斯",
+    "name_en": "Mauritius",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 13,
+    "pop_weight": 1.27,
+    "life_exp": 74.9,
+    "infant_surv": 0.985,
+    "gdp_pc": 11500,
+    "edu_years": 14.6,
+    "urban_pct": 41,
+    "tier": "upper_mid",
+    "cities": [
+      "路易港"
+    ]
+  },
+  {
+    "code": "SZ",
+    "name_zh": "史瓦帝尼",
+    "name_en": "Eswatini",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 29,
+    "pop_weight": 1.23,
+    "life_exp": 64.1,
+    "infant_surv": 0.95,
+    "gdp_pc": 4150,
+    "edu_years": 14.9,
+    "urban_pct": 25,
+    "tier": "lower_mid",
+    "cities": [
+      "墨巴本"
+    ]
+  },
+  {
+    "code": "DJ",
+    "name_zh": "吉布地",
+    "name_en": "Djibouti",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 25,
+    "pop_weight": 1.15,
+    "life_exp": 66.0,
+    "infant_surv": 0.948,
+    "gdp_pc": 3600,
+    "edu_years": 7.4,
+    "urban_pct": 79,
+    "tier": "lower_mid",
+    "cities": [
+      "吉布地市"
+    ]
+  },
+  {
+    "code": "KM",
+    "name_zh": "葛摩",
+    "name_en": "Comoros",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 25,
+    "pop_weight": 0.85,
+    "life_exp": 66.8,
+    "infant_surv": 0.952,
+    "gdp_pc": 1620,
+    "edu_years": 13.1,
+    "urban_pct": 30,
+    "tier": "lower_mid",
+    "cities": [
+      "莫洛尼"
+    ]
+  },
+  {
+    "code": "CV",
+    "name_zh": "維德角",
+    "name_en": "Cabo Verde",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 8,
+    "pop_weight": 0.52,
+    "life_exp": 76.1,
+    "infant_surv": 0.988,
+    "gdp_pc": 4320,
+    "edu_years": 11.7,
+    "urban_pct": 68,
+    "tier": "lower_mid",
+    "cities": [
+      "培亞"
+    ]
+  },
+  {
+    "code": "EG",
+    "name_zh": "埃及",
+    "name_en": "Egypt",
+    "region": "北非",
+    "birth_weight": 2180,
+    "pop_weight": 114.5,
+    "life_exp": 71.6,
+    "infant_surv": 0.982,
+    "gdp_pc": 3510,
+    "edu_years": 12.9,
+    "urban_pct": 43,
+    "tier": "lower_mid",
+    "cities": [
+      "開羅",
+      "亞歷山卓",
+      "吉薩"
+    ]
+  },
+  {
+    "code": "DZ",
+    "name_zh": "阿爾及利亞",
+    "name_en": "Algeria",
+    "region": "北非",
+    "birth_weight": 910,
+    "pop_weight": 46.2,
+    "life_exp": 76.3,
+    "infant_surv": 0.979,
+    "gdp_pc": 5300,
+    "edu_years": 15.5,
+    "urban_pct": 75,
+    "tier": "upper_mid",
+    "cities": [
+      "阿爾及爾",
+      "奧蘭",
+      "君士坦丁"
+    ]
+  },
+  {
+    "code": "MA",
+    "name_zh": "摩洛哥",
+    "name_en": "Morocco",
+    "region": "北非",
+    "birth_weight": 630,
+    "pop_weight": 37.8,
+    "life_exp": 75.3,
+    "infant_surv": 0.983,
+    "gdp_pc": 3980,
+    "edu_years": 14.6,
+    "urban_pct": 65,
+    "tier": "lower_mid",
+    "cities": [
+      "卡薩布蘭卡",
+      "拉巴特",
+      "馬拉喀什"
+    ]
+  },
+  {
+    "code": "TN",
+    "name_zh": "突尼西亞",
+    "name_en": "Tunisia",
+    "region": "北非",
+    "birth_weight": 170,
+    "pop_weight": 12.2,
+    "life_exp": 76.5,
+    "infant_surv": 0.986,
+    "gdp_pc": 4190,
+    "edu_years": 14.7,
+    "urban_pct": 71,
+    "tier": "lower_mid",
+    "cities": [
+      "突尼斯",
+      "斯法克斯"
+    ]
+  },
+  {
+    "code": "LY",
+    "name_zh": "利比亞",
+    "name_en": "Libya",
+    "region": "北非",
+    "birth_weight": 120,
+    "pop_weight": 7.3,
+    "life_exp": 73.4,
+    "infant_surv": 0.989,
+    "gdp_pc": 6400,
+    "edu_years": 12.9,
+    "urban_pct": 82,
+    "tier": "upper_mid",
+    "cities": [
+      "的黎波里",
+      "班加西"
+    ]
+  },
+  {
+    "code": "RU",
+    "name_zh": "俄羅斯",
+    "name_en": "Russia",
+    "region": "東歐",
+    "birth_weight": 1280,
+    "pop_weight": 144.8,
+    "life_exp": 73.2,
+    "infant_surv": 0.995,
+    "gdp_pc": 13800,
+    "edu_years": 15.7,
+    "urban_pct": 75,
+    "tier": "upper_mid",
+    "cities": [
+      "莫斯科",
+      "聖彼得堡",
+      "新西伯利亞"
+    ]
+  },
+  {
+    "code": "FR",
+    "name_zh": "法國",
+    "name_en": "France",
+    "region": "西歐",
+    "birth_weight": 680,
+    "pop_weight": 66.4,
+    "life_exp": 83.3,
+    "infant_surv": 0.996,
+    "gdp_pc": 46100,
+    "edu_years": 16.0,
+    "urban_pct": 82,
+    "tier": "high",
+    "cities": [
+      "巴黎",
+      "里昂",
+      "馬賽"
+    ]
+  },
+  {
+    "code": "DE",
+    "name_zh": "德國",
+    "name_en": "Germany",
+    "region": "西歐",
+    "birth_weight": 710,
+    "pop_weight": 84.5,
+    "life_exp": 81.4,
+    "infant_surv": 0.996,
+    "gdp_pc": 54300,
+    "edu_years": 17.3,
+    "urban_pct": 78,
+    "tier": "high",
+    "cities": [
+      "柏林",
+      "慕尼黑",
+      "漢堡",
+      "法蘭克福"
+    ]
+  },
+  {
+    "code": "GB",
+    "name_zh": "英國",
+    "name_en": "United Kingdom",
+    "region": "北歐",
+    "birth_weight": 660,
+    "pop_weight": 68.7,
+    "life_exp": 81.3,
+    "infant_surv": 0.996,
+    "gdp_pc": 49500,
+    "edu_years": 17.6,
+    "urban_pct": 85,
+    "tier": "high",
+    "cities": [
+      "倫敦",
+      "曼徹斯特",
+      "愛丁堡"
+    ]
+  },
+  {
+    "code": "IT",
+    "name_zh": "義大利",
+    "name_en": "Italy",
+    "region": "南歐",
+    "birth_weight": 385,
+    "pop_weight": 59.3,
+    "life_exp": 83.7,
+    "infant_surv": 0.997,
+    "gdp_pc": 39000,
+    "edu_years": 16.7,
+    "urban_pct": 72,
+    "tier": "high",
+    "cities": [
+      "羅馬",
+      "米蘭",
+      "拿坡里",
+      "佛羅倫斯"
+    ]
+  },
+  {
+    "code": "ES",
+    "name_zh": "西班牙",
+    "name_en": "Spain",
+    "region": "南歐",
+    "birth_weight": 330,
+    "pop_weight": 47.9,
+    "life_exp": 83.7,
+    "infant_surv": 0.997,
+    "gdp_pc": 34000,
+    "edu_years": 17.8,
+    "urban_pct": 82,
+    "tier": "high",
+    "cities": [
+      "馬德里",
+      "巴塞隆納",
+      "瓦倫西亞"
+    ]
+  },
+  {
+    "code": "UA",
+    "name_zh": "烏克蘭",
+    "name_en": "Ukraine",
+    "region": "東歐",
+    "birth_weight": 200,
+    "pop_weight": 37.7,
+    "life_exp": 73.4,
+    "infant_surv": 0.992,
+    "gdp_pc": 5180,
+    "edu_years": 13.3,
+    "urban_pct": 70,
+    "tier": "upper_mid",
+    "cities": [
+      "基輔",
+      "利維夫",
+      "敖德薩"
+    ]
+  },
+  {
+    "code": "PL",
+    "name_zh": "波蘭",
+    "name_en": "Poland",
+    "region": "東歐",
+    "birth_weight": 280,
+    "pop_weight": 38.5,
+    "life_exp": 78.6,
+    "infant_surv": 0.996,
+    "gdp_pc": 22400,
+    "edu_years": 15.9,
+    "urban_pct": 60,
+    "tier": "high",
+    "cities": [
+      "華沙",
+      "克拉科夫",
+      "格但斯克"
+    ]
+  },
+  {
+    "code": "RO",
+    "name_zh": "羅馬尼亞",
+    "name_en": "Romania",
+    "region": "東歐",
+    "birth_weight": 160,
+    "pop_weight": 19.1,
+    "life_exp": 75.9,
+    "infant_surv": 0.994,
+    "gdp_pc": 18400,
+    "edu_years": 14.5,
+    "urban_pct": 55,
+    "tier": "upper_mid",
+    "cities": [
+      "布加勒斯特",
+      "克盧日"
+    ]
+  },
+  {
+    "code": "NL",
+    "name_zh": "荷蘭",
+    "name_en": "Netherlands",
+    "region": "西歐",
+    "birth_weight": 170,
+    "pop_weight": 18.1,
+    "life_exp": 82.2,
+    "infant_surv": 0.996,
+    "gdp_pc": 63800,
+    "edu_years": 18.6,
+    "urban_pct": 93,
+    "tier": "high",
+    "cities": [
+      "阿姆斯特丹",
+      "鹿特丹",
+      "烏特勒支"
+    ]
+  },
+  {
+    "code": "BE",
+    "name_zh": "比利時",
+    "name_en": "Belgium",
+    "region": "西歐",
+    "birth_weight": 112,
+    "pop_weight": 11.7,
+    "life_exp": 82.1,
+    "infant_surv": 0.996,
+    "gdp_pc": 55000,
+    "edu_years": 19.0,
+    "urban_pct": 98,
+    "tier": "high",
+    "cities": [
+      "布魯塞爾",
+      "安特衛普",
+      "根特"
+    ]
+  },
+  {
+    "code": "CZ",
+    "name_zh": "捷克",
+    "name_en": "Czechia",
+    "region": "東歐",
+    "birth_weight": 95,
+    "pop_weight": 10.7,
+    "life_exp": 79.8,
+    "infant_surv": 0.997,
+    "gdp_pc": 30400,
+    "edu_years": 16.3,
+    "urban_pct": 75,
+    "tier": "high",
+    "cities": [
+      "布拉格",
+      "布爾諾"
+    ]
+  },
+  {
+    "code": "SE",
+    "name_zh": "瑞典",
+    "name_en": "Sweden",
+    "region": "北歐",
+    "birth_weight": 104,
+    "pop_weight": 10.6,
+    "life_exp": 83.3,
+    "infant_surv": 0.998,
+    "gdp_pc": 56300,
+    "edu_years": 19.0,
+    "urban_pct": 89,
+    "tier": "high",
+    "cities": [
+      "斯德哥爾摩",
+      "哥德堡",
+      "馬爾摩"
+    ]
+  },
+  {
+    "code": "PT",
+    "name_zh": "葡萄牙",
+    "name_en": "Portugal",
+    "region": "南歐",
+    "birth_weight": 85,
+    "pop_weight": 10.4,
+    "life_exp": 82.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 27300,
+    "edu_years": 16.8,
+    "urban_pct": 68,
+    "tier": "high",
+    "cities": [
+      "里斯本",
+      "波多"
+    ]
+  },
+  {
+    "code": "GR",
+    "name_zh": "希臘",
+    "name_en": "Greece",
+    "region": "南歐",
+    "birth_weight": 74,
+    "pop_weight": 10.1,
+    "life_exp": 81.9,
+    "infant_surv": 0.996,
+    "gdp_pc": 23900,
+    "edu_years": 20.0,
+    "urban_pct": 81,
+    "tier": "high",
+    "cities": [
+      "雅典",
+      "塞薩洛尼基"
+    ]
+  },
+  {
+    "code": "HU",
+    "name_zh": "匈牙利",
+    "name_en": "Hungary",
+    "region": "東歐",
+    "birth_weight": 86,
+    "pop_weight": 9.7,
+    "life_exp": 77.0,
+    "infant_surv": 0.996,
+    "gdp_pc": 22100,
+    "edu_years": 15.1,
+    "urban_pct": 73,
+    "tier": "high",
+    "cities": [
+      "布達佩斯",
+      "德布勒森"
+    ]
+  },
+  {
+    "code": "CH",
+    "name_zh": "瑞士",
+    "name_en": "Switzerland",
+    "region": "西歐",
+    "birth_weight": 82,
+    "pop_weight": 8.9,
+    "life_exp": 84.0,
+    "infant_surv": 0.996,
+    "gdp_pc": 103000,
+    "edu_years": 16.6,
+    "urban_pct": 74,
+    "tier": "high",
+    "cities": [
+      "蘇黎世",
+      "日內瓦",
+      "伯恩"
+    ]
+  },
+  {
+    "code": "AT",
+    "name_zh": "奧地利",
+    "name_en": "Austria",
+    "region": "西歐",
+    "birth_weight": 80,
+    "pop_weight": 9.1,
+    "life_exp": 82.0,
+    "infant_surv": 0.996,
+    "gdp_pc": 56800,
+    "edu_years": 16.4,
+    "urban_pct": 60,
+    "tier": "high",
+    "cities": [
+      "維也納",
+      "薩爾茲堡",
+      "格拉茨"
+    ]
+  },
+  {
+    "code": "BY",
+    "name_zh": "白俄羅斯",
+    "name_en": "Belarus",
+    "region": "東歐",
+    "birth_weight": 68,
+    "pop_weight": 9.1,
+    "life_exp": 74.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 7900,
+    "edu_years": 14.0,
+    "urban_pct": 81,
+    "tier": "upper_mid",
+    "cities": [
+      "明斯克",
+      "布列斯特"
+    ]
+  },
+  {
+    "code": "RS",
+    "name_zh": "塞爾維亞",
+    "name_en": "Serbia",
+    "region": "南歐",
+    "birth_weight": 62,
+    "pop_weight": 6.7,
+    "life_exp": 76.8,
+    "infant_surv": 0.994,
+    "gdp_pc": 11300,
+    "edu_years": 14.5,
+    "urban_pct": 57,
+    "tier": "upper_mid",
+    "cities": [
+      "貝爾格勒",
+      "諾威薩"
+    ]
+  },
+  {
+    "code": "BG",
+    "name_zh": "保加利亞",
+    "name_en": "Bulgaria",
+    "region": "東歐",
+    "birth_weight": 55,
+    "pop_weight": 6.8,
+    "life_exp": 75.6,
+    "infant_surv": 0.994,
+    "gdp_pc": 15800,
+    "edu_years": 13.9,
+    "urban_pct": 77,
+    "tier": "upper_mid",
+    "cities": [
+      "索菲亞",
+      "普羅夫迪夫"
+    ]
+  },
+  {
+    "code": "DK",
+    "name_zh": "丹麥",
+    "name_en": "Denmark",
+    "region": "北歐",
+    "birth_weight": 59,
+    "pop_weight": 6.0,
+    "life_exp": 81.9,
+    "infant_surv": 0.996,
+    "gdp_pc": 68900,
+    "edu_years": 18.8,
+    "urban_pct": 88,
+    "tier": "high",
+    "cities": [
+      "哥本哈根",
+      "奧胡斯"
+    ]
+  },
+  {
+    "code": "FI",
+    "name_zh": "芬蘭",
+    "name_en": "Finland",
+    "region": "北歐",
+    "birth_weight": 44,
+    "pop_weight": 5.6,
+    "life_exp": 81.9,
+    "infant_surv": 0.998,
+    "gdp_pc": 54000,
+    "edu_years": 19.5,
+    "urban_pct": 86,
+    "tier": "high",
+    "cities": [
+      "赫爾辛基",
+      "坦佩雷"
+    ]
+  },
+  {
+    "code": "SK",
+    "name_zh": "斯洛伐克",
+    "name_en": "Slovakia",
+    "region": "東歐",
+    "birth_weight": 49,
+    "pop_weight": 5.5,
+    "life_exp": 78.3,
+    "infant_surv": 0.994,
+    "gdp_pc": 24500,
+    "edu_years": 14.7,
+    "urban_pct": 54,
+    "tier": "high",
+    "cities": [
+      "布拉提斯拉瓦",
+      "科希策"
+    ]
+  },
+  {
+    "code": "NO",
+    "name_zh": "挪威",
+    "name_en": "Norway",
+    "region": "北歐",
+    "birth_weight": 53,
+    "pop_weight": 5.5,
+    "life_exp": 83.3,
+    "infant_surv": 0.998,
+    "gdp_pc": 87900,
+    "edu_years": 18.6,
+    "urban_pct": 84,
+    "tier": "high",
+    "cities": [
+      "奧斯陸",
+      "卑爾根",
+      "特羅姆瑟"
+    ]
+  },
+  {
+    "code": "IE",
+    "name_zh": "愛爾蘭",
+    "name_en": "Ireland",
+    "region": "北歐",
+    "birth_weight": 55,
+    "pop_weight": 5.2,
+    "life_exp": 82.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 106000,
+    "edu_years": 19.1,
+    "urban_pct": 64,
+    "tier": "high",
+    "cities": [
+      "都柏林",
+      "科克",
+      "高威"
+    ]
+  },
+  {
+    "code": "HR",
+    "name_zh": "克羅埃西亞",
+    "name_en": "Croatia",
+    "region": "南歐",
+    "birth_weight": 33,
+    "pop_weight": 3.9,
+    "life_exp": 78.6,
+    "infant_surv": 0.995,
+    "gdp_pc": 21400,
+    "edu_years": 16.2,
+    "urban_pct": 59,
+    "tier": "high",
+    "cities": [
+      "札格瑞布",
+      "斯普利特"
+    ]
+  },
+  {
+    "code": "BA",
+    "name_zh": "波士尼亞與赫塞哥維納",
+    "name_en": "Bosnia and Herzegovina",
+    "region": "南歐",
+    "birth_weight": 26,
+    "pop_weight": 3.2,
+    "life_exp": 77.9,
+    "infant_surv": 0.994,
+    "gdp_pc": 8400,
+    "edu_years": 13.5,
+    "urban_pct": 50,
+    "tier": "upper_mid",
+    "cities": [
+      "塞拉耶佛",
+      "巴尼亞盧卡"
+    ]
+  },
+  {
+    "code": "MD",
+    "name_zh": "摩爾多瓦",
+    "name_en": "Moldova",
+    "region": "東歐",
+    "birth_weight": 26,
+    "pop_weight": 3.0,
+    "life_exp": 71.2,
+    "infant_surv": 0.986,
+    "gdp_pc": 6700,
+    "edu_years": 14.9,
+    "urban_pct": 43,
+    "tier": "upper_mid",
+    "cities": [
+      "基希涅夫"
+    ]
+  },
+  {
+    "code": "AL",
+    "name_zh": "阿爾巴尼亞",
+    "name_en": "Albania",
+    "region": "南歐",
+    "birth_weight": 24,
+    "pop_weight": 2.8,
+    "life_exp": 79.6,
+    "infant_surv": 0.99,
+    "gdp_pc": 8500,
+    "edu_years": 14.5,
+    "urban_pct": 65,
+    "tier": "upper_mid",
+    "cities": [
+      "地拉那",
+      "都拉斯"
+    ]
+  },
+  {
+    "code": "LT",
+    "name_zh": "立陶宛",
+    "name_en": "Lithuania",
+    "region": "北歐",
+    "birth_weight": 22,
+    "pop_weight": 2.8,
+    "life_exp": 76.0,
+    "infant_surv": 0.996,
+    "gdp_pc": 27100,
+    "edu_years": 16.4,
+    "urban_pct": 69,
+    "tier": "high",
+    "cities": [
+      "維爾紐斯",
+      "考納斯"
+    ]
+  },
+  {
+    "code": "MK",
+    "name_zh": "北馬其頓",
+    "name_en": "North Macedonia",
+    "region": "南歐",
+    "birth_weight": 18,
+    "pop_weight": 1.8,
+    "life_exp": 77.4,
+    "infant_surv": 0.994,
+    "gdp_pc": 8600,
+    "edu_years": 13.4,
+    "urban_pct": 59,
+    "tier": "upper_mid",
+    "cities": [
+      "史高比耶"
+    ]
+  },
+  {
+    "code": "SI",
+    "name_zh": "斯洛維尼亞",
+    "name_en": "Slovenia",
+    "region": "南歐",
+    "birth_weight": 17,
+    "pop_weight": 2.1,
+    "life_exp": 81.6,
+    "infant_surv": 0.998,
+    "gdp_pc": 32600,
+    "edu_years": 17.4,
+    "urban_pct": 56,
+    "tier": "high",
+    "cities": [
+      "盧比安納"
+    ]
+  },
+  {
+    "code": "LV",
+    "name_zh": "拉脫維亞",
+    "name_en": "Latvia",
+    "region": "北歐",
+    "birth_weight": 15,
+    "pop_weight": 1.9,
+    "life_exp": 76.2,
+    "infant_surv": 0.996,
+    "gdp_pc": 23200,
+    "edu_years": 16.5,
+    "urban_pct": 69,
+    "tier": "high",
+    "cities": [
+      "里加"
+    ]
+  },
+  {
+    "code": "EE",
+    "name_zh": "愛沙尼亞",
+    "name_en": "Estonia",
+    "region": "北歐",
+    "birth_weight": 11,
+    "pop_weight": 1.37,
+    "life_exp": 79.2,
+    "infant_surv": 0.998,
+    "gdp_pc": 30100,
+    "edu_years": 16.0,
+    "urban_pct": 70,
+    "tier": "high",
+    "cities": [
+      "塔林",
+      "塔爾圖"
+    ]
+  },
+  {
+    "code": "ME",
+    "name_zh": "蒙特內哥羅",
+    "name_en": "Montenegro",
+    "region": "南歐",
+    "birth_weight": 7,
+    "pop_weight": 0.63,
+    "life_exp": 77.1,
+    "infant_surv": 0.997,
+    "gdp_pc": 12000,
+    "edu_years": 15.1,
+    "urban_pct": 69,
+    "tier": "upper_mid",
+    "cities": [
+      "波德戈里察"
+    ]
+  },
+  {
+    "code": "LU",
+    "name_zh": "盧森堡",
+    "name_en": "Luxembourg",
+    "region": "西歐",
+    "birth_weight": 7,
+    "pop_weight": 0.67,
+    "life_exp": 82.2,
+    "infant_surv": 0.997,
+    "gdp_pc": 128000,
+    "edu_years": 14.2,
+    "urban_pct": 92,
+    "tier": "high",
+    "cities": [
+      "盧森堡市"
+    ]
+  },
+  {
+    "code": "MT",
+    "name_zh": "馬爾他",
+    "name_en": "Malta",
+    "region": "南歐",
+    "birth_weight": 5,
+    "pop_weight": 0.54,
+    "life_exp": 83.3,
+    "infant_surv": 0.994,
+    "gdp_pc": 38800,
+    "edu_years": 15.9,
+    "urban_pct": 95,
+    "tier": "high",
+    "cities": [
+      "瓦萊塔"
+    ]
+  },
+  {
+    "code": "IS",
+    "name_zh": "冰島",
+    "name_en": "Iceland",
+    "region": "北歐",
+    "birth_weight": 4.3,
+    "pop_weight": 0.39,
+    "life_exp": 82.7,
+    "infant_surv": 0.998,
+    "gdp_pc": 79000,
+    "edu_years": 18.9,
+    "urban_pct": 94,
+    "tier": "high",
+    "cities": [
+      "雷克雅維克"
+    ]
+  },
+  {
+    "code": "US",
+    "name_zh": "美國",
+    "name_en": "United States",
+    "region": "北美",
+    "birth_weight": 3620,
+    "pop_weight": 335.0,
+    "life_exp": 79.3,
+    "infant_surv": 0.994,
+    "gdp_pc": 82700,
+    "edu_years": 15.9,
+    "urban_pct": 83,
+    "tier": "high",
+    "cities": [
+      "紐約",
+      "洛杉磯",
+      "芝加哥",
+      "休士頓",
+      "西雅圖"
+    ]
+  },
+  {
+    "code": "MX",
+    "name_zh": "墨西哥",
+    "name_en": "Mexico",
+    "region": "北美",
+    "birth_weight": 1830,
+    "pop_weight": 130.0,
+    "life_exp": 75.1,
+    "infant_surv": 0.987,
+    "gdp_pc": 13900,
+    "edu_years": 14.9,
+    "urban_pct": 82,
+    "tier": "upper_mid",
+    "cities": [
+      "墨西哥城",
+      "瓜達拉哈拉",
+      "蒙特雷"
+    ]
+  },
+  {
+    "code": "CA",
+    "name_zh": "加拿大",
+    "name_en": "Canada",
+    "region": "北美",
+    "birth_weight": 360,
+    "pop_weight": 40.5,
+    "life_exp": 82.6,
+    "infant_surv": 0.995,
+    "gdp_pc": 53500,
+    "edu_years": 16.0,
+    "urban_pct": 82,
+    "tier": "high",
+    "cities": [
+      "多倫多",
+      "溫哥華",
+      "蒙特婁"
+    ]
+  },
+  {
+    "code": "GT",
+    "name_zh": "瓜地馬拉",
+    "name_en": "Guatemala",
+    "region": "北美",
+    "birth_weight": 370,
+    "pop_weight": 18.1,
+    "life_exp": 72.6,
+    "infant_surv": 0.978,
+    "gdp_pc": 5800,
+    "edu_years": 10.6,
+    "urban_pct": 53,
+    "tier": "upper_mid",
+    "cities": [
+      "瓜地馬拉市",
+      "克薩爾特南戈"
+    ]
+  },
+  {
+    "code": "HT",
+    "name_zh": "海地",
+    "name_en": "Haiti",
+    "region": "北美",
+    "birth_weight": 270,
+    "pop_weight": 11.7,
+    "life_exp": 64.9,
+    "infant_surv": 0.943,
+    "gdp_pc": 1740,
+    "edu_years": 9.7,
+    "urban_pct": 60,
+    "tier": "lower_mid",
+    "cities": [
+      "太子港",
+      "海地角"
+    ]
+  },
+  {
+    "code": "HN",
+    "name_zh": "宏都拉斯",
+    "name_en": "Honduras",
+    "region": "北美",
+    "birth_weight": 220,
+    "pop_weight": 10.6,
+    "life_exp": 72.9,
+    "infant_surv": 0.983,
+    "gdp_pc": 3240,
+    "edu_years": 10.0,
+    "urban_pct": 60,
+    "tier": "lower_mid",
+    "cities": [
+      "德古西加巴",
+      "聖佩德羅蘇拉"
+    ]
+  },
+  {
+    "code": "DO",
+    "name_zh": "多明尼加",
+    "name_en": "Dominican Republic",
+    "region": "北美",
+    "birth_weight": 195,
+    "pop_weight": 11.3,
+    "life_exp": 73.7,
+    "infant_surv": 0.968,
+    "gdp_pc": 10700,
+    "edu_years": 14.5,
+    "urban_pct": 85,
+    "tier": "upper_mid",
+    "cities": [
+      "聖多明哥",
+      "聖地牙哥"
+    ]
+  },
+  {
+    "code": "NI",
+    "name_zh": "尼加拉瓜",
+    "name_en": "Nicaragua",
+    "region": "北美",
+    "birth_weight": 135,
+    "pop_weight": 6.8,
+    "life_exp": 74.9,
+    "infant_surv": 0.984,
+    "gdp_pc": 2530,
+    "edu_years": 12.6,
+    "urban_pct": 60,
+    "tier": "lower_mid",
+    "cities": [
+      "馬納瓜",
+      "萊昂"
+    ]
+  },
+  {
+    "code": "CU",
+    "name_zh": "古巴",
+    "name_en": "Cuba",
+    "region": "北美",
+    "birth_weight": 92,
+    "pop_weight": 11.0,
+    "life_exp": 78.1,
+    "infant_surv": 0.995,
+    "gdp_pc": 9500,
+    "edu_years": 14.4,
+    "urban_pct": 78,
+    "tier": "upper_mid",
+    "cities": [
+      "哈瓦那",
+      "聖地牙哥"
+    ]
+  },
+  {
+    "code": "SV",
+    "name_zh": "薩爾瓦多",
+    "name_en": "El Salvador",
+    "region": "北美",
+    "birth_weight": 96,
+    "pop_weight": 6.3,
+    "life_exp": 72.1,
+    "infant_surv": 0.987,
+    "gdp_pc": 5340,
+    "edu_years": 11.7,
+    "urban_pct": 75,
+    "tier": "upper_mid",
+    "cities": [
+      "聖薩爾瓦多"
+    ]
+  },
+  {
+    "code": "PA",
+    "name_zh": "巴拿馬",
+    "name_en": "Panama",
+    "region": "北美",
+    "birth_weight": 75,
+    "pop_weight": 4.5,
+    "life_exp": 79.6,
+    "infant_surv": 0.986,
+    "gdp_pc": 18700,
+    "edu_years": 13.5,
+    "urban_pct": 70,
+    "tier": "upper_mid",
+    "cities": [
+      "巴拿馬城"
+    ]
+  },
+  {
+    "code": "CR",
+    "name_zh": "哥斯大黎加",
+    "name_en": "Costa Rica",
+    "region": "北美",
+    "birth_weight": 56,
+    "pop_weight": 5.1,
+    "life_exp": 80.8,
+    "infant_surv": 0.992,
+    "gdp_pc": 16600,
+    "edu_years": 16.5,
+    "urban_pct": 83,
+    "tier": "upper_mid",
+    "cities": [
+      "聖荷西"
+    ]
+  },
+  {
+    "code": "JM",
+    "name_zh": "牙買加",
+    "name_en": "Jamaica",
+    "region": "北美",
+    "birth_weight": 36,
+    "pop_weight": 2.8,
+    "life_exp": 71.5,
+    "infant_surv": 0.988,
+    "gdp_pc": 6870,
+    "edu_years": 12.5,
+    "urban_pct": 57,
+    "tier": "upper_mid",
+    "cities": [
+      "京斯敦"
+    ]
+  },
+  {
+    "code": "TT",
+    "name_zh": "千里達及托巴哥",
+    "name_en": "Trinidad and Tobago",
+    "region": "北美",
+    "birth_weight": 17,
+    "pop_weight": 1.5,
+    "life_exp": 73.5,
+    "infant_surv": 0.984,
+    "gdp_pc": 18300,
+    "edu_years": 14.1,
+    "urban_pct": 54,
+    "tier": "upper_mid",
+    "cities": [
+      "西班牙港"
+    ]
+  },
+  {
+    "code": "BZ",
+    "name_zh": "貝里斯",
+    "name_en": "Belize",
+    "region": "北美",
+    "birth_weight": 7,
+    "pop_weight": 0.41,
+    "life_exp": 73.6,
+    "infant_surv": 0.988,
+    "gdp_pc": 7990,
+    "edu_years": 13.0,
+    "urban_pct": 47,
+    "tier": "upper_mid",
+    "cities": [
+      "貝里斯市"
+    ]
+  },
+  {
+    "code": "BS",
+    "name_zh": "巴哈馬",
+    "name_en": "Bahamas",
+    "region": "北美",
+    "birth_weight": 4.5,
+    "pop_weight": 0.4,
+    "life_exp": 74.5,
+    "infant_surv": 0.988,
+    "gdp_pc": 35800,
+    "edu_years": 12.9,
+    "urban_pct": 84,
+    "tier": "high",
+    "cities": [
+      "拿索"
+    ]
+  },
+  {
+    "code": "BR",
+    "name_zh": "巴西",
+    "name_en": "Brazil",
+    "region": "拉美",
+    "birth_weight": 2580,
+    "pop_weight": 211.0,
+    "life_exp": 75.8,
+    "infant_surv": 0.986,
+    "gdp_pc": 10200,
+    "edu_years": 15.8,
+    "urban_pct": 88,
+    "tier": "upper_mid",
+    "cities": [
+      "聖保羅",
+      "里約熱內盧",
+      "巴西利亞",
+      "薩爾瓦多"
+    ]
+  },
+  {
+    "code": "CO",
+    "name_zh": "哥倫比亞",
+    "name_en": "Colombia",
+    "region": "拉美",
+    "birth_weight": 680,
+    "pop_weight": 52.3,
+    "life_exp": 77.7,
+    "infant_surv": 0.987,
+    "gdp_pc": 6980,
+    "edu_years": 14.4,
+    "urban_pct": 82,
+    "tier": "upper_mid",
+    "cities": [
+      "波哥大",
+      "麥德林",
+      "卡利"
+    ]
+  },
+  {
+    "code": "AR",
+    "name_zh": "阿根廷",
+    "name_en": "Argentina",
+    "region": "拉美",
+    "birth_weight": 520,
+    "pop_weight": 45.5,
+    "life_exp": 77.4,
+    "infant_surv": 0.99,
+    "gdp_pc": 13800,
+    "edu_years": 18.8,
+    "urban_pct": 93,
+    "tier": "upper_mid",
+    "cities": [
+      "布宜諾斯艾利斯",
+      "哥多華",
+      "羅薩里奧"
+    ]
+  },
+  {
+    "code": "PE",
+    "name_zh": "秘魯",
+    "name_en": "Peru",
+    "region": "拉美",
+    "birth_weight": 550,
+    "pop_weight": 34.0,
+    "life_exp": 77.7,
+    "infant_surv": 0.985,
+    "gdp_pc": 7790,
+    "edu_years": 14.8,
+    "urban_pct": 79,
+    "tier": "upper_mid",
+    "cities": [
+      "利馬",
+      "阿雷基帕",
+      "庫斯科"
+    ]
+  },
+  {
+    "code": "VE",
+    "name_zh": "委內瑞拉",
+    "name_en": "Venezuela",
+    "region": "拉美",
+    "birth_weight": 440,
+    "pop_weight": 28.4,
+    "life_exp": 72.5,
+    "infant_surv": 0.976,
+    "gdp_pc": 3400,
+    "edu_years": 13.5,
+    "urban_pct": 88,
+    "tier": "lower_mid",
+    "cities": [
+      "卡拉卡斯",
+      "馬拉開波"
+    ]
+  },
+  {
+    "code": "EC",
+    "name_zh": "厄瓜多",
+    "name_en": "Ecuador",
+    "region": "拉美",
+    "birth_weight": 285,
+    "pop_weight": 18.0,
+    "life_exp": 77.3,
+    "infant_surv": 0.987,
+    "gdp_pc": 6530,
+    "edu_years": 14.6,
+    "urban_pct": 65,
+    "tier": "upper_mid",
+    "cities": [
+      "基多",
+      "瓜亞基爾"
+    ]
+  },
+  {
+    "code": "BO",
+    "name_zh": "玻利維亞",
+    "name_en": "Bolivia",
+    "region": "拉美",
+    "birth_weight": 250,
+    "pop_weight": 12.2,
+    "life_exp": 68.6,
+    "infant_surv": 0.974,
+    "gdp_pc": 3700,
+    "edu_years": 15.0,
+    "urban_pct": 71,
+    "tier": "lower_mid",
+    "cities": [
+      "拉巴斯",
+      "聖克魯斯"
+    ]
+  },
+  {
+    "code": "CL",
+    "name_zh": "智利",
+    "name_en": "Chile",
+    "region": "拉美",
+    "birth_weight": 195,
+    "pop_weight": 19.7,
+    "life_exp": 81.2,
+    "infant_surv": 0.994,
+    "gdp_pc": 17100,
+    "edu_years": 16.9,
+    "urban_pct": 88,
+    "tier": "upper_mid",
+    "cities": [
+      "聖地牙哥",
+      "瓦爾帕萊索"
+    ]
+  },
+  {
+    "code": "PY",
+    "name_zh": "巴拉圭",
+    "name_en": "Paraguay",
+    "region": "拉美",
+    "birth_weight": 130,
+    "pop_weight": 6.8,
+    "life_exp": 73.8,
+    "infant_surv": 0.982,
+    "gdp_pc": 6260,
+    "edu_years": 12.9,
+    "urban_pct": 63,
+    "tier": "upper_mid",
+    "cities": [
+      "亞松森",
+      "東方市"
+    ]
+  },
+  {
+    "code": "UY",
+    "name_zh": "烏拉圭",
+    "name_en": "Uruguay",
+    "region": "拉美",
+    "birth_weight": 34,
+    "pop_weight": 3.4,
+    "life_exp": 78.1,
+    "infant_surv": 0.993,
+    "gdp_pc": 22600,
+    "edu_years": 17.4,
+    "urban_pct": 96,
+    "tier": "high",
+    "cities": [
+      "蒙特維多"
+    ]
+  },
+  {
+    "code": "GY",
+    "name_zh": "蓋亞那",
+    "name_en": "Guyana",
+    "region": "拉美",
+    "birth_weight": 15,
+    "pop_weight": 0.82,
+    "life_exp": 70.2,
+    "infant_surv": 0.974,
+    "gdp_pc": 20600,
+    "edu_years": 13.1,
+    "urban_pct": 27,
+    "tier": "high",
+    "cities": [
+      "喬治敦"
+    ]
+  },
+  {
+    "code": "SR",
+    "name_zh": "蘇利南",
+    "name_en": "Suriname",
+    "region": "拉美",
+    "birth_weight": 11,
+    "pop_weight": 0.63,
+    "life_exp": 73.6,
+    "infant_surv": 0.982,
+    "gdp_pc": 6070,
+    "edu_years": 12.6,
+    "urban_pct": 66,
+    "tier": "upper_mid",
+    "cities": [
+      "巴拉馬利波"
+    ]
+  },
+  {
+    "code": "AU",
+    "name_zh": "澳洲",
+    "name_en": "Australia",
+    "region": "大洋洲",
+    "birth_weight": 300,
+    "pop_weight": 26.6,
+    "life_exp": 83.9,
+    "infant_surv": 0.996,
+    "gdp_pc": 64800,
+    "edu_years": 21.1,
+    "urban_pct": 87,
+    "tier": "high",
+    "cities": [
+      "雪梨",
+      "墨爾本",
+      "布里斯本",
+      "伯斯"
+    ]
+  },
+  {
+    "code": "PG",
+    "name_zh": "巴布亞紐幾內亞",
+    "name_en": "Papua New Guinea",
+    "region": "大洋洲",
+    "birth_weight": 255,
+    "pop_weight": 10.4,
+    "life_exp": 66.1,
+    "infant_surv": 0.958,
+    "gdp_pc": 2990,
+    "edu_years": 10.4,
+    "urban_pct": 14,
+    "tier": "lower_mid",
+    "cities": [
+      "莫士比港",
+      "萊城"
+    ]
+  },
+  {
+    "code": "NZ",
+    "name_zh": "紐西蘭",
+    "name_en": "New Zealand",
+    "region": "大洋洲",
+    "birth_weight": 58,
+    "pop_weight": 5.2,
+    "life_exp": 82.1,
+    "infant_surv": 0.995,
+    "gdp_pc": 48500,
+    "edu_years": 19.7,
+    "urban_pct": 87,
+    "tier": "high",
+    "cities": [
+      "奧克蘭",
+      "威靈頓",
+      "基督城"
+    ]
+  },
+  {
+    "code": "FJ",
+    "name_zh": "斐濟",
+    "name_en": "Fiji",
+    "region": "大洋洲",
+    "birth_weight": 18,
+    "pop_weight": 0.93,
+    "life_exp": 67.3,
+    "infant_surv": 0.974,
+    "gdp_pc": 5860,
+    "edu_years": 14.7,
+    "urban_pct": 59,
+    "tier": "upper_mid",
+    "cities": [
+      "蘇瓦",
+      "楠迪"
+    ]
+  },
+  {
+    "code": "SB",
+    "name_zh": "索羅門群島",
+    "name_en": "Solomon Islands",
+    "region": "大洋洲",
+    "birth_weight": 22,
+    "pop_weight": 0.8,
+    "life_exp": 70.5,
+    "infant_surv": 0.981,
+    "gdp_pc": 2200,
+    "edu_years": 10.3,
+    "urban_pct": 26,
+    "tier": "lower_mid",
+    "cities": [
+      "荷尼阿拉"
+    ]
+  },
+  {
+    "code": "VU",
+    "name_zh": "萬那杜",
+    "name_en": "Vanuatu",
+    "region": "大洋洲",
+    "birth_weight": 9.5,
+    "pop_weight": 0.32,
+    "life_exp": 71.5,
+    "infant_surv": 0.98,
+    "gdp_pc": 3510,
+    "edu_years": 11.8,
+    "urban_pct": 26,
+    "tier": "lower_mid",
+    "cities": [
+      "維拉港"
+    ]
+  },
+  {
+    "code": "WS",
+    "name_zh": "薩摩亞",
+    "name_en": "Samoa",
+    "region": "大洋洲",
+    "birth_weight": 5.5,
+    "pop_weight": 0.22,
+    "life_exp": 71.7,
+    "infant_surv": 0.982,
+    "gdp_pc": 4640,
+    "edu_years": 12.7,
+    "urban_pct": 17,
+    "tier": "lower_mid",
+    "cities": [
+      "阿皮亞"
+    ]
+  },
+  {
+    "code": "TO",
+    "name_zh": "東加",
+    "name_en": "Tonga",
+    "region": "大洋洲",
+    "birth_weight": 2.4,
+    "pop_weight": 0.1,
+    "life_exp": 72.9,
+    "infant_surv": 0.988,
+    "gdp_pc": 4800,
+    "edu_years": 14.4,
+    "urban_pct": 23,
+    "tier": "lower_mid",
+    "cities": [
+      "努瓜婁發"
+    ]
+  },
+  {
+    "code": "FM",
+    "name_zh": "密克羅尼西亞",
+    "name_en": "Micronesia",
+    "region": "大洋洲",
+    "birth_weight": 2.3,
+    "pop_weight": 0.11,
+    "life_exp": 67.2,
+    "infant_surv": 0.976,
+    "gdp_pc": 4120,
+    "edu_years": 11.7,
+    "urban_pct": 23,
+    "tier": "lower_mid",
+    "cities": [
+      "帕利基爾"
+    ]
+  },
+  {
+    "code": "SC",
+    "name_zh": "塞席爾",
+    "name_en": "Seychelles",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 1.5,
+    "pop_weight": 0.12,
+    "life_exp": 72.9,
+    "infant_surv": 0.986,
+    "gdp_pc": 17900,
+    "edu_years": 13.9,
+    "urban_pct": 59,
+    "tier": "upper_mid",
+    "cities": [
+      "維多利亞"
+    ]
+  },
+  {
+    "code": "ST",
+    "name_zh": "聖多美普林西比",
+    "name_en": "São Tomé and Príncipe",
+    "region": "撒哈拉以南非洲",
+    "birth_weight": 6.5,
+    "pop_weight": 0.23,
+    "life_exp": 69.7,
+    "infant_surv": 0.984,
+    "gdp_pc": 2900,
+    "edu_years": 12.7,
+    "urban_pct": 77,
+    "tier": "lower_mid",
+    "cities": [
+      "聖多美"
+    ]
+  },
+  {
+    "code": "BB",
+    "name_zh": "巴貝多",
+    "name_en": "Barbados",
+    "region": "北美",
+    "birth_weight": 3.0,
+    "pop_weight": 0.28,
+    "life_exp": 76.2,
+    "infant_surv": 0.989,
+    "gdp_pc": 22700,
+    "edu_years": 15.8,
+    "urban_pct": 31,
+    "tier": "high",
+    "cities": [
+      "橋鎮"
+    ]
+  },
+  {
+    "code": "LC",
+    "name_zh": "聖露西亞",
+    "name_en": "Saint Lucia",
+    "region": "北美",
+    "birth_weight": 2.0,
+    "pop_weight": 0.18,
+    "life_exp": 72.7,
+    "infant_surv": 0.982,
+    "gdp_pc": 13900,
+    "edu_years": 12.6,
+    "urban_pct": 19,
+    "tier": "upper_mid",
+    "cities": [
+      "卡斯翠"
+    ]
+  },
+  {
+    "code": "GD",
+    "name_zh": "格瑞那達",
+    "name_en": "Grenada",
+    "region": "北美",
+    "birth_weight": 1.8,
+    "pop_weight": 0.12,
+    "life_exp": 75.2,
+    "infant_surv": 0.983,
+    "gdp_pc": 10500,
+    "edu_years": 16.5,
+    "urban_pct": 37,
+    "tier": "upper_mid",
+    "cities": [
+      "聖喬治"
+    ]
+  },
+  {
+    "code": "VC",
+    "name_zh": "聖文森及格瑞那丁",
+    "name_en": "Saint Vincent and the Grenadines",
+    "region": "北美",
+    "birth_weight": 1.4,
+    "pop_weight": 0.1,
+    "life_exp": 71.2,
+    "infant_surv": 0.985,
+    "gdp_pc": 10200,
+    "edu_years": 14.7,
+    "urban_pct": 54,
+    "tier": "upper_mid",
+    "cities": [
+      "金斯敦"
+    ]
+  },
+  {
+    "code": "AG",
+    "name_zh": "安地卡及巴布達",
+    "name_en": "Antigua and Barbuda",
+    "region": "北美",
+    "birth_weight": 1.1,
+    "pop_weight": 0.09,
+    "life_exp": 77.6,
+    "infant_surv": 0.992,
+    "gdp_pc": 21500,
+    "edu_years": 15.5,
+    "urban_pct": 24,
+    "tier": "high",
+    "cities": [
+      "聖約翰"
+    ]
+  },
+  {
+    "code": "DM",
+    "name_zh": "多米尼克",
+    "name_en": "Dominica",
+    "region": "北美",
+    "birth_weight": 0.9,
+    "pop_weight": 0.07,
+    "life_exp": 71.1,
+    "infant_surv": 0.968,
+    "gdp_pc": 8950,
+    "edu_years": 13.3,
+    "urban_pct": 72,
+    "tier": "upper_mid",
+    "cities": [
+      "羅索"
+    ]
+  },
+  {
+    "code": "KN",
+    "name_zh": "聖克里斯多福及尼維斯",
+    "name_en": "Saint Kitts and Nevis",
+    "region": "北美",
+    "birth_weight": 0.6,
+    "pop_weight": 0.05,
+    "life_exp": 72.1,
+    "infant_surv": 0.984,
+    "gdp_pc": 22600,
+    "edu_years": 15.4,
+    "urban_pct": 31,
+    "tier": "high",
+    "cities": [
+      "巴斯特爾"
+    ]
+  },
+  {
+    "code": "AD",
+    "name_zh": "安道爾",
+    "name_en": "Andorra",
+    "region": "南歐",
+    "birth_weight": 0.5,
+    "pop_weight": 0.08,
+    "life_exp": 84.0,
+    "infant_surv": 0.997,
+    "gdp_pc": 46500,
+    "edu_years": 12.8,
+    "urban_pct": 88,
+    "tier": "high",
+    "cities": [
+      "安道爾城"
+    ]
+  },
+  {
+    "code": "MC",
+    "name_zh": "摩納哥",
+    "name_en": "Monaco",
+    "region": "西歐",
+    "birth_weight": 0.3,
+    "pop_weight": 0.04,
+    "life_exp": 86.4,
+    "infant_surv": 0.997,
+    "gdp_pc": 240000,
+    "edu_years": 16.0,
+    "urban_pct": 100,
+    "tier": "high",
+    "cities": [
+      "摩納哥城"
+    ]
+  },
+  {
+    "code": "LI",
+    "name_zh": "列支敦斯登",
+    "name_en": "Liechtenstein",
+    "region": "西歐",
+    "birth_weight": 0.35,
+    "pop_weight": 0.04,
+    "life_exp": 83.6,
+    "infant_surv": 0.998,
+    "gdp_pc": 187000,
+    "edu_years": 15.5,
+    "urban_pct": 15,
+    "tier": "high",
+    "cities": [
+      "瓦杜茲"
+    ]
+  },
+  {
+    "code": "SM",
+    "name_zh": "聖馬利諾",
+    "name_en": "San Marino",
+    "region": "南歐",
+    "birth_weight": 0.22,
+    "pop_weight": 0.03,
+    "life_exp": 85.7,
+    "infant_surv": 0.998,
+    "gdp_pc": 59000,
+    "edu_years": 13.0,
+    "urban_pct": 98,
+    "tier": "high",
+    "cities": [
+      "聖馬利諾市"
+    ]
+  },
+  {
+    "code": "KI",
+    "name_zh": "吉里巴斯",
+    "name_en": "Kiribati",
+    "region": "大洋洲",
+    "birth_weight": 3.5,
+    "pop_weight": 0.13,
+    "life_exp": 66.5,
+    "infant_surv": 0.948,
+    "gdp_pc": 2090,
+    "edu_years": 11.8,
+    "urban_pct": 58,
+    "tier": "lower_mid",
+    "cities": [
+      "南塔拉瓦"
+    ]
+  },
+  {
+    "code": "MH",
+    "name_zh": "馬紹爾群島",
+    "name_en": "Marshall Islands",
+    "region": "大洋洲",
+    "birth_weight": 1.1,
+    "pop_weight": 0.04,
+    "life_exp": 66.9,
+    "infant_surv": 0.971,
+    "gdp_pc": 6700,
+    "edu_years": 12.2,
+    "urban_pct": 79,
+    "tier": "upper_mid",
+    "cities": [
+      "馬久羅"
+    ]
+  },
+  {
+    "code": "PW",
+    "name_zh": "帛琉",
+    "name_en": "Palau",
+    "region": "大洋洲",
+    "birth_weight": 0.22,
+    "pop_weight": 0.02,
+    "life_exp": 69.3,
+    "infant_surv": 0.982,
+    "gdp_pc": 15800,
+    "edu_years": 15.8,
+    "urban_pct": 82,
+    "tier": "upper_mid",
+    "cities": [
+      "恩吉魯穆德",
+      "科羅爾"
+    ]
+  },
+  {
+    "code": "TV",
+    "name_zh": "吐瓦魯",
+    "name_en": "Tuvalu",
+    "region": "大洋洲",
+    "birth_weight": 0.25,
+    "pop_weight": 0.01,
+    "life_exp": 67.1,
+    "infant_surv": 0.979,
+    "gdp_pc": 5800,
+    "edu_years": 11.0,
+    "urban_pct": 67,
+    "tier": "upper_mid",
+    "cities": [
+      "富納富提"
+    ]
+  },
+  {
+    "code": "NR",
+    "name_zh": "諾魯",
+    "name_en": "Nauru",
+    "region": "大洋洲",
+    "birth_weight": 0.3,
+    "pop_weight": 0.01,
+    "life_exp": 62.1,
+    "infant_surv": 0.973,
+    "gdp_pc": 12100,
+    "edu_years": 11.7,
+    "urban_pct": 100,
+    "tier": "upper_mid",
+    "cities": [
+      "亞倫"
+    ]
+  }
+]

@@ -117,6 +117,7 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
             patch("rpg_engine.match_lorebook_for_text", return_value=[]),
             patch("assistant_db.format_memories_for_prompt", return_value=""),
             patch("boardgame_engine.get_latest_game_in_channel", return_value=None),
+            patch("lifesim_engine.get_active_life_run", return_value=None),
             patch("game_wiki_engine.extract_image_text_pass1", new=AsyncMock()) as mock_ocr,
             patch("core.chat_pipeline.generate_with_fallback", new=AsyncMock(return_value=(fake_resp, "gemini-flash-lite-latest"))) as mock_gen,
         ):
@@ -240,6 +241,7 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
             patch("rpg_engine.match_lorebook_for_text", return_value=[]),
             patch("rpg_engine.is_rpg_session_active", return_value=False),
             patch("boardgame_engine.get_latest_game_in_channel", return_value=None),
+            patch("lifesim_engine.get_active_life_run", return_value=None),
         ):
             gen_prompt = get_current_general_prompt(settings, msg, recent_context_text="大家好")
             sys_prompt = get_current_system_prompt(settings, msg, recent_context_text="hello")

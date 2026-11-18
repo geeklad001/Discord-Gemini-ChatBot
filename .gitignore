@@ -11,8 +11,9 @@ env/
 !.env.starter.example
 *_personal.txt
 
-# Database & Persistent Data (keep curated game_wiki files tracked)
+# Database & Persistent Data (keep curated static assets tracked)
 data/*
+!data/world_demographics.json
 !data/game_wiki/
 !data/game_wiki/*.md
 !data/game_wiki/*.csv

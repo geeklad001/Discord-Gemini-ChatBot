@@ -65,10 +65,10 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
 
     if settings.enable_board_games:
         embed.add_field(
-            name="🎲 桌遊與圖形棋盤 (`!play` ＋ 按鈕／口語控制)",
+            name="🎮 遊戲大廳・桌遊與80億分之1 (`!play` ＋ 按鈕／口語控制)",
             value=(
-                "`!play` — 開啟互動大廳（黑白棋、西洋棋、四子棋、五子棋；支援 PvE 簡單/普通/困難/🧠LLM ＆ PvP）\n"
-                "其餘皆可點卡片按鈕（上一步悔棋、提示、座標、投降、戰績）或直接口語請 Bot 代勞（輔助：`!m <座標>`）"
+                "`!play` — 開啟遊戲大廳（黑白棋、西洋棋、四子棋、五子棋、🌍 **80億分之1** 197國投胎模擬）\n"
+                "其餘皆可點卡片按鈕（悔棋、投降、A/B/C 抉擇、世界圖鑑、戰績）或直接口語請 Bot 操作（輔助：`!m <座標>`）"
             ),
             inline=False,
         )

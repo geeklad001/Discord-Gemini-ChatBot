@@ -64,7 +64,7 @@ class TestConfigAndFlags(unittest.TestCase):
 
     def test_tool_scoping_respects_flags(self):
         tools_all = assistant_tools.get_scoped_tools(
-            enable_flashcards=True, include_rpg=True, enable_game_wiki=True, include_boardgames=True
+            enable_flashcards=True, include_rpg=True, enable_game_wiki=True, include_boardgames=True, include_lifesim=True
         )
         names_all = {fn.__name__ for fn in tools_all}
         self.assertIn("lookup_game_wiki", names_all)
@@ -73,15 +73,19 @@ class TestConfigAndFlags(unittest.TestCase):
         self.assertIn("boardgame_play_move", names_all)
         self.assertIn("boardgame_undo", names_all)
         self.assertIn("boardgame_stats", names_all)
+        self.assertIn("lifesim_start", names_all)
+        self.assertIn("lifesim_decide", names_all)
+        self.assertIn("lifesim_atlas", names_all)
 
         tools_starter = assistant_tools.get_scoped_tools(
-            enable_flashcards=False, include_rpg=False, enable_game_wiki=False, include_boardgames=False
+            enable_flashcards=False, include_rpg=False, enable_game_wiki=False, include_boardgames=False, include_lifesim=False
         )
         names_starter = {fn.__name__ for fn in tools_starter}
         self.assertNotIn("lookup_game_wiki", names_starter)
         self.assertNotIn("add_flashcard_card", names_starter)
         self.assertNotIn("rpg_roll_check", names_starter)
         self.assertNotIn("boardgame_play_move", names_starter)
+        self.assertNotIn("lifesim_start", names_starter)
         self.assertEqual(names_starter, {"record_memory", "create_todo", "finish_todo", "query_todos", "set_reminder"})
 
     def test_help_embed_dynamic_sections(self):

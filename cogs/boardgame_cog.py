@@ -11,9 +11,91 @@ from google import genai
 from google.genai import types
 
 import boardgame_engine as bg
+import lifesim_engine as ls
 from core.chat_pipeline import is_target_channel
 from core.config import BotSettings, truncate_embed_text
 from core.llm_client import generate_with_fallback, get_safety_settings
+
+
+def _build_life_embed(
+    run: dict,
+    note: str = "",
+    unlocked_count: int = 1,
+    include_birth_cert: bool = False,
+) -> discord.Embed:
+    era_lbl = ls.ERA_CONFIG.get(run["era"], {}).get("label", run["era"])
+    if run["status"] == "finished":
+        tl = run.get("timeline") or []
+        sample_tl = tl[:1] + tl[-5:] if len(tl) > 6 else tl
+        tl_lines = "\n".join(f"• **{t['age']}歲** {t['title']}：{t['detail']}" for t in sample_tl) or "（無詳細紀錄）"
+        embed = discord.Embed(
+            title=f"📜 人生謝幕紀念卡 — {run['char_name']}（享壽 {run['age']} 歲）",
+            description=(
+                f"🌍 **出生地**：`{run['country_name']}・{run['city']}`（{era_lbl}｜全球幸運度 PR `{run['luck_pr']}`）\n"
+                f"💼 **最終職業**：`{run['occupation']}` ｜ 🏠 **出身家境**：`{run['family_class']}`\n"
+                f"🪦 **生命終章**：{run.get('death_cause') or '走完了一生。'}\n\n"
+                f"📊 **終局五維**：❤️ 健康 `{run['health']}` ｜ 😊 快樂 `{run['happiness']}` ｜ 📚 知識 `{run['knowledge']}` ｜ 💰 財富 `{run['wealth']}` ｜ 🤝 人際 `{run['social']}`\n"
+                f"🗺️ **世界國家圖鑑**：已解鎖 `{unlocked_count} / 197` 個國家與地區"
+            ),
+            color=0xD4AF37,
+        )
+        embed.add_field(name="⏳ 生平重要里程碑", value=truncate_embed_text(tl_lines, max_len=950), inline=False)
+        embed.set_image(url="attachment://life_summary.png")
+        embed.set_footer(text=f"人生 #{run['id']} | 80億分之1 (1in8B) | 玩家：{run['user_name']}")
+        return embed
+
+    pe = run.get("pending_event") or {}
+    choices = pe.get("choices") or []
+    choice_lines = []
+    for idx, ch in enumerate(choices[:3], start=1):
+        choice_lines.append(f"**[{chr(64 + idx)}]** {ch.get('label', f'選項{idx}')}")
+
+    mode_lbl = "🧠 Gemini 沉浸劇情版" if run["story_mode"] == "llm" else "⚡ 極速統計版"
+    focus_lbl = ls.FOCUS_LABELS.get(run.get("focus", "balance"), "⚖️ 均衡發展")
+    desc_parts = [
+        f"🌍 **{run['country_name']}・{run['city']}**（出生確率 `{run['birth_prob_pct']:.3f}%`｜全球幸運度 `PR {run['luck_pr']}`）",
+        f"👤 **{run['char_name']}**（{run['gender']}｜{era_lbl} {run['birth_year']}年生｜{run['family_class']}）",
+        f"🎂 **{run['age']} 歲** ｜ 💼 **職業**：`{run['occupation']}` ｜ 🎯 **重心**：`{focus_lbl}`",
+        f"📊 ❤️健康 `{run['health']}` ｜ 😊快樂 `{run['happiness']}` ｜ 📚知識 `{run['knowledge']}` ｜ 💰財富 `{run['wealth']}` ｜ 🤝人際 `{run['social']}`",
+    ]
+    if note:
+        desc_parts.append(f"\n📌 **上一步結果**：{note}")
+
+    embed = discord.Embed(
+        title=f"🌍 80億分之1 (1in8B) — {run['char_name']}（{run['age']}歲）",
+        description="\n".join(desc_parts),
+        color=0x2ECC71 if run["health"] >= 60 else (0xF1C40F if run["health"] >= 30 else 0xE74C3C),
+    )
+    ev_title = f"⏳ {pe.get('stage', '人生轉折')}｜{pe.get('title', '命運的十字路口')}"
+    ev_body = f"{pe.get('story', '')}\n\n" + "\n".join(choice_lines)
+    if run["story_mode"] == "llm":
+        ev_body += "\n\n💬 *可點下方 `[A]/[B]/[C]` 按鈕，或直接對 Bot 打字說出你的自訂決定！*"
+    embed.add_field(name=ev_title[:250], value=truncate_embed_text(ev_body, max_len=1000), inline=False)
+    if include_birth_cert:
+        embed.set_image(url="attachment://birth_cert.png")
+    embed.set_footer(text=f"人生 #{run['id']} | {mode_lbl} | 圖鑑 {unlocked_count}/197 | 玩家：{run['user_name']}")
+    return embed
+
+
+def _build_atlas_embed(target_user: discord.abc.User, entries: list[dict]) -> discord.Embed:
+    unlocked = len(entries)
+    pct = (unlocked / 197.0) * 100.0
+    if not entries:
+        return discord.Embed(
+            title=f"🗺️ {target_user.display_name} 的世界國家圖鑑（0 / 197）",
+            description="還沒有在《80億分之1》出生過任何國家！點擊「🌍 80億分之1」開始你的第一場投胎體驗吧。",
+            color=0x3498DB,
+        )
+    top_lines = [
+        f"• **{e['country_name']}** (`{e['country_code']}`) — 投胎 `{e['runs_count']}` 次｜最高 `{e['best_age']}` 歲｜幸運 `PR {e['best_luck_pr']}`"
+        for e in entries[:15]
+    ]
+    extra = f"\n…以及另外 `{unlocked - 15}` 個已探索國家！" if unlocked > 15 else ""
+    return discord.Embed(
+        title=f"🗺️ {target_user.display_name} 的世界國家圖鑑（{unlocked} / 197｜{pct:.1f}%）",
+        description="\n".join(top_lines) + extra,
+        color=0x2ECC71,
+    )
 
 
 def _build_board_embed(
@@ -134,21 +216,31 @@ async def _render_board_file(game: dict, highlight_from: Optional[str] = None) -
     return discord.File(io.BytesIO(png_bytes), filename="board.png")
 
 
-def _build_game_lobby_embed(channel_id: int) -> discord.Embed:
+def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> discord.Embed:
     active = bg.get_active_game(channel_id)
+    active_life = ls.get_active_life_run(channel_id, user_id=user_id) if user_id else None
     lines = []
     for key, meta in bg.GAME_CATALOG.items():
         lines.append(f"{meta['emoji']} **{meta['name']}**（`{key}` | {meta['size']}）\n└ {meta['desc']}")
+    lines.append(
+        "🌍 **80億分之1 (1 in 8 Billion)**（`1in8b` | 197 國真實人口統計）\n"
+        "└ 依聯合國/世界銀行 197 國真實出生機率隨機投胎，經歷生老病死與命運抉擇！（支援 ⚡極速統計版 ＆ 🧠Gemini 沉浸劇情版）"
+    )
 
-    status_banner = ""
+    banners = []
     if active:
         ameta = bg.GAME_CATALOG[active["game_type"]]
-        status_banner = f"\n\n⚠️ **此頻道目前有一場進行中的 `{ameta['name']}`**（輸入 `!play board` 或說「重貼棋盤」即可叫回面板）。"
+        banners.append(f"⚠️ 此頻道有一場進行中的 `{ameta['name']}`（輸入 `!play board` 或說「重貼棋盤」可叫回面板）。")
+    if active_life:
+        banners.append(
+            f"🌍 你在此頻道有一段進行中的人生：**{active_life['char_name']}**（{active_life['country_name']}｜{active_life['age']}歲）"
+        )
+    status_banner = ("\n\n" + "\n".join(banners)) if banners else ""
 
     embed = discord.Embed(
-        title="🎮 Discord 桌遊與棋盤大廳 (`!play`)",
+        title="🎮 Discord 遊戲大廳 (`!play`)",
         description=(
-            "所有棋盤規則、勝負與座標判定皆由 **Python 引擎＋SQLite** 嚴格校驗，**零作弊、零幻覺**，並附上四邊高清座標圖！\n\n"
+            "所有棋盤規則、隨機機率與五維數值皆由 **Python 引擎＋SQLite** 嚴格校驗，**零作弊、零幻覺**，並生成專屬高清圖片卡片！\n\n"
             + "\n\n".join(lines)
             + status_banner
         ),
@@ -157,14 +249,275 @@ def _build_game_lobby_embed(channel_id: int) -> discord.Embed:
     embed.add_field(
         name="🚀 極簡玩法（按鈕選單 ＋ 自然語言都能玩）",
         value=(
-            "• **用選的**：直接點下方選單選遊戲與對手（含 **PvE 簡單/普通/困難 AI**、**🧠 Gemini LLM**、**PvP 雙人**）\n"
-            "• **用說的**：直接打「我想跟 LLM 玩黑白棋」、「幫我下在 C4」、「我想悔棋」\n"
-            "• **用指令**：`!play 黑白棋` / `!play 西洋棋 llm` / `!play 五子棋 pvp @好友`"
+            "• **用選的**：下拉選遊戲與模式（棋盤支援 **PvE AI / 🧠LLM / PvP**；`80億分之1` 可選 **⚡極速 / 🧠沉浸劇情 / 🧵開專屬串**）\n"
+            "• **用說的**：直接打「我想跟 LLM 玩黑白棋」、「幫我下 C4」、「我想玩80億分之1」、「這題選A / 我決定去考公職」\n"
+            "• **用指令**：`!play 黑白棋` / `!play 西洋棋 llm` / `!play 1in8b` / `!play 圖鑑`"
         ),
         inline=False,
     )
-    embed.set_footer(text="💡 對局內所有功能（投降、上一步悔棋、提示、座標水印、看戰績）皆可直接點卡片按鈕操作！")
+    embed.set_footer(text="💡 對局內所有功能（投降、悔棋、提示、人生抉擇、世界圖鑑、戰績）皆可直接點卡片按鈕或口語操作！")
     return embed
+
+
+class LifeSimSetupView(discord.ui.View):
+    """《80億分之1》開局設定面板：時代、抽出基準、故事模式（極速/LLM）、開局位置。"""
+
+    def __init__(self, cog: "BoardGameCog", owner_id: int):
+        super().__init__(timeout=600)
+        self.cog = cog
+        self.owner_id = owner_id
+        self.era = "present"
+        self.draw_method = "births"
+        self.story_mode = "fast"
+
+        era_opts = [
+            discord.SelectOption(label="🌍 現代（2024–2026）", value="present", default=True),
+            discord.SelectOption(label="📼 過去（1980–1995）", value="past_1980"),
+            discord.SelectOption(label="🕰️ 戰後（1950–1965）", value="past_1950"),
+            discord.SelectOption(label="🚀 未來預測（2048–2055）", value="future_2050"),
+        ]
+        self.era_select = discord.ui.Select(placeholder="1️⃣ 選擇降生時代...", options=era_opts, row=0)
+        self.era_select.callback = self._on_era
+        self.add_item(self.era_select)
+
+        method_opts = [
+            discord.SelectOption(label="👶 依真實新生兒出生率抽取（推薦・寫實）", value="births", default=True),
+            discord.SelectOption(label="👥 依全球現存人口比例抽取", value="population"),
+        ]
+        self.method_select = discord.ui.Select(placeholder="2️⃣ 選擇機率分配方式...", options=method_opts, row=1)
+        self.method_select.callback = self._on_method
+        self.add_item(self.method_select)
+
+        story_opts = [
+            discord.SelectOption(label="⚡ 極速統計版（0 Token，瞬間結算）", value="fast", default=True),
+            discord.SelectOption(label="🧠 Gemini 沉浸劇情版（在地文化＋自由打字決定）", value="llm"),
+        ]
+        self.story_select = discord.ui.Select(placeholder="3️⃣ 選擇遊玩引擎...", options=story_opts, row=2)
+        self.story_select.callback = self._on_story
+        self.add_item(self.story_select)
+
+    def _build_setup_embed(self) -> discord.Embed:
+        return discord.Embed(
+            title="🌍 80億分之1 (1 in 8 Billion) — 投胎設定",
+            description=(
+                "你即將根據 **聯合國/世界銀行 197 國真實統計權重**，隨機降生在地球上的某個家庭。\n\n"
+                f"• **時代**：`{ls.ERA_CONFIG[self.era]['label']}`\n"
+                f"• **機率基準**：`{ls.DRAW_METHOD_LABELS[self.draw_method]}`\n"
+                f"• **故事引擎**：`{'🧠 Gemini 沉浸劇情版' if self.story_mode == 'llm' else '⚡ 極速統計版'}`\n\n"
+                "選擇下方按鈕開始投胎，或點擊 **「🧵 開專屬串投胎」** 避免影響大頻道聊天！"
+            ),
+            color=0x2ECC71,
+        )
+
+    async def _check_owner(self, interaction: discord.Interaction) -> bool:
+        if self.owner_id and interaction.user.id != self.owner_id:
+            await interaction.response.send_message("ℹ️ 請輸入 `!play` 開啟你自己的設定面板，才不會點到別人的喔！", ephemeral=True)
+            return False
+        return True
+
+    async def _on_era(self, interaction: discord.Interaction):
+        if not await self._check_owner(interaction):
+            return
+        self.era = self.era_select.values[0]
+        for o in self.era_select.options:
+            o.default = (o.value == self.era)
+        await interaction.response.edit_message(embed=self._build_setup_embed(), view=self)
+
+    async def _on_method(self, interaction: discord.Interaction):
+        if not await self._check_owner(interaction):
+            return
+        self.draw_method = self.method_select.values[0]
+        for o in self.method_select.options:
+            o.default = (o.value == self.draw_method)
+        await interaction.response.edit_message(embed=self._build_setup_embed(), view=self)
+
+    async def _on_story(self, interaction: discord.Interaction):
+        if not await self._check_owner(interaction):
+            return
+        self.story_mode = self.story_select.values[0]
+        for o in self.story_select.options:
+            o.default = (o.value == self.story_mode)
+        await interaction.response.edit_message(embed=self._build_setup_embed(), view=self)
+
+    @discord.ui.button(label="立即投胎出生", emoji="🌍", style=discord.ButtonStyle.success, row=3)
+    async def start_here_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_owner(interaction):
+            return
+        await interaction.response.defer()
+        await self.cog.start_life_and_send(
+            interaction.channel,
+            interaction.user,
+            story_mode=self.story_mode,
+            era=self.era,
+            draw_method=self.draw_method,
+            retire_interaction=interaction,
+        )
+
+    @discord.ui.button(label="開專屬串投胎", emoji="🧵", style=discord.ButtonStyle.primary, row=3)
+    async def start_thread_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_owner(interaction):
+            return
+        await interaction.response.defer()
+        target_ch = interaction.channel
+        if isinstance(interaction.channel, discord.TextChannel):
+            try:
+                thread = await interaction.channel.create_thread(
+                    name=f"🌍 {interaction.user.display_name} 的80億分之1人生",
+                    type=discord.ChannelType.public_thread,
+                    auto_archive_duration=1440,
+                )
+                target_ch = thread
+            except Exception as e:
+                self.cog.logger.warning(f"⚠️ 無法建立討論串，改回當前頻道遊玩: {e}")
+        await self.cog.start_life_and_send(
+            target_ch,
+            interaction.user,
+            story_mode=self.story_mode,
+            era=self.era,
+            draw_method=self.draw_method,
+            retire_interaction=interaction,
+        )
+
+    @discord.ui.button(label="我的國家圖鑑", emoji="🗺️", style=discord.ButtonStyle.secondary, row=3)
+    async def atlas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
+        await interaction.response.send_message(embed=_build_atlas_embed(interaction.user, entries), ephemeral=True)
+
+    @discord.ui.button(label="回遊戲大廳", emoji="⬅️", style=discord.ButtonStyle.secondary, row=3)
+    async def back_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check_owner(interaction):
+            return
+        embed = _build_game_lobby_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=GameLobbyView(self.cog))
+
+
+class LifeSimActiveView(discord.ui.View):
+    """《80億分之1》進行中互動卡片：A/B/C 選擇、年度重心、自動過完與圖鑑。"""
+
+    def __init__(self, cog: "BoardGameCog", run: dict):
+        super().__init__(timeout=1800)
+        self.cog = cog
+        self.run_id = run["id"]
+        self.owner_id = run["user_id"]
+
+        choices = (run.get("pending_event") or {}).get("choices") or []
+        for idx in range(3):
+            letter = chr(65 + idx)
+            if idx < len(choices):
+                lbl_raw = choices[idx].get("label", f"選項 {letter}")
+                btn_lbl = f"{letter}. {lbl_raw[:22]}{'…' if len(lbl_raw) > 22 else ''}"
+                disabled = False
+            else:
+                btn_lbl = f"{letter}. （無）"
+                disabled = True
+            btn = discord.ui.Button(label=btn_lbl, style=discord.ButtonStyle.primary, row=0, disabled=disabled)
+            btn.callback = self._make_choice_cb(idx)
+            self.add_item(btn)
+
+        focus_opts = [
+            discord.SelectOption(
+                label=lbl,
+                value=key,
+                default=(key == (run.get("focus") or "balance")),
+            )
+            for key, lbl in ls.FOCUS_LABELS.items()
+        ]
+        self.focus_select = discord.ui.Select(placeholder="🎯 調整下一階段人生重心...", options=focus_opts, row=1)
+        self.focus_select.callback = self._on_focus
+        self.add_item(self.focus_select)
+
+    def _make_choice_cb(self, idx: int):
+        async def _cb(interaction: discord.Interaction):
+            if interaction.user.id != self.owner_id:
+                await interaction.response.send_message("ℹ️ 這段人生屬於原玩家，輸入 `!play 1in8b` 可開啟你自己的投胎！", ephemeral=True)
+                return
+            await interaction.response.defer()
+            try:
+                updated, note = await asyncio.to_thread(ls.resolve_life_step, self.run_id, interaction.user.id, choice_idx=idx)
+            except ValueError as e:
+                await interaction.followup.send(f"⚠️ {e}", ephemeral=True)
+                return
+            if updated["status"] == "active" and updated["story_mode"] == "llm":
+                updated = await self.cog.populate_llm_next_event(updated)
+            await self.cog.retire_and_send_life_card(interaction, updated, note=note)
+        return _cb
+
+    async def _on_focus(self, interaction: discord.Interaction):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("ℹ️ 只能調整你自己的人生重心喔！", ephemeral=True)
+            return
+        focus_val = self.focus_select.values[0]
+        try:
+            updated = await asyncio.to_thread(ls.set_life_focus, self.run_id, interaction.user.id, focus_val)
+        except ValueError as e:
+            await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
+            return
+        unlocked = len(await asyncio.to_thread(ls.get_user_country_dex, updated["user_id"]))
+        embed = _build_life_embed(updated, note=f"已將人生重心調整為：{ls.FOCUS_LABELS[focus_val]}", unlocked_count=unlocked)
+        await interaction.response.edit_message(embed=embed, view=LifeSimActiveView(self.cog, updated))
+
+    @discord.ui.button(label="自動過完此生", emoji="🤖", style=discord.ButtonStyle.secondary, row=2)
+    async def auto_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("ℹ️ 只能快轉你自己的人生！", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            finished = await asyncio.to_thread(ls.auto_finish_life, self.run_id, interaction.user.id)
+        except ValueError as e:
+            await interaction.followup.send(f"⚠️ {e}", ephemeral=True)
+            return
+        await self.cog.retire_and_send_life_card(interaction, finished, note="⚡ 已快速模擬完畢剩餘人生。")
+
+    @discord.ui.button(label="國家圖鑑", emoji="🗺️", style=discord.ButtonStyle.secondary, row=2)
+    async def dex_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
+        await interaction.response.send_message(embed=_build_atlas_embed(interaction.user, entries), ephemeral=True)
+
+    @discord.ui.button(label="投胎重開", emoji="🔁", style=discord.ButtonStyle.danger, row=2)
+    async def restart_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("ℹ️ 只能重開你自己的人生！", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            finished = await asyncio.to_thread(ls.abandon_life_run, self.run_id, interaction.user.id)
+        except ValueError as e:
+            await interaction.followup.send(f"⚠️ {e}", ephemeral=True)
+            return
+        await self.cog.retire_and_send_life_card(interaction, finished, note="已結束本輪人生，準備重新投胎！")
+
+
+class LifeSimFinishedView(discord.ui.View):
+    """《80億分之1》終局謝幕卡片按鈕。"""
+
+    def __init__(self, cog: "BoardGameCog", run: dict):
+        super().__init__(timeout=1800)
+        self.cog = cog
+        self.story_mode = run.get("story_mode", "fast")
+        self.era = run.get("era", "present")
+        self.draw_method = run.get("draw_method", "births")
+
+    @discord.ui.button(label="再投胎一次", emoji="🔁", style=discord.ButtonStyle.success, row=0)
+    async def replay_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await self.cog.start_life_and_send(
+            interaction.channel,
+            interaction.user,
+            story_mode=self.story_mode,
+            era=self.era,
+            draw_method=self.draw_method,
+        )
+
+    @discord.ui.button(label="我的世界圖鑑", emoji="🗺️", style=discord.ButtonStyle.primary, row=0)
+    async def dex_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
+        await interaction.response.send_message(embed=_build_atlas_embed(interaction.user, entries), ephemeral=True)
+
+    @discord.ui.button(label="回遊戲大廳", emoji="🎮", style=discord.ButtonStyle.secondary, row=0)
+    async def lobby_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = _build_game_lobby_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.send_message(embed=embed, view=GameLobbyView(self.cog))
 
 
 class GameLobbyView(discord.ui.View):
@@ -186,7 +539,16 @@ class GameLobbyView(discord.ui.View):
             )
             for gtype, meta in bg.GAME_CATALOG.items()
         ]
-        self.game_select = discord.ui.Select(placeholder="1️⃣ 選擇要玩的棋盤遊戲...", options=game_opts, row=0)
+        game_opts.append(
+            discord.SelectOption(
+                label="80億分之1 (1in8B 人生模擬)",
+                value="1in8b",
+                emoji="🌍",
+                description="197國真實機率投胎｜極速統計 / 🧠Gemini 沉浸劇情版",
+                default=False,
+            )
+        )
+        self.game_select = discord.ui.Select(placeholder="1️⃣ 選擇要玩的遊戲...", options=game_opts, row=0)
         self.game_select.callback = self._on_select_game
         self.add_item(self.game_select)
 
@@ -197,7 +559,7 @@ class GameLobbyView(discord.ui.View):
             discord.SelectOption(label="PvE 對戰後端 Gemini LLM（會回話且防作弊 🧠）", value="pve:llm"),
             discord.SelectOption(label="PvP 雙人公開對戰（等待群友加入 👥）", value="pvp:open"),
         ]
-        self.mode_select = discord.ui.Select(placeholder="2️⃣ 選擇 PvE 難度或 PvP 對戰...", options=mode_opts, row=1)
+        self.mode_select = discord.ui.Select(placeholder="2️⃣ 棋盤對戰模式（若選 80億分之1 可直接點立即開局）...", options=mode_opts, row=1)
         self.mode_select.callback = self._on_select_mode
         self.add_item(self.mode_select)
 
@@ -215,6 +577,11 @@ class GameLobbyView(discord.ui.View):
 
     @discord.ui.button(label="立即開局", emoji="▶️", style=discord.ButtonStyle.success, row=2)
     async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.selected_game == "1in8b":
+            setup_view = LifeSimSetupView(self.cog, owner_id=interaction.user.id)
+            await interaction.response.edit_message(embed=setup_view._build_setup_embed(), view=setup_view)
+            return
+
         mode_kind, sub = self.selected_mode.split(":", 1)
         mode = "pve" if mode_kind == "pve" else "pvp"
         diff = sub if mode == "pve" else "normal"
@@ -235,9 +602,15 @@ class GameLobbyView(discord.ui.View):
         await interaction.response.defer()
         await self.cog.send_game_card(interaction.channel, game, last_note="對局已建立！")
 
-    @discord.ui.button(label="我的戰績", emoji="🏆", style=discord.ButtonStyle.secondary, row=2)
+    @discord.ui.button(label="我的戰績 / 圖鑑", emoji="🏆", style=discord.ButtonStyle.secondary, row=2)
     async def stats_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = self.cog.build_stats_embed(interaction.user)
+        entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
+        embed.add_field(
+            name="🗺️ 80億分之1 世界圖鑑",
+            value=f"已解鎖 **{len(entries)} / 197** 個國家與地區（輸入 `!play 圖鑑` 查看詳情）",
+            inline=False,
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -761,6 +1134,134 @@ class BoardGameCog(commands.Cog):
             content_text=llm_msg,
         )
 
+    # -------------------------------------------------------------
+    # 《80億分之1 (1in8B)》生活卡片、LLM 文化劇情與圖鑑方法
+    # -------------------------------------------------------------
+    async def populate_llm_next_event(self, run: dict) -> dict:
+        """在 Gemini 沉浸劇情模式下，為當前年齡生成在地文化轉折事件（失敗自動保留本地事件）。"""
+        if not run or run["status"] != "active":
+            return run
+        prompt = ls.format_lifesim_next_event_prompt(run)
+        try:
+            resp, _ = await generate_with_fallback(
+                client=self.gemini_client,
+                models_to_try=self.settings.models_to_try,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.75,
+                    safety_settings=get_safety_settings(self.settings.disable_safety_settings),
+                ),
+                timeout=22.0,
+                context_label="80億分之1 LLM 劇情生成",
+                logger=self.logger,
+            )
+            ev = ls.parse_lifesim_event_json(getattr(resp, "text", "") or "", run["age"])
+            if ev:
+                return await asyncio.to_thread(ls.set_pending_event, run["id"], ev)
+        except Exception as e:
+            self.logger.warning(f"⚠️ [1in8B LLM] 事件生成失敗，改用本地統計事件: {e}")
+        return run
+
+    async def evaluate_llm_custom_choice(self, run: dict, user_decision: str) -> tuple[str, dict]:
+        """在 Gemini 沉浸劇情模式下評估玩家自然語言自訂決定的合理後果。"""
+        prompt = ls.format_lifesim_custom_choice_prompt(run, user_decision)
+        try:
+            resp, _ = await generate_with_fallback(
+                client=self.gemini_client,
+                models_to_try=self.settings.models_to_try,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.55,
+                    safety_settings=get_safety_settings(self.settings.disable_safety_settings),
+                ),
+                timeout=22.0,
+                context_label="80億分之1 自訂抉擇判定",
+                logger=self.logger,
+            )
+            return ls.parse_lifesim_custom_json(getattr(resp, "text", "") or "")
+        except Exception as e:
+            self.logger.warning(f"⚠️ [1in8B LLM] 自訂決定判定失敗，改用中性結果: {e}")
+            return f"你選擇了「{user_decision[:40]}」，並為這段人生留下特別的足跡。", {"happiness": 3}
+
+    async def send_life_card(
+        self,
+        channel: discord.abc.Messageable,
+        run: dict,
+        note: str = "",
+        include_birth_cert: bool = False,
+        content_text: Optional[str] = None,
+    ) -> discord.Message:
+        unlocked = len(await asyncio.to_thread(ls.get_user_country_dex, run["user_id"]))
+        embed = _build_life_embed(run, note=note, unlocked_count=unlocked, include_birth_cert=include_birth_cert)
+        view = LifeSimActiveView(self, run) if run["status"] == "active" else LifeSimFinishedView(self, run)
+        clean_content = (content_text or "").strip() or None
+        if clean_content and len(clean_content) > 1900:
+            clean_content = clean_content[:1900] + "..."
+
+        files: list[discord.File] = []
+        if run["status"] == "finished":
+            png_bytes = await asyncio.to_thread(ls.render_life_epitaph_png, run, unlocked, 197)
+            files.append(discord.File(io.BytesIO(png_bytes), filename="life_summary.png"))
+        elif include_birth_cert:
+            png_bytes = await asyncio.to_thread(ls.render_birth_certificate_png, run)
+            files.append(discord.File(io.BytesIO(png_bytes), filename="birth_cert.png"))
+
+        if files:
+            return await channel.send(content=clean_content, files=files, embed=embed, view=view)
+        return await channel.send(content=clean_content, embed=embed, view=view)
+
+    async def retire_and_send_life_card(
+        self,
+        interaction: discord.Interaction,
+        run: dict,
+        note: str = "",
+        include_birth_cert: bool = False,
+        content_text: Optional[str] = None,
+    ) -> discord.Message:
+        try:
+            await interaction.edit_original_response(view=None)
+        except Exception:
+            pass
+        return await self.send_life_card(
+            interaction.channel,
+            run,
+            note=note,
+            include_birth_cert=include_birth_cert,
+            content_text=content_text,
+        )
+
+    async def start_life_and_send(
+        self,
+        channel: discord.abc.Messageable,
+        user: discord.abc.User,
+        story_mode: str = "fast",
+        era: str = "present",
+        draw_method: str = "births",
+        retire_interaction: Optional[discord.Interaction] = None,
+    ) -> discord.Message:
+        run = await asyncio.to_thread(
+            ls.create_life_run,
+            channel.id,
+            user.id,
+            user.display_name,
+            story_mode=story_mode,
+            era=era,
+            draw_method=draw_method,
+        )
+        if story_mode == "llm" and run["status"] == "active":
+            run = await self.populate_llm_next_event(run)
+        if retire_interaction is not None:
+            try:
+                await retire_interaction.edit_original_response(view=None)
+            except Exception:
+                pass
+        return await self.send_life_card(
+            channel,
+            run,
+            note="你呱呱墜地了！以下是你的全球出生證明書與首次命運轉折。",
+            include_birth_cert=True,
+        )
+
     def build_stats_embed(self, target_user: Optional[discord.abc.User] = None) -> discord.Embed:
         rows = bg.get_user_stats(target_user.id if target_user else None, limit=15)
         title = f"🏆 {target_user.display_name} 的桌遊戰績" if target_user else "🏆 伺服器桌遊排行榜"
@@ -778,24 +1279,39 @@ class BoardGameCog(commands.Cog):
 
     @commands.command(name="play", aliases=["game", "games", "桌遊", "棋盤", "boardgame", "bg"])
     async def play_command(self, ctx: commands.Context, *, args: str = None):
-        """桌遊大廳與開局指令：!play [遊戲名] [pve/pvp] [難度或@對手]"""
+        """遊戲大廳與開局指令：!play [黑白棋/西洋棋/四子棋/五子棋/1in8b] ..."""
         if not is_target_channel(ctx.channel, self.settings):
             return
 
         raw = (args or "").strip()
         if not raw or raw.lower() in ("list", "lobby", "menu", "清單", "大廳"):
-            embed = _build_game_lobby_embed(ctx.channel.id)
+            embed = _build_game_lobby_embed(ctx.channel.id, user_id=ctx.author.id)
             await ctx.send(embed=embed, view=GameLobbyView(self))
             return
 
         low = raw.lower()
+        if low in ("atlas", "dex", "圖鑑", "國家圖鑑", "世界圖鑑"):
+            entries = await asyncio.to_thread(ls.get_user_country_dex, ctx.author.id)
+            await ctx.send(embed=_build_atlas_embed(ctx.author, entries))
+            return
         if low in ("stats", "stat", "戰績", "排行"):
-            await ctx.send(embed=self.build_stats_embed(ctx.author))
+            embed = self.build_stats_embed(ctx.author)
+            entries = await asyncio.to_thread(ls.get_user_country_dex, ctx.author.id)
+            embed.add_field(
+                name="🗺️ 80億分之1 世界圖鑑",
+                value=f"已解鎖 **{len(entries)} / 197** 個國家與地區（輸入 `!play 圖鑑` 查看詳情）",
+                inline=False,
+            )
+            await ctx.send(embed=embed)
             return
         if low in ("board", "show", "棋盤", "看棋盤"):
             active = await asyncio.to_thread(bg.get_active_game, ctx.channel.id)
             if not active:
-                await ctx.send("🎲 目前此頻道沒有進行中的棋局。輸入 `!play` 開一局吧！")
+                active_life = await asyncio.to_thread(ls.get_active_life_run, ctx.channel.id, ctx.author.id)
+                if active_life:
+                    await self.send_life_card(ctx.channel, active_life, note="已重新顯示你目前的人生模擬進度")
+                    return
+                await ctx.send("🎲 目前此頻道沒有進行中的棋局或人生模擬。輸入 `!play` 開一局吧！")
                 return
             await self.send_game_card(ctx.channel, active, last_note="已重新顯示目前盤面")
             return
@@ -830,9 +1346,34 @@ class BoardGameCog(commands.Cog):
             return
 
         tokens = raw.split()
+        first_low = tokens[0].lower()
+        if first_low in ("1in8b", "80億分之1", "八十億分之一", "life", "lifesim", "投胎", "人生模擬"):
+            if len(tokens) == 1:
+                setup_view = LifeSimSetupView(self, owner_id=ctx.author.id)
+                await ctx.send(embed=setup_view._build_setup_embed(), view=setup_view)
+                return
+            story_mode = "fast"
+            era = "present"
+            draw_method = "births"
+            for tok in tokens[1:]:
+                tl = tok.lower()
+                if tl in ("llm", "gemini", "ai", "沉浸", "劇情"):
+                    story_mode = "llm"
+                elif tl in ("fast", "stat", "極速", "統計"):
+                    story_mode = "fast"
+                elif tl in ("population", "pop", "人口"):
+                    draw_method = "population"
+                elif tl in ("births", "birth", "出生", "出生率"):
+                    draw_method = "births"
+                elif any(k in tl for k in ("1950", "1980", "2050", "未來", "戰後", "過去", "現代")):
+                    era = ls.resolve_era(tl)
+            async with ctx.channel.typing():
+                await self.start_life_and_send(ctx.channel, ctx.author, story_mode=story_mode, era=era, draw_method=draw_method)
+            return
+
         gtype = bg.resolve_game_type(tokens[0])
         if not gtype:
-            await ctx.send(f"❓ 找不到遊戲 `{tokens[0]}`。輸入 `!play` 可開啟大廳與遊戲清單！")
+            await ctx.send(f"❓ 找不到遊戲 `{tokens[0]}`。輸入 `!play` 可開啟遊戲大廳與遊戲清單！")
             return
 
         mode = "pve"

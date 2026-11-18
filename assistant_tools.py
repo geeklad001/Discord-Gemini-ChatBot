@@ -6,9 +6,10 @@ import discord
 
 import assistant_db
 import boardgame_engine
-import rpg_engine
 import flashcard_engine
 import game_wiki_engine
+import lifesim_engine
+import rpg_engine
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg = assistant_db.current_discord_msg
@@ -372,16 +373,135 @@ def boardgame_stats() -> str:
     return "\n".join(lines)
 
 
+def _queue_lifesim_card_update(
+    run_id: int,
+    note: str = "",
+    include_birth_cert: bool = False,
+    custom_decision: str = "",
+    needs_llm_next: bool = False,
+) -> None:
+    pending = lifesim_engine.pending_lifesim_card_updates.get()
+    if pending is not None:
+        pending.append({
+            "run_id": run_id,
+            "note": note,
+            "include_birth_cert": include_birth_cert,
+            "custom_decision": custom_decision,
+            "needs_llm_next": needs_llm_next,
+        })
+
+
+def lifesim_start(story_mode: str = "fast", era: str = "present", draw_method: str = "births") -> str:
+    """
+    為當前玩家開啟一場《80億分之1 (1in8B)》寫實人生模擬，依全球 197 國真實人口統計抽出生地、時代、家境與五維初始值。
+    參數:
+      story_mode: 'fast'（極速統計版，預設）或 'llm'（Gemini 沉浸劇情版，支援自然語言自訂決定）。
+      era: 'present'（現代）、'past_1980'、'past_1950' 或 'future_2050'。
+      draw_method: 'births'（依全球新生兒出生比例，預設）或 'population'（依總人口比例）。
+    """
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    sm = "llm" if str(story_mode or "").strip().lower() in ("llm", "gemini", "ai", "沉浸", "劇情") else "fast"
+    resolved_era = lifesim_engine.resolve_era(era)
+    resolved_method = lifesim_engine.resolve_draw_method(draw_method)
+    run = lifesim_engine.create_life_run(
+        channel_id=msg.channel.id,
+        user_id=msg.author.id,
+        user_name=msg.author.display_name,
+        story_mode=sm,
+        era=resolved_era,
+        draw_method=resolved_method,
+    )
+    _queue_lifesim_card_update(
+        run["id"],
+        note="你呱呱墜地了！以下是你的全球出生證明書與首次命運轉折。",
+        include_birth_cert=True,
+        needs_llm_next=(sm == "llm"),
+    )
+    return (
+        f"🌍 已為 {msg.author.display_name} 開啟《80億分之1》人生模擬 (#run_id={run['id']})！\n"
+        f"⚡【最新權威狀態已更新，請以此為準，並簡短幽默點評出生設定即可；系統會自動在下方貼上出生證明圖卡與選項按鈕】\n"
+        f"{lifesim_engine.format_lifesim_status_for_llm(msg.channel.id, msg.author.id)}"
+    )
+
+
+def lifesim_decide(decision: str) -> str:
+    """
+    推進當前玩家在此頻道的《80億分之1》人生模擬事件（選擇 A/B/C、自然語言自訂行動、自動過完此生或投胎重開）。
+    參數:
+      decision: 'A'/'B'/'C'（或 '1'/'2'/'3'）、'auto'/'自動過完'、'restart'/'投胎重開'，或在沉浸劇情模式下填寫玩家的口語自訂決定（例如：「決定半工半讀考大學」）。
+    """
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    active = lifesim_engine.get_active_life_run(msg.channel.id, msg.author.id)
+    if not active:
+        return "🌍 你目前在此頻道還沒有進行中的《80億分之1》人生。想立即投胎嗎？可以直接告訴我或輸入 `!play 1in8b`！"
+
+    raw = (decision or "").strip()
+    low = raw.lower()
+    if low in ("auto", "自動", "自動過完", "快轉"):
+        finished = lifesim_engine.auto_finish_life(active["id"], msg.author.id)
+        _queue_lifesim_card_update(finished["id"], note="⚡ 已快速模擬完畢剩餘人生。")
+        return (
+            f"📜 {finished['char_name']} 已走完 {finished['age']} 歲的人生（{finished.get('death_cause', '')}）。"
+            f"系統將自動貼出終局謝幕卡與總結圖片！"
+        )
+    if low in ("restart", "重開", "投胎", "投胎重開", "abandon", "放棄"):
+        finished = lifesim_engine.abandon_life_run(active["id"], msg.author.id)
+        _queue_lifesim_card_update(finished["id"], note="已結束本輪人生，準備重新投胎！")
+        return f"🔁 已為你結束「{finished['char_name']}」本輪模擬，點下方卡片的「再投胎一次」即可重抽國籍！"
+
+    idx_map = {"a": 0, "1": 0, "選a": 0, "選1": 0, "b": 1, "2": 1, "選b": 1, "選2": 1, "c": 2, "3": 2, "選c": 2, "選3": 2}
+    if low in idx_map:
+        updated, note = lifesim_engine.resolve_life_step(active["id"], msg.author.id, choice_idx=idx_map[low])
+        _queue_lifesim_card_update(
+            updated["id"],
+            note=note,
+            needs_llm_next=(updated["story_mode"] == "llm" and updated["status"] == "active"),
+        )
+        status_note = "已壽終正寢，系統將貼出人生謝幕卡！" if updated["status"] == "finished" else "已推進至下一階段，最新卡片與選項將附在下方！"
+        return (
+            f"⏳ {status_note}\n"
+            f"⚡【最新權威狀態已更新】\n"
+            f"{lifesim_engine.format_lifesim_status_for_llm(msg.channel.id, msg.author.id) or updated.get('death_cause', '')}"
+        )
+
+    if active["story_mode"] != "llm":
+        return "⚡ 目前為「極速統計版」，請輸入 `A` / `B` / `C`（或點擊卡片按鈕），若想自由輸入任何自訂行動請重開選擇「🧠 Gemini 沉浸劇情版」！"
+
+    _queue_lifesim_card_update(active["id"], custom_decision=raw, needs_llm_next=True)
+    return (
+        f"🧠 已受理 {msg.author.display_name} 的自訂決定「{raw}」，"
+        f"系統正在依國家背景與目前屬性結算真實後果，稍後將直接在下方附上新卡片！"
+    )
+
+
+def lifesim_atlas() -> str:
+    """查詢當前玩家在《80億分之1》已解鎖的世界國家圖鑑（共 197 國）。"""
+    msg = current_discord_msg.get()
+    if not msg:
+        return "❌ 無法取得目前 Discord 頻道上下文。"
+    entries = lifesim_engine.get_user_country_dex(msg.author.id)
+    if not entries:
+        return f"🗺️ {msg.author.display_name} 目前還沒有解鎖任何國家（0 / 197）。快輸入 `!play 1in8b` 投胎一次吧！"
+    top = "、".join(f"{e['country_name']}({e['runs_count']}次)" for e in entries[:12])
+    more = f" 等共 {len(entries)} 國" if len(entries) > 12 else ""
+    return f"🗺️ {msg.author.display_name} 的《80億分之1》世界國家圖鑑：已解鎖 **{len(entries)} / 197** 國（{top}{more}）。"
+
+
 def get_scoped_tools(
     enable_flashcards: bool = True,
     include_rpg: bool = False,
     enable_game_wiki: bool = True,
     include_boardgames: bool = False,
+    include_lifesim: bool = False,
 ) -> list:
     """
     【小模型 Tool Scoping 動態工具瘦身】
     針對 gemini-flash-lite 等輕量模型，在非 TRPG 跑團情境下自動卸載 RPG 工具，
-    並僅在啟用對應模組且處於相關情境時才掛載單字卡、《殭屍學園》知識庫與桌遊管理引擎工具。
+    並僅在啟用對應模組且處於相關情境時才掛載單字卡、《殭屍學園》知識庫與桌遊/人生模擬工具。
     """
     tools = [
         record_memory,
@@ -401,6 +521,12 @@ def get_scoped_tools(
             boardgame_resign,
             boardgame_refresh_board,
             boardgame_stats,
+        ])
+    if include_lifesim:
+        tools.extend([
+            lifesim_start,
+            lifesim_decide,
+            lifesim_atlas,
         ])
     if include_rpg:
         tools.extend([
@@ -427,6 +553,7 @@ def get_assistant_tools(
         include_rpg=True,
         enable_game_wiki=enable_game_wiki,
         include_boardgames=enable_board_games,
+        include_lifesim=enable_board_games,
     )
 
 

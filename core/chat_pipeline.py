@@ -1,5 +1,6 @@
 """Chat routing, dynamic system instructions, history building, and response dispatch."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -471,22 +472,25 @@ async def prepare_and_generate_chat_response(
     recent_text = _extract_recent_context_text(contents)
     in_rpg = is_rpg_context(message.channel, message.clean_content)
     bg_cid = _resolve_boardgame_channel_id(settings, message.channel)
-    in_boardgame = bool(
-        settings.enable_board_games
-        and (
-            boardgame_engine.get_latest_game_in_channel(bg_cid, include_finished_hours=4) is not None
+    in_boardgame = False
+    in_lifesim = False
+    if settings.enable_board_games:
+        recent_bg = await asyncio.to_thread(
+            boardgame_engine.get_latest_game_in_channel, bg_cid, include_finished_hours=4
+        )
+        in_boardgame = bool(
+            recent_bg is not None
             or boardgame_engine.is_boardgame_intent(message.clean_content)
             or boardgame_engine.is_boardgame_intent(recent_text)
         )
-    )
-    in_lifesim = bool(
-        settings.enable_board_games
-        and (
-            lifesim_engine.get_active_life_run(bg_cid, user_id=message.author.id) is not None
+        active_life = await asyncio.to_thread(
+            lifesim_engine.get_active_life_run, bg_cid, user_id=message.author.id
+        )
+        in_lifesim = bool(
+            active_life is not None
             or lifesim_engine.is_lifesim_intent(message.clean_content)
             or lifesim_engine.is_lifesim_intent(recent_text)
         )
-    )
     scoped_tools = assistant_tools.get_scoped_tools(
         enable_flashcards=settings.enable_flashcard_mode,
         include_rpg=in_rpg,
@@ -695,6 +699,28 @@ async def _flush_pending_lifesim_cards(
     return sent_reply_with_card
 
 
+async def _flush_all_pending_cards(
+    bot: discord.Client,
+    channel: discord.abc.Messageable,
+    pending_cards: list,
+    pending_life: list,
+    reply_text: str,
+    logger: Optional[logging.Logger] = None,
+) -> bool:
+    """統一派送排程中的棋盤卡與《80億分之1》人生卡片，避免重複發送回覆文字。"""
+    sent_with_card = await _flush_pending_board_cards(
+        bot, channel, pending_cards, reply_text=reply_text, logger=logger
+    )
+    sent_with_life = await _flush_pending_lifesim_cards(
+        bot,
+        channel,
+        pending_life,
+        reply_text="" if sent_with_card else reply_text,
+        logger=logger,
+    )
+    return sent_with_card or sent_with_life
+
+
 async def handle_general_chat(
     bot: discord.Client,
     gemini_client: genai.Client,
@@ -734,17 +760,10 @@ async def handle_general_chat(
                 context_label="日常群聊",
                 logger=logger,
             )
-            sent_with_card = await _flush_pending_board_cards(
-                bot, message.channel, pending_cards, reply_text=reply_text, logger=logger
+            sent_with_any = await _flush_all_pending_cards(
+                bot, message.channel, pending_cards, pending_life, reply_text=reply_text, logger=logger
             )
-            sent_with_life = await _flush_pending_lifesim_cards(
-                bot,
-                message.channel,
-                pending_life,
-                reply_text="" if sent_with_card else reply_text,
-                logger=logger,
-            )
-            if not sent_with_card and not sent_with_life:
+            if not sent_with_any:
                 await send_split_messages(message.channel, _strip_hallucinated_board_card_echo(reply_text) or reply_text)
 
         except Exception as e:
@@ -836,22 +855,15 @@ async def handle_japanese_learning_chat(
                     if jp_clean and tts_channel and tts_channel.id != message.channel.id:
                         try:
                             await tts_channel.send(content=jp_clean)
-                        except Exception:
+                        except discord.HTTPException:
                             pass
                     merged_reply = "\n".join(p for p in (jp_clean, zh_clean) if p)
                 else:
                     merged_reply = _strip_hallucinated_board_card_echo(reply_text.replace("[JP]", "").strip())
-                sent_with_card = await _flush_pending_board_cards(
-                    bot, message.channel, pending_cards, reply_text=merged_reply, logger=logger
+                sent_with_any = await _flush_all_pending_cards(
+                    bot, message.channel, pending_cards, pending_life, reply_text=merged_reply, logger=logger
                 )
-                sent_with_life = await _flush_pending_lifesim_cards(
-                    bot,
-                    message.channel,
-                    pending_life,
-                    reply_text="" if sent_with_card else merged_reply,
-                    logger=logger,
-                )
-                if not sent_with_card and not sent_with_life:
+                if not sent_with_any:
                     await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
             else:
                 await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)

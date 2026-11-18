@@ -1,5 +1,6 @@
 """Assistant Cog: !reset, !reload, !todo, !remind, !memory, !help, and reminder loop."""
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -118,7 +119,7 @@ class AssistantCog(commands.Cog):
     @tasks.loop(seconds=10)
     async def reminder_check_loop(self):
         """背景定時排程：每 10 秒檢查是否有到期的提醒事項並推播至 Discord。"""
-        due_items = assistant_db.get_pending_due_reminders()
+        due_items = await asyncio.to_thread(assistant_db.get_pending_due_reminders)
         for rem in due_items:
             try:
                 channel = self.bot.get_channel(rem["channel_id"])
@@ -142,7 +143,7 @@ class AssistantCog(commands.Cog):
                     embed.set_footer(text=footer_text)
                     await channel.send(content=user_ping, embed=embed)
                     self.logger.info(f"⏰ 已成功發送定時提醒給 {rem['user_name']} (ID: {rem['id']}): {rem['content']}")
-                assistant_db.mark_reminder_sent(rem["id"])
+                await asyncio.to_thread(assistant_db.mark_reminder_sent, rem["id"])
             except Exception as e:
                 self.logger.error(f"❌ 發送定時提醒失敗 (ID: {rem['id']}): {e}")
 
@@ -216,7 +217,7 @@ class AssistantCog(commands.Cog):
 
         wiki_msg = ""
         if self.settings.enable_game_wiki:
-            entries = game_wiki_engine.load_wiki_entries(force_reload=True)
+            entries = await asyncio.to_thread(game_wiki_engine.load_wiki_entries, force_reload=True)
             wiki_msg = f"\n📚 遊戲知識庫已重新載入（共 {len(entries)} 筆條目）"
 
         await ctx.send(f"🔄 **人設與設定已重新載入！**\n• 提示詞：{', '.join(checked)}{wiki_msg}")
@@ -228,7 +229,7 @@ class AssistantCog(commands.Cog):
             return
 
         if not action or action.lower() in ("list", "show", "ls"):
-            todos = assistant_db.list_todos(only_pending=True)
+            todos = await asyncio.to_thread(assistant_db.list_todos, only_pending=True)
             if not todos:
                 await ctx.send("📋 目前沒有任何未完成的待辦事項。")
                 return
@@ -250,7 +251,7 @@ class AssistantCog(commands.Cog):
             if not arg:
                 await ctx.send("❓ 請輸入要新增的待辦事項內容，例如：`!todo add 買牛奶`")
                 return
-            tid = assistant_db.add_todo(arg.strip(), user_name=ctx.author.display_name)
+            tid = await asyncio.to_thread(assistant_db.add_todo, arg.strip(), user_name=ctx.author.display_name)
             await ctx.send(f"✅ 已成功新增待辦事項 **#{tid}**：{arg.strip()}")
 
         elif act in ("done", "finish", "ok", "check", "v"):
@@ -258,9 +259,13 @@ class AssistantCog(commands.Cog):
                 await ctx.send("❓ 請輸入要完成的待辦編號或關鍵字，例如：`!todo done 1` 或 `!todo done 牛奶`")
                 return
             target = arg.strip()
-            completed = assistant_db.complete_todo_by_id(int(target)) if target.isdigit() else None
+            completed = (
+                await asyncio.to_thread(assistant_db.complete_todo_by_id, int(target))
+                if target.isdigit()
+                else None
+            )
             if not completed:
-                completed = assistant_db.complete_todo_by_keyword(target)
+                completed = await asyncio.to_thread(assistant_db.complete_todo_by_keyword, target)
 
             if completed:
                 await ctx.send(f"🎉 已完成待辦事項 **#{completed['id']}**：~~{completed['content']}~~")
@@ -272,13 +277,13 @@ class AssistantCog(commands.Cog):
                 await ctx.send("❓ 請輸入要刪除的待辦事項編號，例如：`!todo del 1`")
                 return
             tid = int(arg.strip())
-            if assistant_db.delete_todo(tid):
+            if await asyncio.to_thread(assistant_db.delete_todo, tid):
                 await ctx.send(f"🗑️ 已刪除待辦事項 **#{tid}**。")
             else:
                 await ctx.send(f"❌ 找不到待辦事項 **#{tid}**。")
 
         elif act in ("all", "history"):
-            todos = assistant_db.list_todos(only_pending=False)
+            todos = await asyncio.to_thread(assistant_db.list_todos, only_pending=False)
             if not todos:
                 await ctx.send("📋 目前待辦清單完全是空的。")
                 return
@@ -295,7 +300,7 @@ class AssistantCog(commands.Cog):
             await ctx.send(embed=embed)
         else:
             full_content = f"{action} {arg}" if arg else action
-            tid = assistant_db.add_todo(full_content.strip(), user_name=ctx.author.display_name)
+            tid = await asyncio.to_thread(assistant_db.add_todo, full_content.strip(), user_name=ctx.author.display_name)
             await ctx.send(f"✅ 已成功新增待辦事項 **#{tid}**：{full_content.strip()}")
 
     @commands.command(name="remind", aliases=["reminder", "rem"])
@@ -305,7 +310,7 @@ class AssistantCog(commands.Cog):
             return
 
         if not time_spec or time_spec.lower() in ("list", "show", "ls"):
-            rems = assistant_db.list_upcoming_reminders()
+            rems = await asyncio.to_thread(assistant_db.list_upcoming_reminders)
             if not rems:
                 await ctx.send("⏰ 目前沒有任何預約中的定時提醒。")
                 return
@@ -327,7 +332,7 @@ class AssistantCog(commands.Cog):
                 await ctx.send("❓ 請輸入要取消的提醒編號，例如：`!remind del 1`")
                 return
             rid = int(content.strip())
-            ok, info = assistant_db.cancel_reminder(rid, user_id=ctx.author.id)
+            ok, info = await asyncio.to_thread(assistant_db.cancel_reminder, rid, user_id=ctx.author.id)
             if ok:
                 await ctx.send(f"🗑️ 已取消提醒事項 **#{rid}**（{info}）。")
             else:
@@ -348,7 +353,8 @@ class AssistantCog(commands.Cog):
             await ctx.send("❌ 設定的時間已經過去了，請設定未來的時間。")
             return
 
-        rid = assistant_db.add_reminder(
+        rid = await asyncio.to_thread(
+            assistant_db.add_reminder,
             channel_id=ctx.channel.id,
             user_id=ctx.author.id,
             user_name=ctx.author.display_name,
@@ -370,7 +376,7 @@ class AssistantCog(commands.Cog):
             return
 
         if not action or action.lower() in ("list", "show", "ls"):
-            memories = assistant_db.get_all_memories()
+            memories = await asyncio.to_thread(assistant_db.get_all_memories)
             if not memories:
                 await ctx.send("🧠 目前長期記憶庫是空的。可以在聊天中隨口說「記住喔，我喜歡...」，或輸入 `!remember <事情>` 來記錄！")
                 return
@@ -394,7 +400,7 @@ class AssistantCog(commands.Cog):
                 example_text = "女友最愛吃抹茶" if self.settings.enable_japanese_mode else "每週六晚上八點固定打團"
                 await ctx.send(f"❓ 請輸入要記住的事實，例如：`!remember {example_text}`")
                 return
-            mid = assistant_db.add_memory(arg.strip(), user_name=ctx.author.display_name)
+            mid = await asyncio.to_thread(assistant_db.add_memory, arg.strip(), user_name=ctx.author.display_name)
             await ctx.send(f"🧠 已存入長期記憶庫 **#{mid}**：{arg.strip()}")
 
         elif act in ("del", "delete", "rm", "forget", "-"):
@@ -402,13 +408,13 @@ class AssistantCog(commands.Cog):
                 await ctx.send("❓ 請輸入要刪除的記憶編號，例如：`!forget 1`")
                 return
             mid = int(arg.strip())
-            if assistant_db.delete_memory(mid):
+            if await asyncio.to_thread(assistant_db.delete_memory, mid):
                 await ctx.send(f"🗑️ 已從長期記憶庫刪除 **#{mid}**。")
             else:
                 await ctx.send(f"❌ 找不到記憶編號 **#{mid}**。")
         else:
             full_content = f"{action} {arg}" if arg else action
-            mid = assistant_db.add_memory(full_content.strip(), user_name=ctx.author.display_name)
+            mid = await asyncio.to_thread(assistant_db.add_memory, full_content.strip(), user_name=ctx.author.display_name)
             await ctx.send(f"🧠 已存入長期記憶庫 **#{mid}**：{full_content.strip()}")
 
     @commands.command(name="remember")

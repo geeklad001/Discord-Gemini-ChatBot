@@ -1,5 +1,6 @@
 """RPG Cog: !roll, !rpg, !sheet, !party, !adventure, !save, !load, !saves, !note, !journal, !lore."""
 
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -64,8 +65,8 @@ class RpgCog(commands.Cog):
             thread = ctx.channel
 
         uname = ctx.author.display_name
-        rpg_engine.set_rpg_session_active(thread.id, True)
-        char, _ = rpg_engine.join_rpg_party(thread.id, ctx.author.id, uname)
+        await asyncio.to_thread(rpg_engine.set_rpg_session_active, thread.id, True)
+        char, _ = await asyncio.to_thread(rpg_engine.join_rpg_party, thread.id, ctx.author.id, uname)
 
         opening_embed = discord.Embed(
             title=f"🗡️ 【{adventure_topic}】冒險篇章正式展開！",
@@ -95,10 +96,12 @@ class RpgCog(commands.Cog):
         if not save_name:
             await ctx.send("❓ 請提供存檔名稱，例如：`!save 森林遺跡` 或 `!save 第一章通關`")
             return
-        if not rpg_engine.get_all_characters_in_channel(ctx.channel.id):
+        if not await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id):
             await ctx.send("🏕️ 目前隊伍中尚無任何已入隊的冒險者，無法存檔！請先輸入 `!rpg join` 或 `!rpg start [主題]`。")
             return
-        res = rpg_engine.save_game(ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name)
+        res = await asyncio.to_thread(
+            rpg_engine.save_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name
+        )
         embed = discord.Embed(
             title="💾 冒險進度已保存！",
             description=f"存檔名稱：**【{res['save_name']}】**",
@@ -121,11 +124,13 @@ class RpgCog(commands.Cog):
         if not save_name:
             await ctx.send("❓ 請提供要載入的存檔名稱，例如：`!load 森林遺跡`（可先輸入 `!saves` 查看所有存檔）")
             return
-        res = rpg_engine.load_game(ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name)
+        res = await asyncio.to_thread(
+            rpg_engine.load_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name
+        )
         if not res:
             await ctx.send(f"❌ 找不到存檔「{save_name}」。輸入 `!saves` 可查看目前所有保存的存檔清單！")
             return
-        rpg_engine.set_rpg_session_active(ctx.channel.id, True)
+        await asyncio.to_thread(rpg_engine.set_rpg_session_active, ctx.channel.id, True)
         inv_str = "、".join(res["inventory"]) if res["inventory"] else "（背包空）"
         embed = discord.Embed(
             title="📂 冒險進度載入成功！",
@@ -146,7 +151,7 @@ class RpgCog(commands.Cog):
         """查看所有冒險存檔清單：!saves"""
         if not is_target_channel(ctx.channel, self.settings):
             return
-        saves = rpg_engine.list_saves(ctx.author.id)
+        saves = await asyncio.to_thread(rpg_engine.list_saves, ctx.author.id)
         if not saves:
             await ctx.send("💾 目前沒有任何冒險存檔。在冒險中輸入 `!save <名稱>` 即可隨時保存進度！")
             return
@@ -175,7 +180,8 @@ class RpgCog(commands.Cog):
         if not content:
             await ctx.send("❓ 請輸入要記錄的冒險線索或手記，例如：`!note 守衛老伯最怕老鼠` 或 `!note 發現了發光的紫水晶手鐲`")
             return
-        nid = rpg_engine.add_journey_note(
+        nid = await asyncio.to_thread(
+            rpg_engine.add_journey_note,
             channel_id=ctx.channel.id,
             user_id=ctx.author.id,
             user_name=ctx.author.display_name,
@@ -189,7 +195,7 @@ class RpgCog(commands.Cog):
         """查看當前冒險的所有手記與線索：!journal"""
         if not is_target_channel(ctx.channel, self.settings):
             return
-        notes = rpg_engine.get_journey_notes(ctx.channel.id)
+        notes = await asyncio.to_thread(rpg_engine.get_journey_notes, ctx.channel.id)
         if not notes:
             await ctx.send("📓 目前這趟旅程還沒有任何手記或線索。\nAI 在冒險中發現線索會自動記下，你也可以隨時輸入 `!note <筆記>` 手動記錄！")
             return
@@ -210,8 +216,8 @@ class RpgCog(commands.Cog):
         cid = ctx.channel.id
         uid = ctx.author.id
         uname = ctx.author.display_name
-        char, already_in = rpg_engine.join_rpg_party(cid, uid, uname)
-        all_chars = rpg_engine.get_all_characters_in_channel(cid)
+        char, already_in = await asyncio.to_thread(rpg_engine.join_rpg_party, cid, uid, uname)
+        all_chars = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid)
         if already_in:
             await ctx.send(
                 f"⚔️ **{uname}**（角色：**{char['char_name']}**）已經在冒險隊伍中囉！目前隊伍共有 **{len(all_chars)}** 位成員（輸入 `!party` 查看）。"
@@ -235,11 +241,11 @@ class RpgCog(commands.Cog):
         cid = ctx.channel.id
         uid = ctx.author.id
         uname = ctx.author.display_name
-        left_char = rpg_engine.leave_rpg_party(cid, uid)
+        left_char = await asyncio.to_thread(rpg_engine.leave_rpg_party, cid, uid)
         if not left_char:
             await ctx.send(f"ℹ️ **{uname}** 目前原本就不在這個頻道／討論串的冒險隊伍中喔。")
             return
-        remaining = rpg_engine.get_all_characters_in_channel(cid)
+        remaining = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid)
         await ctx.send(
             f"👋 **{uname}**（**{left_char['char_name']}**）已退出本頻道／討論串的冒險隊伍（已保留角色卡設定與其餘隊友的旅程手記）。\n"
             f"👥 目前隊伍剩餘 **{len(remaining)}** 位成員；隨時輸入 `!rpg join` 即可再次歸隊！"
@@ -250,11 +256,11 @@ class RpgCog(commands.Cog):
         if not target_query or not target_query.strip():
             await ctx.send("❓ 請指定要移出隊伍的對象，例如：`!party kick @隊友` 或 `!party kick 亞瑟`")
             return
-        kicked = rpg_engine.kick_rpg_member(ctx.channel.id, target_query)
+        kicked = await asyncio.to_thread(rpg_engine.kick_rpg_member, ctx.channel.id, target_query)
         if not kicked:
             await ctx.send(f"❌ 在目前入隊名單中找不到符合 `{target_query.strip()}` 的成員。")
             return
-        remaining = rpg_engine.get_all_characters_in_channel(ctx.channel.id)
+        remaining = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id)
         await ctx.send(
             f"👢 已將 **{kicked['user_name']}**（**{kicked['char_name']}**）移出當前冒險隊伍。目前剩餘 **{len(remaining)}** 位成員（對方隨時可輸入 `!rpg join` 歸隊）。"
         )
@@ -275,7 +281,7 @@ class RpgCog(commands.Cog):
             await self._handle_party_kick(ctx, arg)
             return
 
-        chars = rpg_engine.get_all_characters_in_channel(ctx.channel.id)
+        chars = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id)
         if not chars:
             await ctx.send("🏕️ 當前頻道或討論串中尚未有任何冒險者入隊。輸入 `!rpg join` 加入隊伍，或 `!rpg start [主題]` 開局！")
             return
@@ -294,7 +300,7 @@ class RpgCog(commands.Cog):
                 value=truncate_embed_text(f"❤️ 血量：`{c['hp']}/{c['max_hp']}` [{bar}]\n🎒 背包：{inv_str}", max_len=950),
                 inline=False,
             )
-        notes = rpg_engine.get_journey_notes(ctx.channel.id)
+        notes = await asyncio.to_thread(rpg_engine.get_journey_notes, ctx.channel.id)
         embed.set_footer(text=f"📓 本趟旅程共 {len(notes)} 條線索 | 入隊 !party join / 退隊 !party leave / 存檔 !save <名>")
         await ctx.send(embed=embed)
 
@@ -413,11 +419,11 @@ class RpgCog(commands.Cog):
 
         if content:
             parsed = rpg_engine.parse_character_sheet(content, default_name=uname)
-            applied = rpg_engine.apply_character_sheet(cid, uid, uname, parsed)
+            applied = await asyncio.to_thread(rpg_engine.apply_character_sheet, cid, uid, uname, parsed)
             await self.send_sheet_embed(ctx, applied, title_prefix="✨ 角色卡匯入並入隊成功！")
             return
 
-        char = rpg_engine.get_rpg_character(cid, uid)
+        char = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
         if not char:
             await ctx.send("🏕️ 你尚未在這個頻道／討論串建立或加入角色。請輸入 `!rpg join` 加入隊伍，或輸入 `!sheet <角色設定>` 直接帶卡參戰！")
             return
@@ -469,7 +475,7 @@ class RpgCog(commands.Cog):
             if not arg:
                 await ctx.send("❓ 請輸入要刪除的存檔名稱，例如：`!rpg delsave 森林遺跡`")
                 return
-            if rpg_engine.delete_save(arg.strip(), uid):
+            if await asyncio.to_thread(rpg_engine.delete_save, arg.strip(), uid):
                 await ctx.send(f"🗑️ 已刪除存檔 **【{arg.strip()}】**。")
             else:
                 await ctx.send(f"❌ 找不到存檔 **【{arg.strip()}】**。")
@@ -485,40 +491,40 @@ class RpgCog(commands.Cog):
                 await ctx.send("❓ 請輸入要刪除的手記編號，例如：`!rpg delnote 1`")
                 return
             nid = int(arg.strip())
-            if rpg_engine.delete_journey_note(cid, nid):
+            if await asyncio.to_thread(rpg_engine.delete_journey_note, cid, nid):
                 await ctx.send(f"🗑️ 已刪除當前旅程手記 **#{nid}**。")
             else:
                 await ctx.send(f"❌ 找不到當前旅程手記 **#{nid}**。")
             return
         if act in ("reset", "restart", "重置", "重開"):
-            rpg_engine.reset_rpg_character(cid, uid)
-            rpg_engine.set_rpg_session_active(cid, False)
+            await asyncio.to_thread(rpg_engine.reset_rpg_character, cid, uid)
+            await asyncio.to_thread(rpg_engine.set_rpg_session_active, cid, False)
             await ctx.send(f"🔄 **{uname}** 的冒險紀錄與旅程手記已重置，可以隨時開始新的冒險。")
             return
         if act in ("name", "rename"):
             if not arg:
                 await ctx.send("❓ 請輸入新角色名，例如：`!rpg name 艾莉絲`")
                 return
-            existing = rpg_engine.get_rpg_character(cid, uid)
+            existing = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
             if not existing or not existing["is_in_party"]:
                 await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改角色名稱。")
                 return
-            char = rpg_engine.update_rpg_character(cid, uid, uname, char_name=arg.strip())
+            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_name=arg.strip())
             await ctx.send(f"✅ 角色名稱已更改為：**{char['char_name']}**")
             return
         if act in ("class", "job"):
             if not arg:
                 await ctx.send("❓ 請輸入新職業名稱，例如：`!rpg class 精靈弓箭手`")
                 return
-            existing = rpg_engine.get_rpg_character(cid, uid)
+            existing = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
             if not existing or not existing["is_in_party"]:
                 await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改職業稱號。")
                 return
-            char = rpg_engine.update_rpg_character(cid, uid, uname, char_class=arg.strip())
+            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_class=arg.strip())
             await ctx.send(f"✅ 角色職業已更改為：**{char['char_class']}**")
             return
 
-        char = rpg_engine.get_rpg_character(cid, uid)
+        char = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
         if not char:
             await ctx.send(
                 "🏕️ 你尚未加入本頻道／討論串的冒險隊伍！\n"
@@ -532,7 +538,7 @@ class RpgCog(commands.Cog):
                 f"👉 隨時輸入 `!rpg join` 即可重新歸隊繼續冒險！"
             )
             return
-        notes = rpg_engine.get_journey_notes(cid)
+        notes = await asyncio.to_thread(rpg_engine.get_journey_notes, cid)
         inv_str = "、".join(char["inventory"]) if char["inventory"] else "（背包空空如也）"
 
         hp_ratio = max(0.0, min(1.0, char["hp"] / max(1, char["max_hp"])))
@@ -555,7 +561,7 @@ class RpgCog(commands.Cog):
         embed.add_field(name="🎯 當前目標", value=f"`{char['current_quest']}`", inline=False)
         embed.add_field(name="🎒 背包隨身裝備", value=truncate_embed_text(inv_str, max_len=950), inline=False)
         embed.add_field(name="📓 本趟旅程手記", value=f"{len(notes)} 條線索與情報（輸入 `!journal` 查看）", inline=False)
-        all_chars = rpg_engine.get_all_characters_in_channel(cid)
+        all_chars = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid)
         footer_text = "💡 完整角色卡 !sheet | 保存 !save <名> | 載入 !load <名> | 擲骰 !roll"
         if len(all_chars) > 1:
             footer_text = f"👥 目前小隊共有 {len(all_chars)} 位成員！輸入 !party 查看全隊名冊 | !sheet 查看角色卡 | !save <名> 存檔"
@@ -571,7 +577,7 @@ class RpgCog(commands.Cog):
         act = (action or "").lower()
 
         if not action or act in ("list", "show", "ls"):
-            entries = rpg_engine.get_all_lorebook_entries()
+            entries = await asyncio.to_thread(rpg_engine.get_all_lorebook_entries)
             if not entries:
                 await ctx.send("📖 目前世界設定集（Lorebook）是空的。可以輸入 `!lore add 關鍵字 | 設定內容` 或 `!lore import` 批次匯入！")
                 return
@@ -631,7 +637,7 @@ class RpgCog(commands.Cog):
                 await ctx.send("❌ 未能識別出有效的設定條目。請確認使用 `【名稱】內容` 或 `名稱：內容` 格式！")
                 return
 
-            count = rpg_engine.batch_add_lorebook_entries(parsed)
+            count = await asyncio.to_thread(rpg_engine.batch_add_lorebook_entries, parsed)
             preview_lines = [f"• **{kw}**：{cnt[:50]}..." if len(cnt) > 50 else f"• **{kw}**：{cnt}" for kw, cnt in parsed[:5]]
             desc = f"🎉 成功批次解析並存入 **{count}** 筆世界觀設定！\n\n**前幾筆設定預覽：**\n" + "\n".join(preview_lines)
             if count > 5:
@@ -649,7 +655,7 @@ class RpgCog(commands.Cog):
             if not self.settings.enable_japanese_mode and ctx.guild and not ctx.author.guild_permissions.manage_messages:
                 await ctx.send("⚠️ 在社群伺服器中，僅限擁有「管理訊息」權限的管理員可執行 `!lore clear` 清空全服世界觀設定喔！（一般成員可使用 `!lore del <編號>` 刪除單筆設定）")
                 return
-            count = rpg_engine.clear_lorebook()
+            count = await asyncio.to_thread(rpg_engine.clear_lorebook)
             await ctx.send(f"🧹 已清空世界觀設定集（共刪除 {count} 筆設定）。隨時可以重新匯入新世界觀！")
             return
 
@@ -660,7 +666,7 @@ class RpgCog(commands.Cog):
             parts = arg.split("|", 1)
             kws = parts[0].strip()
             cnt = parts[1].strip()
-            lid = rpg_engine.add_lorebook_entry(kws, cnt)
+            lid = await asyncio.to_thread(rpg_engine.add_lorebook_entry, kws, cnt)
             await ctx.send(f"✅ 已成功將世界設定 **#{lid}** 存入設定集！關鍵字：`{kws}`")
             return
 
@@ -669,7 +675,7 @@ class RpgCog(commands.Cog):
                 await ctx.send("❓ 請輸入要刪除的設定編號，例如：`!lore del 1`")
                 return
             lid = int(arg.strip())
-            if rpg_engine.delete_lorebook_entry(lid):
+            if await asyncio.to_thread(rpg_engine.delete_lorebook_entry, lid):
                 await ctx.send(f"🗑️ 已刪除設定 **#{lid}**。")
             else:
                 await ctx.send(f"❌ 找不到設定編號 **#{lid}**。")

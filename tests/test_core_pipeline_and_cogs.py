@@ -154,9 +154,13 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(bot.get_command("card"))
         self.assertIsNone(bot.get_command("wiki"))
 
+        from cogs.lifesim_cog import LifeSimCog
+
         await bot.add_cog(FlashcardCog(bot, client, settings, logger))
         await bot.add_cog(WikiCog(bot, client, settings, logger))
         await bot.add_cog(BoardGameCog(bot, client, settings, logger))
+        await bot.add_cog(LifeSimCog(bot, client, settings, logger))
+        self.assertIsNotNone(bot.get_cog("LifeSimCog"))
         self.assertIsNotNone(bot.get_command("card"))
         self.assertIsNotNone(bot.get_command("wiki"))
         self.assertIsNotNone(bot.get_command("play"))

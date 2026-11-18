@@ -636,8 +636,8 @@ async def _flush_pending_lifesim_cards(
     """將自然語言觸發的《80億分之1》人生卡片（含非同步 LLM 劇情/自訂判定）與回覆合併發送。"""
     if not pending_updates:
         return False
-    bg_cog = bot.get_cog("BoardGameCog") if hasattr(bot, "get_cog") else None
-    if not bg_cog:
+    life_cog = bot.get_cog("LifeSimCog") if hasattr(bot, "get_cog") else None
+    if not life_cog:
         return False
 
     latest_by_run: dict[int, dict] = {}
@@ -665,7 +665,7 @@ async def _flush_pending_lifesim_cards(
                 continue
             note = info["note"]
             if info["custom_decision"] and run["status"] == "active":
-                outcome, deltas = await bg_cog.evaluate_llm_custom_choice(run, info["custom_decision"])
+                outcome, deltas = await life_cog.evaluate_llm_custom_choice(run, info["custom_decision"])
                 run, note = lifesim_engine.resolve_life_step(
                     rid,
                     run["user_id"],
@@ -673,14 +673,14 @@ async def _flush_pending_lifesim_cards(
                     custom_outcome_text=outcome,
                 )
             if info["needs_llm_next"] and run["status"] == "active" and run["story_mode"] == "llm":
-                run = await bg_cog.populate_llm_next_event(run)
+                run = await life_cog.populate_llm_next_event(run)
 
             merged_content = cleaned_reply if (idx == 0 and cleaned_reply) else ""
             if merged_content and len(merged_content) > 1900:
                 await send_split_messages(channel, merged_content)
                 merged_content = ""
 
-            await bg_cog.send_life_card(
+            await life_cog.send_life_card(
                 channel,
                 run,
                 note=note,

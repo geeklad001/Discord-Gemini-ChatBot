@@ -41,7 +41,7 @@
 - **嚴禁硬編碼特定身分詞彙**：在共用的 `assistant_db.py`、`assistant_tools.py`（包含 Tool Docstrings！）與 `rpg_engine.py` 中，**不得將「情侶」寫死在共用提示詞或工具描述中**（應根據環境變數或使用中性詞彙如「長期記憶庫」、「共同待辦清單」），否則社群版 AI 會在讀取 Tool Schema 時產生「你們是情侶」的嚴重幻覺。
 
 ### 3. 工具掛載與 System Prompt 一致性 (Tool-Prompt Alignment)
-- 本專案主程式已模組化拆分至 `core/`（`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`）與 `cogs/`（`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`flashcard_cog.py`、`wiki_cog.py`），由 `bot.py` 統一載入。
+- 本專案主程式已模組化拆分至 `core/`（`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`、`rendering.py`）、`engines/`（含 `engines/boardgames/` 子模組）與 `cogs/`（`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`lifesim_cog.py`、`flashcard_cog.py`、`wiki_cog.py`），由 `bot.py` 統一載入。
 - 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道或該實例未啟用的工具（例如停用 `ENABLE_FLASHCARD_MODE` 時的 `add_flashcard_card`、停用 `ENABLE_GAME_WIKI` 時的 `lookup_game_wiki` 與 Pass-1 OCR、停用 `ENABLE_BOARD_GAMES` 時的 `boardgame_*`），應從 `tools` 清單中移除並停用對應 Cog，避免模型亂呼叫做白工。
 - **HornBot 語音頻道防護 (`TTS_CHANNEL_ID`)**：在日語雙頻道模式下，必須確保只有純日語區段 (`[JP]`) 會送往 `TTS_CHANNEL_ID`。若模型因呼叫工具而未輸出 `[ZH]` 分隔標籤，必須有防呆機制避免將整段中文工具回報直接丟進 TTS 頻道朗讀。
 

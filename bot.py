@@ -24,6 +24,7 @@ from engines import (
 from cogs.assistant_cog import AssistantCog
 from cogs.boardgame_cog import BoardGameCog
 from cogs.flashcard_cog import FlashcardCog
+from cogs.lifesim_cog import LifeSimCog
 from cogs.rpg_cog import RpgCog
 from cogs.wiki_cog import WikiCog
 from core.chat_pipeline import (
@@ -103,6 +104,7 @@ class GeminiBot(commands.Bot):
         await self.add_cog(RpgCog(self, settings, logger))
         if settings.enable_board_games:
             await self.add_cog(BoardGameCog(self, gemini_client, settings, logger))
+            await self.add_cog(LifeSimCog(self, gemini_client, settings, logger))
         if settings.enable_flashcard_mode:
             await self.add_cog(FlashcardCog(self, gemini_client, settings, logger))
         if settings.enable_game_wiki:

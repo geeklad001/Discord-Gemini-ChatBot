@@ -11,8 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from core.rendering import load_font
 from engines.assistant_db import DATA_DIR, TZ_TAIPEI, get_conn, get_db_path
 
 _initialized_ls_dbs: set[str] = set()
@@ -823,21 +824,8 @@ def parse_lifesim_custom_json(raw_text: str) -> tuple[str, dict]:
 # =============================================================
 # PIL 圖形渲染器：🌍 全球出生證明書 & 📜 人生總結紀念卡
 # =============================================================
-def _load_cjk_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    candidates = [
-        "C:/Windows/Fonts/msjhbd.ttc" if bold else "C:/Windows/Fonts/msjh.ttc",
-        "C:/Windows/Fonts/msjh.ttc",
-        "C:/Windows/Fonts/NotoSansTC-VF.ttf",
-        "C:/Windows/Fonts/segoeuib.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ]
-    for p in candidates:
-        try:
-            return ImageFont.truetype(p, size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
+def _load_cjk_font(size: int, bold: bool = False):
+    return load_font(size, bold=bold, prefer_cjk=True)
 
 
 def _draw_stat_bar(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, label: str, val: int, color: tuple, f_lbl, f_val) -> None:

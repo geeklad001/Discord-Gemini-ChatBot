@@ -1204,8 +1204,8 @@ class BoardGameCog(commands.Cog):
                     retry_err = "回傳內容未包含合法座標或 JSON"
                     continue
                 updated, ai_note = await asyncio.to_thread(bg.apply_move, game["id"], 0, mv)
-                card_note = f"🧠 LLM ({used_model})：{ai_note}"
-                taunt_msg = f"💬 **LLM ({mv})**：{taunt}" if taunt else ""
+                card_note = f"🧠 我方 ({used_model})：{ai_note}"
+                taunt_msg = f"我下在 **`{mv}`**！{taunt}" if taunt else f"我下在 **`{mv}`**。"
                 return updated, card_note, taunt_msg
             except ValueError as e:
                 retry_err = str(e)

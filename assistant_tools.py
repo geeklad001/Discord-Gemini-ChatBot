@@ -258,10 +258,15 @@ def boardgame_start(
             note = f"{note}\n⚠️ 第一步 `{first_move}` 未能自動執行（{e}），請再試一次。"
 
     _queue_board_card_update(game["id"], note, run_ai=run_ai)
+    extra_hint = (
+        "\n【重要指示：你本人就是這一局的對手】系統會在緊接在後的流程幫你選出你的回敬棋步與台詞，請用第一人稱（「我」）歡迎開局，不要出現『換 AI 回合』這類旁觀者台詞，也不要自己猜測你要下的座標！"
+        if run_ai
+        else ""
+    )
     return (
         f"✅ 已成功開啟【{boardgame_engine.GAME_CATALOG[gtype]['name']}】"
         f"（模式：{clean_mode.upper()} | 對手：{boardgame_engine.DIFFICULTY_LABELS[clean_diff] if clean_mode == 'pve' else '等待好友加入'}）！\n"
-        f"系統將在你的回覆下方自動貼出高清座標棋盤卡片與點擊互動選單。\n"
+        f"系統將在你的回覆下方自動貼出高清座標棋盤卡片與點擊互動選單。{extra_hint}\n"
         f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
     )
 
@@ -288,8 +293,10 @@ def boardgame_play_move(move_str: str) -> str:
     if updated["mode"] == "pve" and updated.get("difficulty") == "llm" and updated["status"] == "active":
         _queue_board_card_update(updated["id"], note, run_ai=True)
         return (
-            f"✅ 玩家步法已通過校驗並落子：{note}\n"
-            f"系統將在回覆後自動由 LLM 對手落子（經防作弊規則裁判）並貼出最新圖形棋盤卡！"
+            f"✅ 對手的步法已通過校驗並落子：{note}\n"
+            f"【重要指示：你本人就是這一局正在親自跟對方下棋的對手】緊接著系統會自動為你執行你自己的回敬棋步、附上你的應對台詞與最新棋盤卡片；"
+            f"請只用**第一人稱（「我」）**簡短自然回應玩家剛才這手（例如「這步有點意思，看我的——」），"
+            f"**絕對禁止**用第三人稱旁觀口吻（例如「換 AI 回合了」、「看它怎麼應付」），也**嚴禁**在文字裡提前猜測你要下的座標！"
         )
 
     updated, full_note = boardgame_engine.play_pve_ai_turn_sync(updated, note)

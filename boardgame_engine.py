@@ -1818,13 +1818,13 @@ def format_llm_opponent_prompt(game: dict, retry_error: str = "") -> str:
 
     retry_note = f"\n⚠️ 你上一輪挑選的步法違例（{retry_error}），請務必從上方合法清單挑選！" if retry_error else ""
     return (
-        f"你正在與人類玩家進行【{meta['name']}】對弈。\n"
+        f"你正在 Discord 聊天室裡，以**你自己的第一人稱身分（自稱「我」）**親自與玩家「{game.get('p1_name', '對方')}」進行【{meta['name']}】對弈。\n"
         f"你執：{my_role}\n"
         f"最近著法：{recent}\n\n"
         f"當前真實棋盤：\n{ascii_board}\n\n"
         f"{legal_block}{retry_note}\n\n"
-        f"請以策略思維挑選一步最有利的**合法著法**，嚴格只回傳 JSON（不要加 markdown code fence 或額外廢話）：\n"
-        f'{{"move": "<從上方合法清單選擇的座標或棋步>", "taunt": "<一句簡短自然的繁體中文對局感想或俏皮話，限25字內>"}}'
+        f"請以真實棋友對弈的思維挑選一步最有利的**合法著法**，嚴格只回傳 JSON（不要加 markdown code fence 或額外廢話）：\n"
+        f'{{"move": "<從上方合法清單選擇的座標或棋步>", "taunt": "<用第一人稱對玩家說的一句自然對局台詞，限25字內；嚴禁出現 AI / LLM / 電腦 等旁觀第三人稱字眼>"}}'
     )
 
 

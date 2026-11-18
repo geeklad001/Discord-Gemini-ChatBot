@@ -554,7 +554,7 @@ def _strip_hallucinated_board_card_echo(text: str) -> str:
         r"(?:(?:黑白棋|西洋棋|四子棋|五子棋)\s*\([^)]+\)\s*[—\-]|"
         r"(?:黑棋|白棋|紅方|黃方|白方|黑方)\s*[:：].*🆚|"
         r"目前輪到\s*[:：]|最新動態\s*[:：]|目前子數\s*[:：]|最近著法（第|"
-        r"LLM\s*\([^)]+\)\s*[⚫⚪])"
+        r"(?:LLM|我方)\s*\([^)]+\)\s*[⚫⚪♟️🔴🟡⭕:]?)"
     )
     kept_lines = [line for line in cleaned.splitlines() if not card_line_re.match(line.strip())]
     return "\n".join(kept_lines).strip()

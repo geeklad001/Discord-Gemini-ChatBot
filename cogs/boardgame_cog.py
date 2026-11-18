@@ -259,8 +259,45 @@ def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> d
     return embed
 
 
+def _build_lifesim_setup_embed(era: str, draw_method: str, story_mode: str) -> discord.Embed:
+    return discord.Embed(
+        title="🌍 80億分之1 (1 in 8 Billion) — 投胎設定",
+        description=(
+            "你即將根據 **聯合國/世界銀行 197 國真實統計權重**，隨機降生在地球上的某個家庭。\n\n"
+            f"• **時代**：`{ls.ERA_CONFIG[era]['label']}`\n"
+            f"• **機率基準**：`{ls.DRAW_METHOD_LABELS[draw_method]}`\n"
+            f"• **故事引擎**：`{'🧠 Gemini 沉浸劇情版（支援自由打字自訂決定）' if story_mode == 'llm' else '⚡ 極速統計版（0 Token，瞬間結算）'}`\n\n"
+            "可直接點擊下方 **「🌍 立即投胎出生」**，或點 **「🧵 開專屬串投胎」** 在獨立討論串體驗完整一生！"
+        ),
+        color=0x2ECC71,
+    )
+
+
+def _create_lifesim_option_selects(era: str, draw_method: str, story_mode: str, start_row: int = 0):
+    era_opts = [
+        discord.SelectOption(label="🌍 現代（2024–2026）", value="present", default=(era == "present")),
+        discord.SelectOption(label="📼 過去（1980–1995）", value="past_1980", default=(era == "past_1980")),
+        discord.SelectOption(label="🕰️ 戰後（1950–1965）", value="past_1950", default=(era == "past_1950")),
+        discord.SelectOption(label="🚀 未來預測（2048–2055）", value="future_2050", default=(era == "future_2050")),
+    ]
+    era_select = discord.ui.Select(placeholder="1️⃣ 選擇降生時代...", options=era_opts, row=start_row)
+
+    method_opts = [
+        discord.SelectOption(label="👶 依真實新生兒出生率抽取（推薦・寫實）", value="births", default=(draw_method == "births")),
+        discord.SelectOption(label="👥 依全球現存人口比例抽取", value="population", default=(draw_method == "population")),
+    ]
+    method_select = discord.ui.Select(placeholder="2️⃣ 選擇機率分配方式...", options=method_opts, row=start_row + 1)
+
+    story_opts = [
+        discord.SelectOption(label="⚡ 極速統計版（0 Token，瞬間結算）", value="fast", default=(story_mode == "fast")),
+        discord.SelectOption(label="🧠 Gemini 沉浸劇情版（在地文化＋自由打字決定）", value="llm", default=(story_mode == "llm")),
+    ]
+    story_select = discord.ui.Select(placeholder="3️⃣ 選擇遊玩引擎...", options=story_opts, row=start_row + 2)
+    return era_select, method_select, story_select
+
+
 class LifeSimSetupView(discord.ui.View):
-    """《80億分之1》開局設定面板：時代、抽出基準、故事模式（極速/LLM）、開局位置。"""
+    """《80億分之1》獨立設定面板（供 !play 1in8b 直接呼叫）：時代、抽出基準、故事模式、開專屬串。"""
 
     def __init__(self, cog: "BoardGameCog", owner_id: int):
         super().__init__(timeout=600)
@@ -270,44 +307,18 @@ class LifeSimSetupView(discord.ui.View):
         self.draw_method = "births"
         self.story_mode = "fast"
 
-        era_opts = [
-            discord.SelectOption(label="🌍 現代（2024–2026）", value="present", default=True),
-            discord.SelectOption(label="📼 過去（1980–1995）", value="past_1980"),
-            discord.SelectOption(label="🕰️ 戰後（1950–1965）", value="past_1950"),
-            discord.SelectOption(label="🚀 未來預測（2048–2055）", value="future_2050"),
-        ]
-        self.era_select = discord.ui.Select(placeholder="1️⃣ 選擇降生時代...", options=era_opts, row=0)
+        self.era_select, self.method_select, self.story_select = _create_lifesim_option_selects(
+            self.era, self.draw_method, self.story_mode, start_row=0
+        )
         self.era_select.callback = self._on_era
-        self.add_item(self.era_select)
-
-        method_opts = [
-            discord.SelectOption(label="👶 依真實新生兒出生率抽取（推薦・寫實）", value="births", default=True),
-            discord.SelectOption(label="👥 依全球現存人口比例抽取", value="population"),
-        ]
-        self.method_select = discord.ui.Select(placeholder="2️⃣ 選擇機率分配方式...", options=method_opts, row=1)
         self.method_select.callback = self._on_method
-        self.add_item(self.method_select)
-
-        story_opts = [
-            discord.SelectOption(label="⚡ 極速統計版（0 Token，瞬間結算）", value="fast", default=True),
-            discord.SelectOption(label="🧠 Gemini 沉浸劇情版（在地文化＋自由打字決定）", value="llm"),
-        ]
-        self.story_select = discord.ui.Select(placeholder="3️⃣ 選擇遊玩引擎...", options=story_opts, row=2)
         self.story_select.callback = self._on_story
+        self.add_item(self.era_select)
+        self.add_item(self.method_select)
         self.add_item(self.story_select)
 
     def _build_setup_embed(self) -> discord.Embed:
-        return discord.Embed(
-            title="🌍 80億分之1 (1 in 8 Billion) — 投胎設定",
-            description=(
-                "你即將根據 **聯合國/世界銀行 197 國真實統計權重**，隨機降生在地球上的某個家庭。\n\n"
-                f"• **時代**：`{ls.ERA_CONFIG[self.era]['label']}`\n"
-                f"• **機率基準**：`{ls.DRAW_METHOD_LABELS[self.draw_method]}`\n"
-                f"• **故事引擎**：`{'🧠 Gemini 沉浸劇情版' if self.story_mode == 'llm' else '⚡ 極速統計版'}`\n\n"
-                "選擇下方按鈕開始投胎，或點擊 **「🧵 開專屬串投胎」** 避免影響大頻道聊天！"
-            ),
-            color=0x2ECC71,
-        )
+        return _build_lifesim_setup_embed(self.era, self.draw_method, self.story_mode)
 
     async def _check_owner(self, interaction: discord.Interaction) -> bool:
         if self.owner_id and interaction.user.id != self.owner_id:
@@ -359,14 +370,15 @@ class LifeSimSetupView(discord.ui.View):
             return
         await interaction.response.defer()
         target_ch = interaction.channel
+        created_thread = False
         if isinstance(interaction.channel, discord.TextChannel):
             try:
-                thread = await interaction.channel.create_thread(
+                target_ch = await interaction.channel.create_thread(
                     name=f"🌍 {interaction.user.display_name} 的80億分之1人生",
                     type=discord.ChannelType.public_thread,
                     auto_archive_duration=1440,
                 )
-                target_ch = thread
+                created_thread = True
             except Exception as e:
                 self.cog.logger.warning(f"⚠️ 無法建立討論串，改回當前頻道遊玩: {e}")
         await self.cog.start_life_and_send(
@@ -377,6 +389,8 @@ class LifeSimSetupView(discord.ui.View):
             draw_method=self.draw_method,
             retire_interaction=interaction,
         )
+        if created_thread:
+            await interaction.followup.send(f"🧵 已為你開啟專屬投胎討論串：{target_ch.mention}", ephemeral=True)
 
     @discord.ui.button(label="我的國家圖鑑", emoji="🗺️", style=discord.ButtonStyle.secondary, row=3)
     async def atlas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -521,14 +535,41 @@ class LifeSimFinishedView(discord.ui.View):
 
 
 class GameLobbyView(discord.ui.View):
-    """互動式遊戲大廳：下拉選遊戲與模式後一鍵開局。"""
+    """互動式遊戲大廳：依所選遊戲動態切換「棋盤對戰設定」或「80億分之1投胎設定」。"""
 
-    def __init__(self, cog: "BoardGameCog"):
+    def __init__(self, cog: "BoardGameCog", initial_game: str = "othello"):
         super().__init__(timeout=600)
         self.cog = cog
-        self.selected_game = "othello"
+        self.selected_game = initial_game
         self.selected_mode = "pve:normal"
+        self.era = "present"
+        self.draw_method = "births"
+        self.story_mode = "fast"
 
+        self.game_select = self._make_game_select()
+        self.mode_select = self._make_mode_select()
+        self.era_select, self.method_select, self.story_select = _create_lifesim_option_selects(
+            self.era, self.draw_method, self.story_mode, start_row=1
+        )
+        self.era_select.callback = self._on_select_era
+        self.method_select.callback = self._on_select_method
+        self.story_select.callback = self._on_select_story
+
+        self.board_start_btn = discord.ui.Button(label="立即開局", emoji="▶️", style=discord.ButtonStyle.success, row=2)
+        self.board_start_btn.callback = self._on_board_start
+        self.stats_btn = discord.ui.Button(label="我的戰績 / 圖鑑", emoji="🏆", style=discord.ButtonStyle.secondary, row=2)
+        self.stats_btn.callback = self._on_stats
+
+        self.life_start_btn = discord.ui.Button(label="立即投胎出生", emoji="🌍", style=discord.ButtonStyle.success, row=4)
+        self.life_start_btn.callback = self._on_life_start_here
+        self.life_thread_btn = discord.ui.Button(label="開專屬串投胎", emoji="🧵", style=discord.ButtonStyle.primary, row=4)
+        self.life_thread_btn.callback = self._on_life_start_thread
+        self.life_atlas_btn = discord.ui.Button(label="我的國家圖鑑", emoji="🗺️", style=discord.ButtonStyle.secondary, row=4)
+        self.life_atlas_btn.callback = self._on_life_atlas
+
+        self._rebuild_items()
+
+    def _make_game_select(self) -> discord.ui.Select:
         game_opts = [
             discord.SelectOption(
                 label=meta["name"],
@@ -545,29 +586,61 @@ class GameLobbyView(discord.ui.View):
                 value="1in8b",
                 emoji="🌍",
                 description="197國真實機率投胎｜極速統計 / 🧠Gemini 沉浸劇情版",
-                default=False,
+                default=(self.selected_game == "1in8b"),
             )
         )
-        self.game_select = discord.ui.Select(placeholder="1️⃣ 選擇要玩的遊戲...", options=game_opts, row=0)
-        self.game_select.callback = self._on_select_game
+        sel = discord.ui.Select(placeholder="1️⃣ 選擇要玩的遊戲...", options=game_opts, row=0)
+        sel.callback = self._on_select_game
+        return sel
+
+    def _make_mode_select(self) -> discord.ui.Select:
+        mode_opts = [
+            discord.SelectOption(label="PvE 對戰本地 AI（簡單 🌱）", value="pve:easy", default=(self.selected_mode == "pve:easy")),
+            discord.SelectOption(label="PvE 對戰本地 AI（普通 ⚔️）", value="pve:normal", default=(self.selected_mode == "pve:normal")),
+            discord.SelectOption(label="PvE 對戰本地 AI（困難 🔥）", value="pve:hard", default=(self.selected_mode == "pve:hard")),
+            discord.SelectOption(label="PvE 對戰後端 Gemini LLM（會回話且防作弊 🧠）", value="pve:llm", default=(self.selected_mode == "pve:llm")),
+            discord.SelectOption(label="PvP 雙人公開對戰（等待群友加入 👥）", value="pvp:open", default=(self.selected_mode == "pvp:open")),
+        ]
+        sel = discord.ui.Select(placeholder="2️⃣ 選擇 PvE 難度或 PvP 對戰...", options=mode_opts, row=1)
+        sel.callback = self._on_select_mode
+        return sel
+
+    def _rebuild_items(self) -> None:
+        self.clear_items()
+        for opt in self.game_select.options:
+            opt.default = (opt.value == self.selected_game)
         self.add_item(self.game_select)
 
-        mode_opts = [
-            discord.SelectOption(label="PvE 對戰本地 AI（簡單 🌱）", value="pve:easy"),
-            discord.SelectOption(label="PvE 對戰本地 AI（普通 ⚔️）", value="pve:normal", default=True),
-            discord.SelectOption(label="PvE 對戰本地 AI（困難 🔥）", value="pve:hard"),
-            discord.SelectOption(label="PvE 對戰後端 Gemini LLM（會回話且防作弊 🧠）", value="pve:llm"),
-            discord.SelectOption(label="PvP 雙人公開對戰（等待群友加入 👥）", value="pvp:open"),
-        ]
-        self.mode_select = discord.ui.Select(placeholder="2️⃣ 棋盤對戰模式（若選 80億分之1 可直接點立即開局）...", options=mode_opts, row=1)
-        self.mode_select.callback = self._on_select_mode
-        self.add_item(self.mode_select)
+        if self.selected_game == "1in8b":
+            for opt in self.era_select.options:
+                opt.default = (opt.value == self.era)
+            for opt in self.method_select.options:
+                opt.default = (opt.value == self.draw_method)
+            for opt in self.story_select.options:
+                opt.default = (opt.value == self.story_mode)
+            self.add_item(self.era_select)
+            self.add_item(self.method_select)
+            self.add_item(self.story_select)
+            self.add_item(self.life_start_btn)
+            self.add_item(self.life_thread_btn)
+            self.add_item(self.life_atlas_btn)
+        else:
+            for opt in self.mode_select.options:
+                opt.default = (opt.value == self.selected_mode)
+            self.add_item(self.mode_select)
+            self.add_item(self.board_start_btn)
+            self.add_item(self.stats_btn)
+
+    def _current_embed(self, channel_id: int, user_id: Optional[int] = None) -> discord.Embed:
+        if self.selected_game == "1in8b":
+            return _build_lifesim_setup_embed(self.era, self.draw_method, self.story_mode)
+        return _build_game_lobby_embed(channel_id, user_id=user_id)
 
     async def _on_select_game(self, interaction: discord.Interaction):
         self.selected_game = self.game_select.values[0]
-        for opt in self.game_select.options:
-            opt.default = (opt.value == self.selected_game)
-        await interaction.response.edit_message(view=self)
+        self._rebuild_items()
+        embed = self._current_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def _on_select_mode(self, interaction: discord.Interaction):
         self.selected_mode = self.mode_select.values[0]
@@ -575,13 +648,25 @@ class GameLobbyView(discord.ui.View):
             opt.default = (opt.value == self.selected_mode)
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="立即開局", emoji="▶️", style=discord.ButtonStyle.success, row=2)
-    async def start_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.selected_game == "1in8b":
-            setup_view = LifeSimSetupView(self.cog, owner_id=interaction.user.id)
-            await interaction.response.edit_message(embed=setup_view._build_setup_embed(), view=setup_view)
-            return
+    async def _on_select_era(self, interaction: discord.Interaction):
+        self.era = self.era_select.values[0]
+        self._rebuild_items()
+        embed = self._current_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=self)
 
+    async def _on_select_method(self, interaction: discord.Interaction):
+        self.draw_method = self.method_select.values[0]
+        self._rebuild_items()
+        embed = self._current_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _on_select_story(self, interaction: discord.Interaction):
+        self.story_mode = self.story_select.values[0]
+        self._rebuild_items()
+        embed = self._current_embed(interaction.channel.id, user_id=interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _on_board_start(self, interaction: discord.Interaction):
         mode_kind, sub = self.selected_mode.split(":", 1)
         mode = "pve" if mode_kind == "pve" else "pvp"
         diff = sub if mode == "pve" else "normal"
@@ -602,8 +687,45 @@ class GameLobbyView(discord.ui.View):
         await interaction.response.defer()
         await self.cog.send_game_card(interaction.channel, game, last_note="對局已建立！")
 
-    @discord.ui.button(label="我的戰績 / 圖鑑", emoji="🏆", style=discord.ButtonStyle.secondary, row=2)
-    async def stats_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _on_life_start_here(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await self.cog.start_life_and_send(
+            interaction.channel,
+            interaction.user,
+            story_mode=self.story_mode,
+            era=self.era,
+            draw_method=self.draw_method,
+        )
+
+    async def _on_life_start_thread(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        target_ch = interaction.channel
+        created_thread = False
+        if isinstance(interaction.channel, discord.TextChannel):
+            try:
+                target_ch = await interaction.channel.create_thread(
+                    name=f"🌍 {interaction.user.display_name} 的80億分之1人生",
+                    type=discord.ChannelType.public_thread,
+                    auto_archive_duration=1440,
+                )
+                created_thread = True
+            except Exception as e:
+                self.cog.logger.warning(f"⚠️ 無法建立討論串，改回當前頻道遊玩: {e}")
+        await self.cog.start_life_and_send(
+            target_ch,
+            interaction.user,
+            story_mode=self.story_mode,
+            era=self.era,
+            draw_method=self.draw_method,
+        )
+        if created_thread:
+            await interaction.followup.send(f"🧵 已為你開啟專屬投胎討論串：{target_ch.mention}", ephemeral=True)
+
+    async def _on_life_atlas(self, interaction: discord.Interaction):
+        entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
+        await interaction.response.send_message(embed=_build_atlas_embed(interaction.user, entries), ephemeral=True)
+
+    async def _on_stats(self, interaction: discord.Interaction):
         embed = self.cog.build_stats_embed(interaction.user)
         entries = await asyncio.to_thread(ls.get_user_country_dex, interaction.user.id)
         embed.add_field(

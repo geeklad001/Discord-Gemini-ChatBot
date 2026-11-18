@@ -1,5 +1,6 @@
 """Tests for lifesim_engine (1 in 8 Billion / 80億分之1), 197-country dataset, PIL cards, and tools."""
 
+import asyncio
 import os
 import tempfile
 import unittest
@@ -124,10 +125,34 @@ class LifeSimEngineTests(unittest.TestCase):
         self.assertTrue(ls.is_lifesim_intent("幫我投胎看看"))
         self.assertFalse(ls.is_lifesim_intent("今天午餐吃什麼"))
 
-        from cogs.boardgame_cog import _build_game_lobby_embed
+        from cogs.boardgame_cog import _build_game_lobby_embed, GameLobbyView
         lobby = _build_game_lobby_embed(999, user_id=888)
         self.assertIn("Discord 遊戲大廳", lobby.title)
         self.assertIn("80億分之1", lobby.description)
+
+        async def _verify_lobby_view():
+            view = GameLobbyView(cog=None)
+            self.assertIn(view.mode_select, view.children)
+            self.assertNotIn(view.life_thread_btn, view.children)
+
+            view.selected_game = "1in8b"
+            view._rebuild_items()
+            self.assertNotIn(view.mode_select, view.children)
+            self.assertIn(view.era_select, view.children)
+            self.assertIn(view.method_select, view.children)
+            self.assertIn(view.story_select, view.children)
+            self.assertIn(view.life_start_btn, view.children)
+            self.assertIn(view.life_thread_btn, view.children)
+            self.assertEqual(view.life_thread_btn.label, "開專屬串投胎")
+            emb_life = view._current_embed(999, user_id=888)
+            self.assertIn("投胎設定", emb_life.title)
+
+            view.selected_game = "chess"
+            view._rebuild_items()
+            self.assertIn(view.mode_select, view.children)
+            self.assertNotIn(view.life_thread_btn, view.children)
+
+        asyncio.run(_verify_lobby_view())
 
 
 if __name__ == "__main__":

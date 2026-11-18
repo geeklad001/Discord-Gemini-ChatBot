@@ -1,6 +1,6 @@
-# 🌸 Discord 情侶日語共學 & 生活助理機器人 (Gemini 3.8 Flash)
+# 🌸 Discord 日語共學 & 生活助理機器人 (Gemini 3.8 Flash)
 
-專為情侶打造的 Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最新旗艦 **Gemini 3.8 Flash**（搭配 **Thinking: Medium** 深度思考）與 Discord，具備**日語學習雙頻道音字分離**、**日常三人閒聊**、**情侶長期記憶**、**共同待辦清單**與**背景定時提醒**！
+Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最新旗艦 **Gemini 3.8 Flash**（搭配 **Thinking: Medium** 深度思考）與 Discord，具備**日語學習雙頻道音字分離**、**日常三人閒聊**、**情侶長期記憶**、**共同待辦清單**與**背景定時提醒**！
 
 ---
 

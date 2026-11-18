@@ -211,14 +211,17 @@ def boardgame_get_state() -> str:
 def boardgame_start(
     game_type: str,
     mode: str = "pve",
-    difficulty: str = "normal",
+    difficulty: str = "llm",
+    first_move: str = "",
 ) -> str:
     """
     在當前頻道開啟一場新的圖形化棋盤桌遊對局，並自動貼出附帶座標圖與互動按鈕的棋盤卡片。
+    若玩家在口語開局時已經一併報出他的第一步棋（例如「我們來玩西洋棋，我先走 e4」），請同時傳入 `first_move`。
     參數:
       game_type: 遊戲名稱（支援 'othello'/'黑白棋'、'chess'/'西洋棋'、'connect4'/'四子棋'、'gomoku'/'五子棋'）。
-      mode: 對戰模式，'pve'（對戰電腦或 LLM，預設）或 'pvp'（雙人公開挑戰）。
-      difficulty: PvE 難度，可填 'easy'（簡單）、'normal'（普通，預設）、'hard'（困難）或 'llm'（與後端 Gemini LLM 對戰且防作弊）。
+      mode: 對戰模式，'pve'（對戰你/LLM 或本地 AI，預設）或 'pvp'（雙人公開挑戰）。
+      difficulty: PvE 對手類型，預設 'llm'（由你/後端 LLM 親自陪玩並受規則防作弊校驗）；若玩家明確指定難度可填 'easy'、'normal'、'hard'。
+      first_move: 選填；若玩家開局同時指明第一步棋（如 'D3'、'e4'、'G7'、'4'），一併執行！
     """
     msg = current_discord_msg.get()
     if not msg:
@@ -240,7 +243,20 @@ def boardgame_start(
     except ValueError as e:
         return f"⚠️ 開局失敗：{e}"
 
-    _queue_board_card_update(game["id"], f"由 {msg.author.display_name} 透過對話開啟新局！")
+    note = f"由 {msg.author.display_name} 透過對話開啟新局！"
+    run_ai = False
+    if first_move and first_move.strip() and game["status"] == "active":
+        try:
+            game, move_note = boardgame_engine.apply_move(game["id"], msg.author.id, first_move.strip())
+            if game["mode"] == "pve" and game["difficulty"] == "llm" and game["status"] == "active":
+                note = move_note
+                run_ai = True
+            else:
+                game, note = boardgame_engine.play_pve_ai_turn_sync(game, move_note)
+        except ValueError as e:
+            note = f"{note}\n⚠️ 第一步 `{first_move}` 未能自動執行（{e}），請再試一次。"
+
+    _queue_board_card_update(game["id"], note, run_ai=run_ai)
     return (
         f"✅ 已成功開啟【{boardgame_engine.GAME_CATALOG[gtype]['name']}】"
         f"（模式：{clean_mode.upper()} | 對手：{boardgame_engine.DIFFICULTY_LABELS[clean_diff] if clean_mode == 'pve' else '等待好友加入'}）！\n"

@@ -116,6 +116,7 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
             patch("rpg_engine.is_rpg_session_active", return_value=False),
             patch("rpg_engine.match_lorebook_for_text", return_value=[]),
             patch("assistant_db.format_memories_for_prompt", return_value=""),
+            patch("boardgame_engine.get_latest_game_in_channel", return_value=None),
             patch("game_wiki_engine.extract_image_text_pass1", new=AsyncMock()) as mock_ocr,
             patch("core.chat_pipeline.generate_with_fallback", new=AsyncMock(return_value=(fake_resp, "gemini-flash-lite-latest"))) as mock_gen,
         ):
@@ -167,6 +168,83 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(check_quiz_answer_match("さくら", card))
         self.assertTrue(check_quiz_answer_match("櫻花", card))
         self.assertFalse(check_quiz_answer_match("蘋果", card))
+
+    async def test_boardgame_card_embeds_retained_in_chat_history(self):
+        from core.chat_pipeline import build_chat_history_contents
+
+        settings = _make_settings(enable_japanese_mode=True)
+        bot = MagicMock()
+        bot.user = SimpleNamespace(id=999, display_name="Bot")
+
+        card_embed = discord.Embed(title="⚫ 黑白棋 (Othello)", description="目前輪到 ⚫ 小明")
+        card_embed.set_footer(text="棋局 #7 | 用下方選單點選綠點")
+        bot_card_msg = SimpleNamespace(
+            id=1,
+            author=bot.user,
+            content="",
+            clean_content="",
+            embeds=[card_embed],
+            attachments=[],
+            stickers=[],
+        )
+        user_msg = SimpleNamespace(
+            id=2,
+            author=SimpleNamespace(id=123, display_name="小明"),
+            content="剛才那步為什麼下那裡？",
+            clean_content="剛才那步為什麼下那裡？",
+            embeds=[],
+            attachments=[],
+            stickers=[],
+        )
+
+        async def fake_history(**kwargs):
+            yield user_msg
+            yield bot_card_msg
+
+        channel = MagicMock()
+        channel.id = 1001
+        channel.history = fake_history
+        bot.get_channel.return_value = channel
+
+        with patch("core.chat_pipeline.get_effective_reset_timestamp", return_value=None):
+            turns = await build_chat_history_contents(bot, settings, channel, user_msg, is_japanese_dual_mode=True)
+        self.assertEqual(len(turns), 2)
+        self.assertEqual(turns[0].role, "model")
+        self.assertIn("系統已貼出", turns[0].parts[0].text)
+        self.assertIn("黑白棋", turns[0].parts[0].text)
+        self.assertEqual(turns[1].role, "user")
+
+    def test_strip_hallucinated_board_card_echo(self):
+        from core.chat_pipeline import _strip_hallucinated_board_card_echo
+
+        noisy = (
+            "E2 落下去，倒是不小心幫自己清出了一條路。[棋盤卡片]\n"
+            "黑白棋 (Othello) — PvE (🧠 Gemini LLM)\n"
+            "👉目前輪到：白棋\n"
+            "📌最新動態：黑棋 落子 E2"
+        )
+        cleaned = _strip_hallucinated_board_card_echo(noisy)
+        self.assertEqual(cleaned, "E2 落下去，倒是不小心幫自己清出了一條路。")
+
+    def test_get_current_general_prompt_runs_with_boardgames_enabled(self):
+        from core.chat_pipeline import get_current_general_prompt, get_current_system_prompt
+
+        settings = _make_settings(enable_board_games=True)
+        msg = SimpleNamespace(
+            channel=SimpleNamespace(id=54321),
+            author=SimpleNamespace(id=1, display_name="Tester"),
+            clean_content="測試",
+        )
+        with (
+            patch("assistant_db.format_memories_for_prompt", return_value=""),
+            patch("rpg_engine.match_lorebook_for_text", return_value=[]),
+            patch("rpg_engine.is_rpg_session_active", return_value=False),
+            patch("boardgame_engine.get_latest_game_in_channel", return_value=None),
+        ):
+            gen_prompt = get_current_general_prompt(settings, msg, recent_context_text="大家好")
+            sys_prompt = get_current_system_prompt(settings, msg, recent_context_text="hello")
+        self.assertIn("台北時間", gen_prompt)
+        self.assertIn("台北時間", sys_prompt)
 
 
 if __name__ == "__main__":

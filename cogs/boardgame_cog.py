@@ -565,7 +565,7 @@ class ActiveBoardView(discord.ui.View):
             await self.cog.edit_interaction_game_card(interaction, updated, last_note=f"{interaction.user.display_name} 提出和局請求")
         elif status_msg == "accepted":
             await interaction.response.defer()
-            await self.cog.edit_interaction_game_card(interaction, updated, last_note="雙方協議和局！")
+            await self.cog.retire_and_send_game_card(interaction, updated, last_note="雙方協議和局！")
         else:
             await interaction.response.send_message(f"ℹ️ {status_msg}", ephemeral=True)
 
@@ -575,7 +575,7 @@ class ActiveBoardView(discord.ui.View):
             await interaction.response.send_message("⚠️ 找不到此棋局。", ephemeral=True)
             return
         await interaction.response.defer()
-        await self.cog.send_game_card(interaction.channel, latest, last_note="已重新發送最新棋盤面板")
+        await self.cog.retire_and_send_game_card(interaction, latest, last_note="已重新發送最新棋盤面板")
 
     async def _on_undo(self, interaction: discord.Interaction):
         try:
@@ -593,7 +593,7 @@ class ActiveBoardView(discord.ui.View):
                 interaction, updated, last_note=f"{interaction.user.display_name} 申請退回上一步（等待全體玩家同意）"
             )
             return
-        await self.cog.edit_interaction_game_card(
+        await self.cog.retire_and_send_game_card(
             interaction, updated, last_note=f"↩️ 全體玩家已同意，棋盤已退回上一步（第 {updated['move_count']} 手）！"
         )
 
@@ -613,7 +613,7 @@ class ActiveBoardView(discord.ui.View):
             await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
             return
         await interaction.response.defer()
-        await self.cog.edit_interaction_game_card(interaction, updated, last_note=f"{interaction.user.display_name} 選擇投降。")
+        await self.cog.retire_and_send_game_card(interaction, updated, last_note=f"{interaction.user.display_name} 選擇投降。")
 
 
 class BoardGameCog(commands.Cog):
@@ -638,13 +638,38 @@ class BoardGameCog(commands.Cog):
         game: dict,
         last_note: str = "",
         selected_sq: Optional[str] = None,
+        content_text: Optional[str] = None,
     ) -> discord.Message:
         embed = _build_board_embed(game, last_note=last_note, selected_sq=selected_sq)
         view = self._build_view_for_game(game, selected_sq=selected_sq)
+        clean_content = (content_text or "").strip() or None
+        if clean_content and len(clean_content) > 1900:
+            clean_content = clean_content[:1900] + "..."
         if game["status"] == "waiting":
-            return await channel.send(embed=embed, view=view)
+            return await channel.send(content=clean_content, embed=embed, view=view)
         board_file = await _render_board_file(game, highlight_from=selected_sq)
-        return await channel.send(file=board_file, embed=embed, view=view)
+        return await channel.send(content=clean_content, file=board_file, embed=embed, view=view)
+
+    async def retire_and_send_game_card(
+        self,
+        interaction: discord.Interaction,
+        game: dict,
+        last_note: str = "",
+        selected_sq: Optional[str] = None,
+        content_text: Optional[str] = None,
+    ) -> discord.Message:
+        """移除舊訊息的互動控制項並於聊天室最下方發送最新棋盤訊息。"""
+        try:
+            await interaction.edit_original_response(view=None)
+        except Exception:
+            pass
+        return await self.send_game_card(
+            interaction.channel,
+            game,
+            last_note=last_note,
+            selected_sq=selected_sq,
+            content_text=content_text,
+        )
 
     async def edit_interaction_game_card(
         self,
@@ -661,8 +686,8 @@ class BoardGameCog(commands.Cog):
         board_file = await _render_board_file(game, highlight_from=selected_sq)
         await interaction.edit_original_response(embed=embed, view=view, attachments=[board_file])
 
-    async def _pick_and_apply_llm_move(self, game: dict) -> tuple[dict, str]:
-        """向後端 Gemini LLM 請求一步棋，並以 Python 規則引擎嚴格校驗（違例時重試一次並保底退回本地引擎）。"""
+    async def _pick_and_apply_llm_move(self, game: dict) -> tuple[dict, str, str]:
+        """向後端 Gemini LLM 請求一步棋，以 Python 規則嚴格校驗；回傳 (updated_game, card_note, llm_taunt)。"""
         retry_err = ""
         for attempt in range(2):
             prompt = bg.format_llm_opponent_prompt(game, retry_error=retry_err)
@@ -684,8 +709,9 @@ class BoardGameCog(commands.Cog):
                     retry_err = "回傳內容未包含合法座標或 JSON"
                     continue
                 updated, ai_note = await asyncio.to_thread(bg.apply_move, game["id"], 0, mv)
-                taunt_txt = f"「{taunt}」" if taunt else ""
-                return updated, f"🧠 LLM ({used_model}) {ai_note} {taunt_txt}".strip()
+                card_note = f"🧠 LLM ({used_model})：{ai_note}"
+                taunt_msg = f"💬 **LLM ({mv})**：{taunt}" if taunt else ""
+                return updated, card_note, taunt_msg
             except ValueError as e:
                 retry_err = str(e)
                 self.logger.warning(f"🛡️ [BoardGame Anti-Cheat] 攔截 LLM 違例棋步 (attempt={attempt + 1}): {e}")
@@ -695,24 +721,29 @@ class BoardGameCog(commands.Cog):
 
         fallback_mv = await asyncio.to_thread(bg.compute_ai_move_for_game, game, "normal")
         if not fallback_mv:
-            return game, ""
+            return game, "", ""
         updated, ai_note = await asyncio.to_thread(bg.apply_move, game["id"], 0, fallback_mv)
-        return updated, f"🤖 [LLM 思考超時/違例，由本地防作弊裁判代走] {ai_note}"
+        return updated, f"🤖 [LLM 思考超時/違例，由本地防作弊裁判代走] {ai_note}", ""
 
-    async def _run_pve_turn_if_needed(self, game: dict, note_prefix: str) -> tuple[dict, str]:
-        """若為 PvE 且輪到 Bot/LLM，執行其回合（嚴格防作弊校驗）並更新棋局。"""
+    async def _run_pve_turn_if_needed(self, game: dict, note_prefix: str) -> tuple[dict, str, str]:
+        """若為 PvE 且輪到 Bot/LLM，執行其回合；回傳 (updated_game, clean_card_note, llm_thoughts_text)。"""
         if game.get("difficulty") != "llm":
-            return await asyncio.to_thread(bg.play_pve_ai_turn_sync, game, note_prefix)
+            updated, full_note = await asyncio.to_thread(bg.play_pve_ai_turn_sync, game, note_prefix)
+            return updated, full_note, ""
 
         note = note_prefix
+        thoughts: list[str] = []
         safety_loops = 0
         while game["status"] == "active" and game["mode"] == "pve" and game["turn"] == 2 and safety_loops < 4:
             safety_loops += 1
-            game, llm_note = await self._pick_and_apply_llm_move(game)
+            game, llm_note, taunt_msg = await self._pick_and_apply_llm_move(game)
+            if llm_note:
+                note = f"{note}\n{llm_note}" if note else llm_note
+            if taunt_msg:
+                thoughts.append(taunt_msg)
             if not llm_note:
                 break
-            note = f"{note}\n{llm_note}" if note else llm_note
-        return game, note
+        return game, note, "\n".join(thoughts)
 
     async def handle_interaction_move(self, interaction: discord.Interaction, game_id: int, move_str: str) -> None:
         try:
@@ -722,8 +753,13 @@ class BoardGameCog(commands.Cog):
             return
 
         await interaction.response.defer()
-        game, full_note = await self._run_pve_turn_if_needed(game, note)
-        await self.edit_interaction_game_card(interaction, game, last_note=full_note)
+        game, card_note, llm_msg = await self._run_pve_turn_if_needed(game, note)
+        await self.retire_and_send_game_card(
+            interaction,
+            game,
+            last_note=card_note,
+            content_text=llm_msg,
+        )
 
     def build_stats_embed(self, target_user: Optional[discord.abc.User] = None) -> discord.Embed:
         rows = bg.get_user_stats(target_user.id if target_user else None, limit=15)
@@ -857,5 +893,5 @@ class BoardGameCog(commands.Cog):
             return
 
         async with ctx.channel.typing():
-            game, full_note = await self._run_pve_turn_if_needed(game, note)
-        await self.send_game_card(ctx.channel, game, last_note=full_note)
+            game, card_note, llm_msg = await self._run_pve_turn_if_needed(game, note)
+        await self.send_game_card(ctx.channel, game, last_note=card_note, content_text=llm_msg)

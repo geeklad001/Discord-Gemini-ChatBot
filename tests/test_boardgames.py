@@ -232,22 +232,51 @@ class TestBoardGames(unittest.TestCase):
         )
         cog = BoardGameCog(MagicMock(), MagicMock(), settings, MagicMock())
 
-        # Case 1: LLM tries illegal move A1 first, then succeeds with C3 on retry
+        # Case 1: LLM tries illegal move A1 first, then succeeds with C3 on retry; taunt stays separate from card note
         bad_resp = SimpleNamespace(text='{"move": "A1", "taunt": "我要作弊下角落"}')
         good_resp = SimpleNamespace(text='{"move": "C3", "taunt": "這步不錯吧！"}')
         with patch("cogs.boardgame_cog.generate_with_fallback", new=AsyncMock(side_effect=[(bad_resp, "m1"), (good_resp, "m1")])):
-            updated, note = asyncio.run(cog._pick_and_apply_llm_move(g))
+            updated, note, taunt = asyncio.run(cog._pick_and_apply_llm_move(g))
         self.assertEqual(updated["move_count"], 2)
         self.assertIn("C3", note)
-        self.assertIn("這步不錯吧", note)
+        self.assertNotIn("這步不錯吧", note)
+        self.assertIn("這步不錯吧", taunt)
 
         # Case 2: LLM tries illegal move twice -> local anti-cheat engine cleanly takes over
         g2 = bg.create_game(204, "othello", "pve", 1, "Alice", "llm")
         g2, _ = bg.apply_move(g2["id"], 1, "D3")
         with patch("cogs.boardgame_cog.generate_with_fallback", new=AsyncMock(return_value=(bad_resp, "m1"))):
-            updated2, note2 = asyncio.run(cog._pick_and_apply_llm_move(g2))
+            updated2, note2, taunt2 = asyncio.run(cog._pick_and_apply_llm_move(g2))
         self.assertEqual(updated2["move_count"], 2)
         self.assertIn("本地防作弊裁判", note2)
+        self.assertEqual(taunt2, "")
+
+    def test_board_context_includes_ascii_grid_and_finished_game_and_first_move(self):
+        fake_msg = SimpleNamespace(
+            channel=SimpleNamespace(id=305),
+            author=SimpleNamespace(id=1, display_name="小明"),
+        )
+        pending = []
+        tok_msg = assistant_tools.current_discord_msg.set(fake_msg)
+        tok_bg = bg.pending_board_card_updates.set(pending)
+        try:
+            # Start Othello against LLM AND play opening move D3 in one natural-language tool call
+            start_out = assistant_tools.boardgame_start("黑白棋", mode="pve", difficulty="llm", first_move="D3")
+            self.assertIn("黑白棋", start_out)
+            self.assertIn("A B C D E F G H", start_out)
+            self.assertIn("D3", start_out)
+            self.assertEqual(len(pending), 1)
+            self.assertTrue(pending[0]["run_ai"])
+
+            # Finish game via resign -> get_board_status_summary_for_llm still keeps context for chat review!
+            assistant_tools.boardgame_resign()
+            summary_after = bg.get_board_status_summary_for_llm(305)
+            self.assertIn("近期剛結束的棋局", summary_after)
+            self.assertIn("A B C D E F G H", summary_after)
+            self.assertIn("D3", summary_after)
+        finally:
+            bg.pending_board_card_updates.reset(tok_bg)
+            assistant_tools.current_discord_msg.reset(tok_msg)
 
 
 if __name__ == "__main__":

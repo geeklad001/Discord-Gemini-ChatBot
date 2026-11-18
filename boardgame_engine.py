@@ -23,12 +23,13 @@ pending_board_card_updates: contextvars.ContextVar[Optional[list[tuple[int, str]
 
 BOARDGAME_INTENT_KEYWORDS = (
     "黑白棋", "翻轉棋", "奧賽羅", "othello", "reversi",
-    "西洋棋", "國際象棋", "chess", "王車易位", "將軍",
+    "西洋棋", "國際象棋", "chess", "王車易位", "將軍", "將死", "入堡", "升變",
     "四子棋", "connect4", "connect 4", "c4",
     "五子棋", "gomoku", "gobang",
-    "桌遊", "棋盤", "下棋", "落子", "對弈", "棋局", "開一局", "投降", "認輸",
-    "悔棋", "上一步", "撤銷", "退回", "戰績", "棋盤面板", "重發棋盤",
-    "兵", "馬", "象", "城堡", "皇后", "國王", "綠點",
+    "桌遊", "棋盤", "下棋", "玩棋", "落子", "走棋", "對弈", "棋局", "開一局", "開局",
+    "投降", "認輸", "悔棋", "上一步", "撤銷", "退回", "戰績", "棋盤面板", "重發棋盤",
+    "這步", "那步", "哪一步", "剛才那盤", "這盤", "盤面", "棋子", "黑棋", "白棋", "黑子", "白子", "先手", "後手",
+    "兵", "馬", "象", "騎士", "主教", "城堡", "皇后", "國王", "綠點",
 )
 
 
@@ -36,7 +37,7 @@ def is_boardgame_intent(text: str) -> bool:
     t = (text or "").lower()
     if any(kw in t for kw in BOARDGAME_INTENT_KEYWORDS):
         return True
-    if re.search(r"\b[a-h][1-8][a-h][1-8][qrbn]?\b", t):
+    if re.search(r"\b([a-h][1-8][a-h][1-8][qrbn]?|[a-m]\d{1,2}|[kqrbn][a-h]?[1-8]?x?[a-h][1-8]|o-o(-o)?)\b", t):
         return True
     return False
 
@@ -196,6 +197,32 @@ def get_active_game(channel_id: int) -> Optional[dict]:
         )
         row = cursor.fetchone()
         return _deserialize_game(row) if row else None
+
+
+def get_latest_game_in_channel(channel_id: int, include_finished_hours: int = 4) -> Optional[dict]:
+    """取得當前進行中的棋局；若無，回傳數小時內最近一局已結束（非取消）的棋局供對話回顧討論"""
+    active = get_active_game(channel_id)
+    if active:
+        return active
+    init_boardgame_tables()
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM board_games WHERE channel_id = ? AND status = 'finished' AND COALESCE(end_reason, '') != 'aborted' ORDER BY id DESC LIMIT 1",
+            (channel_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        g = _deserialize_game(row)
+        try:
+            updated_dt = datetime.strptime(g["updated_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ_TAIPEI)
+            age_hours = (datetime.now(TZ_TAIPEI) - updated_dt).total_seconds() / 3600.0
+            if age_hours > include_finished_hours:
+                return None
+        except Exception:
+            pass
+        return g
 
 
 def get_game_by_id(game_id: int) -> Optional[dict]:
@@ -2169,23 +2196,44 @@ def _format_legal_moves_for_llm(game: dict) -> str:
 
 
 def get_board_status_summary_for_llm(channel_id: int) -> str:
-    """提供給 Gemini 工具查詢的權威棋盤狀態、棋子分布與完整合法步清單（防作弊與輔助自然語言翻譯）"""
-    game = get_active_game(channel_id)
+    """提供給 Gemini 上下文與工具查詢的權威棋盤圖、對局紀錄與完整合法步清單"""
+    game = get_latest_game_in_channel(channel_id, include_finished_hours=4)
     if not game:
         return (
-            "目前此頻道沒有進行中的棋盤對局。"
-            "若玩家想玩，可主動呼叫 `boardgame_start(game_type, mode, difficulty)` 幫他直接開局並貼出圖形棋盤卡！"
+            "目前此頻道沒有進行中或近期結束的棋盤對局。\n"
+            "👉 若玩家想用自然語言開始玩或直接報出第一步棋，【必須】主動呼叫 `boardgame_start(game_type, mode, difficulty, first_move)` "
+            "建立正式棋局並貼出圖形棋盤卡！嚴禁自己在純文字裡模擬下棋。"
         )
     meta = GAME_CATALOG[game["game_type"]]
+    ascii_board = _format_ascii_board_for_llm(game)
+    recent = " -> ".join((game["state"].get("moves") or [])[-12:]) or "尚無落子"
+
+    if game["status"] == "finished":
+        w = game["winner"]
+        winner_txt = "雙方和局" if w == -1 else (f"{meta['p1_label']} {game['p1_name']} 勝出" if w == 1 else f"{meta['p2_label']} {game['p2_name']} 勝出")
+        extra_score = ""
+        if game["game_type"] == "othello":
+            b_cnt, w_cnt = _othello_counts(game["state"]["board"])
+            extra_score = f"（比數 ⚫ {b_cnt} : {w_cnt} ⚪）"
+        return (
+            f"近期剛結束的棋局：#{game['id']} {meta['name']}（模式：{game['mode'].upper()} | 難度：{game['difficulty']}）\n"
+            f"結果：{winner_txt}{extra_score} | 結束原因：{game.get('end_reason') or 'normal'} | 總手數：{game['move_count']}\n"
+            f"完整近期著法：{recent}\n"
+            f"終局真實棋盤：\n{ascii_board}\n"
+            f"（以上為剛剛那盤的真實資料，可直接據此跟玩家討論或檢討；若玩家要開新局請呼叫 `boardgame_start`。）"
+        )
+
     turn_label = meta["p1_label"] if game["turn"] == 1 else meta["p2_label"]
     turn_name = game["p1_name"] if game["turn"] == 1 else game["p2_name"]
-    recent = " / ".join((game["state"].get("moves") or [])[-6:]) or "尚無落子"
     details = _format_legal_moves_for_llm(game) if game["status"] == "active" else ""
+    diff_tag = f" | 對手類型：{DIFFICULTY_LABELS.get(game['difficulty'], game['difficulty'])}" if game["mode"] == "pve" else ""
     return (
-        f"當前進行中：{meta['name']}（棋局 #{game['id']} | 模式：{game['mode'].upper()} | 狀態：{game['status']}）\n"
+        f"當前進行中：#{game['id']} {meta['name']}（模式：{game['mode'].upper()}{diff_tag} | 狀態：{game['status']}）\n"
         f"玩家 1 ({meta['p1_label']})：{game['p1_name']} vs 玩家 2 ({meta['p2_label']})：{game['p2_name']}\n"
         f"目前輪到：{turn_label} ({turn_name}) | 總手數：{game['move_count']}\n"
-        f"最近著法：{recent}\n"
+        f"近期著法紀錄：{recent}\n"
+        f"當前真實棋盤：\n{ascii_board}\n"
         f"{details}\n"
-        f"（請依使用者自然語言口述對照以上合法著法呼叫 `boardgame_play_move(move_str)` 執行；嚴禁在文字中自行捏造棋盤或違法棋步。）"
+        f"⚠️【強制規範】：若玩家用口語指明要下哪一步或悔棋/投降，你【必須】呼叫 `boardgame_play_move(move_str)` / `boardgame_undo()` / `boardgame_resign()` 寫入真實引擎；"
+        f"系統會自動在你的同一則回覆下方附上圖形棋盤卡，請勿在文字中複述或手畫棋盤卡片欄位（「黑白棋 (Othello)」、「目前輪到」、「最新動態」、「目前子數」、「最近著法」）。"
     )

@@ -78,6 +78,16 @@ def is_rpg_context(channel: discord.abc.Messageable, message_content: str = "") 
     return any(trigger in text for trigger in rpg_triggers)
 
 
+def _resolve_boardgame_channel_id(settings: BotSettings, channel: discord.abc.Messageable) -> int:
+    cid = getattr(channel, "id", 0)
+    if boardgame_engine.get_latest_game_in_channel(cid, include_finished_hours=4) is not None:
+        return cid
+    if settings.enable_japanese_mode and settings.tts_channel_id and cid == settings.tts_channel_id and settings.target_channel_id:
+        if boardgame_engine.get_latest_game_in_channel(settings.target_channel_id, include_finished_hours=4) is not None:
+            return settings.target_channel_id
+    return cid
+
+
 def build_dynamic_system_instruction(
     settings: BotSettings,
     prompt_filename: str,
@@ -134,9 +144,14 @@ def build_dynamic_system_instruction(
             extra_parts.append(f"\n\n{rpg_context}")
 
         if settings.enable_board_games:
-            active_bg = boardgame_engine.get_active_game(message.channel.id)
-            if active_bg or boardgame_engine.is_boardgame_intent(message.clean_content):
-                bg_summary = boardgame_engine.get_board_status_summary_for_llm(message.channel.id)
+            bg_cid = _resolve_boardgame_channel_id(settings, message.channel)
+            recent_bg = boardgame_engine.get_latest_game_in_channel(bg_cid, include_finished_hours=4)
+            if (
+                recent_bg
+                or boardgame_engine.is_boardgame_intent(message.clean_content)
+                or boardgame_engine.is_boardgame_intent(recent_context_text)
+            ):
+                bg_summary = boardgame_engine.get_board_status_summary_for_llm(bg_cid)
                 extra_parts.append(
                     f"\n\n【本機權威棋盤桌遊狀態（嚴禁文字手畫棋盤或作弊）】\n{bg_summary}"
                 )
@@ -204,12 +219,21 @@ async def build_chat_history_contents(
         if msg.content.strip().startswith("!"):
             continue
         has_stickers = bool(getattr(msg, "stickers", None))
-        if is_japanese_dual_mode:
-            if not msg.content.strip() and not msg.embeds and not msg.attachments and not has_stickers:
-                continue
-        else:
-            if not msg.content.strip() and not msg.attachments and not has_stickers:
-                continue
+        has_board_embed = bool(
+            msg.author == bot.user
+            and msg.embeds
+            and (
+                ((msg.embeds[0].footer.text or "") if msg.embeds[0].footer else "").startswith("棋局 #")
+                or "桌遊與棋盤大廳" in (msg.embeds[0].title or "")
+            )
+        )
+        if not has_board_embed:
+            if is_japanese_dual_mode:
+                if not msg.content.strip() and not msg.embeds and not msg.attachments and not has_stickers:
+                    continue
+            else:
+                if not msg.content.strip() and not msg.attachments and not has_stickers:
+                    continue
         raw_messages.append(msg)
 
     raw_messages.reverse()
@@ -219,6 +243,17 @@ async def build_chat_history_contents(
     for msg in raw_messages:
         parts: list[types.Part] = []
         if msg.author == bot.user:
+            if msg.embeds:
+                embed = msg.embeds[0]
+                footer_txt = embed.footer.text if embed.footer and embed.footer.text else ""
+                title_txt = embed.title or ""
+                if footer_txt.startswith("棋局 #") or "桌遊與棋盤大廳" in title_txt:
+                    moves_field = next((f.value for f in (embed.fields or []) if "最近著法" in (f.name or "")), "")
+                    summary_line = f"（系統已貼出{title_txt}｜近期著法：{moves_field}）" if moves_field else f"（系統已貼出{title_txt}）"
+                    parts.append(types.Part.from_text(text=summary_line))
+                    turns.append(types.Content(role="model", parts=parts))
+                    continue
+
             if is_japanese_dual_mode and msg.embeds and not msg.content.strip():
                 embed = msg.embeds[0]
                 author_name = embed.author.name if embed.author and embed.author.name else ""
@@ -236,6 +271,8 @@ async def build_chat_history_contents(
                         model_text,
                         enable_japanese_mode=settings.enable_japanese_mode,
                     )
+                if not model_text:
+                    continue
                 parts.append(types.Part.from_text(text=model_text))
         else:
             role = "user"
@@ -419,11 +456,13 @@ async def prepare_and_generate_chat_response(
 
     recent_text = _extract_recent_context_text(contents)
     in_rpg = is_rpg_context(message.channel, message.clean_content)
+    bg_cid = _resolve_boardgame_channel_id(settings, message.channel)
     in_boardgame = bool(
         settings.enable_board_games
         and (
-            boardgame_engine.get_active_game(message.channel.id) is not None
+            boardgame_engine.get_latest_game_in_channel(bg_cid, include_finished_hours=4) is not None
             or boardgame_engine.is_boardgame_intent(message.clean_content)
+            or boardgame_engine.is_boardgame_intent(recent_text)
         )
     )
     scoped_tools = assistant_tools.get_scoped_tools(
@@ -483,15 +522,35 @@ async def prepare_and_generate_chat_response(
     raise RuntimeError(f"({context_label}) 無法回應訊息。")
 
 
+def _strip_hallucinated_board_card_echo(text: str) -> str:
+    """移除輕量模型偶爾誤複述的系統棋盤卡片文字（實際卡片與 PNG 由程式自動發送）。"""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\[棋盤卡片\][\s\S]*$", "", text).strip()
+    card_line_re = re.compile(
+        r"^(?:[⚫⚪♟️🔴🟡⭕👑🎲👉📌📊📜🧠]\s*)?"
+        r"(?:(?:黑白棋|西洋棋|四子棋|五子棋)\s*\([^)]+\)\s*[—\-]|"
+        r"(?:黑棋|白棋|紅方|黃方|白方|黑方)\s*[:：].*🆚|"
+        r"目前輪到\s*[:：]|最新動態\s*[:：]|目前子數\s*[:：]|最近著法（第|"
+        r"LLM\s*\([^)]+\)\s*[⚫⚪])"
+    )
+    kept_lines = [line for line in cleaned.splitlines() if not card_line_re.match(line.strip())]
+    return "\n".join(kept_lines).strip()
+
+
 async def _flush_pending_board_cards(
     bot: discord.Client,
     channel: discord.abc.Messageable,
     pending_updates: list,
+    reply_text: str = "",
     logger: Optional[logging.Logger] = None,
-) -> None:
-    """將自然語言工具呼叫產生的最新棋盤狀態（含非同步 LLM 對手回合）渲染為圖形卡片並附在對話下方。"""
+) -> bool:
+    """
+    將自然語言工具呼叫產生的最新棋盤狀態（含非同步 LLM 對手回合）與對話文字合併為單一 Discord 訊息發送。
+    回傳 True 表示已成功將 reply_text 一併附帶於棋盤卡片訊息送出，呼叫端無須再重複發送純文字訊息。
+    """
     if not pending_updates:
-        return
+        return False
     latest_items: dict[int, dict] = {}
     for item in pending_updates:
         if isinstance(item, dict):
@@ -508,19 +567,40 @@ async def _flush_pending_board_cards(
 
     bg_cog = bot.get_cog("BoardGameCog") if hasattr(bot, "get_cog") else None
     if not bg_cog:
-        return
-    for gid, info in latest_items.items():
+        return False
+
+    cleaned_reply = _strip_hallucinated_board_card_echo(reply_text)
+    sent_reply_with_card = False
+    items_list = list(latest_items.items())
+
+    for idx, (gid, info) in enumerate(items_list):
         try:
             game = boardgame_engine.get_game_by_id(gid)
             if not game:
                 continue
-            note = info["note"]
+            card_note = info["note"]
+            llm_thoughts = ""
             if info["run_ai"] and game["status"] == "active" and game["mode"] == "pve" and game["turn"] == 2:
-                game, note = await bg_cog._run_pve_turn_if_needed(game, note)
-            await bg_cog.send_game_card(channel, game, last_note=note)
+                game, card_note, llm_thoughts = await bg_cog._run_pve_turn_if_needed(game, card_note)
+
+            msg_parts = []
+            if idx == 0 and cleaned_reply:
+                msg_parts.append(cleaned_reply)
+            if llm_thoughts:
+                msg_parts.append(llm_thoughts)
+            merged_content = "\n".join(msg_parts).strip()
+
+            if merged_content and len(merged_content) > 1900:
+                await send_split_messages(channel, merged_content)
+                merged_content = ""
+
+            await bg_cog.send_game_card(channel, game, last_note=card_note, content_text=merged_content)
+            if idx == 0:
+                sent_reply_with_card = True
         except Exception as e:
             if logger:
                 logger.error(f"❌ 發送圖形棋盤卡失敗 (game_id={gid}): {e}", exc_info=True)
+    return sent_reply_with_card
 
 
 async def handle_general_chat(
@@ -536,7 +616,7 @@ async def handle_general_chat(
         logger.info(f"💬 收到來自 [{author_name}] 的日常閒聊: {message.clean_content}")
 
     async with message.channel.typing():
-        pending_cards: list[tuple[int, str]] = []
+        pending_cards: list = []
         bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
         try:
             contents = await build_chat_history_contents(
@@ -560,8 +640,11 @@ async def handle_general_chat(
                 context_label="日常群聊",
                 logger=logger,
             )
-            await send_split_messages(message.channel, reply_text)
-            await _flush_pending_board_cards(bot, message.channel, pending_cards, logger=logger)
+            sent_with_card = await _flush_pending_board_cards(
+                bot, message.channel, pending_cards, reply_text=reply_text, logger=logger
+            )
+            if not sent_with_card:
+                await send_split_messages(message.channel, _strip_hallucinated_board_card_echo(reply_text) or reply_text)
 
         except Exception as e:
             if logger:
@@ -641,8 +724,26 @@ async def handle_japanese_learning_chat(
                 context_label="日語共學",
                 logger=logger,
             )
-            await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
-            await _flush_pending_board_cards(bot, message.channel, pending_cards, logger=logger)
+            if pending_cards:
+                if "[ZH]" in reply_text:
+                    jp_raw, zh_raw = reply_text.split("[ZH]", 1)
+                    jp_clean = _strip_hallucinated_board_card_echo(jp_raw.replace("[JP]", "").strip())
+                    zh_clean = _strip_hallucinated_board_card_echo(zh_raw.strip())
+                    if jp_clean and tts_channel and tts_channel.id != message.channel.id:
+                        try:
+                            await tts_channel.send(content=jp_clean)
+                        except Exception:
+                            pass
+                    merged_reply = "\n".join(p for p in (jp_clean, zh_clean) if p)
+                else:
+                    merged_reply = _strip_hallucinated_board_card_echo(reply_text.replace("[JP]", "").strip())
+                sent_with_card = await _flush_pending_board_cards(
+                    bot, message.channel, pending_cards, reply_text=merged_reply, logger=logger
+                )
+                if not sent_with_card:
+                    await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
+            else:
+                await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
 
         except Exception as e:
             if logger:

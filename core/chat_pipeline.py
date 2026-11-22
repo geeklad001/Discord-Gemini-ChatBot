@@ -205,6 +205,50 @@ def get_current_general_prompt(
     )
 
 
+async def _build_user_message_parts(
+    msg: discord.Message,
+    *,
+    include_current_media: bool,
+    context_label: str,
+    logger: Optional[logging.Logger] = None,
+) -> list[types.Part]:
+    """建構單一使用者訊息的 Gemini Parts（文字、網址預覽與當前訊息多模態附件）。"""
+    parts: list[types.Part] = []
+    author_name = msg.author.display_name
+    msg_stickers = getattr(msg, "stickers", None) or []
+    clean_content = (getattr(msg, "clean_content", "") or "").strip()
+    if not clean_content and msg_stickers:
+        st_names = "、".join(getattr(s, "name", "貼圖") for s in msg_stickers)
+        raw_text = f"(傳送了貼圖【{st_names}】，請直接觀看貼圖畫面並自然回應)"
+    elif not clean_content and getattr(msg, "attachments", None):
+        has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
+        has_gif = any((a.filename or "").lower().endswith(".gif") or (a.content_type or "").lower() == "image/gif" for a in msg.attachments)
+        if has_vid:
+            raw_text = "(傳送了一段短影片，請直接觀看並回應)"
+        elif has_gif:
+            raw_text = "(傳送了一張 GIF 動圖，請直接觀看畫面並自然回應)"
+        else:
+            raw_text = "(傳送了一張圖片，請直接觀看並回應)"
+    elif clean_content and is_gif_or_media_share_url(clean_content):
+        raw_text = f"{clean_content} (傳送了一張 GIF 動圖，請觀看下方動圖畫面並自然回應)"
+    else:
+        raw_text = clean_content
+    text = f"[{author_name}]: {raw_text}"
+
+    if include_current_media and "http" in (getattr(msg, "clean_content", "") or ""):
+        url_summary = await fetch_url_preview(msg.clean_content, logger=logger)
+        if url_summary:
+            text += f"\n\n{url_summary}"
+
+    parts.append(types.Part.from_text(text=text))
+
+    if include_current_media:
+        media_parts = await build_current_message_media_parts(msg, context_label=context_label, logger=logger)
+        parts.extend(media_parts)
+
+    return parts
+
+
 async def build_chat_history_contents(
     bot: discord.Client,
     settings: BotSettings,
@@ -212,6 +256,7 @@ async def build_chat_history_contents(
     current_message: discord.Message,
     is_japanese_dual_mode: bool = False,
     logger: Optional[logging.Logger] = None,
+    anchor_message_id: Optional[int] = None,
 ) -> list[types.Content]:
     """統一抓取滑動視窗歷史訊息並格式化為 Gemini SDK 的 Content 清單。"""
     if is_japanese_dual_mode and not isinstance(channel, discord.Thread):
@@ -223,9 +268,25 @@ async def build_chat_history_contents(
     raw_messages: list[discord.Message] = []
     history_limit = settings.thread_window_limit if isinstance(source_channel, discord.Thread) else settings.sliding_window_limit
 
-    async for msg in source_channel.history(limit=history_limit, oldest_first=False):
+    same_channel = getattr(source_channel, "id", None) == getattr(channel, "id", None)
+    curr_msg_id = getattr(current_message, "id", None)
+    if isinstance(anchor_message_id, int):
+        effective_anchor_id: Optional[int] = anchor_message_id
+    elif same_channel and isinstance(curr_msg_id, int):
+        effective_anchor_id = curr_msg_id
+    else:
+        effective_anchor_id = None
+
+    history_kwargs: dict = {"limit": history_limit, "oldest_first": False}
+    if isinstance(effective_anchor_id, int):
+        history_kwargs["before"] = discord.Object(id=effective_anchor_id + 1)
+
+    async for msg in source_channel.history(**history_kwargs):
         if reset_after and msg.created_at <= reset_after:
             break
+        msg_id = getattr(msg, "id", None)
+        if isinstance(effective_anchor_id, int) and isinstance(msg_id, int) and msg_id > effective_anchor_id:
+            continue
         if msg.content.strip().startswith("!"):
             continue
         has_stickers = bool(getattr(msg, "stickers", None))
@@ -249,6 +310,7 @@ async def build_chat_history_contents(
     raw_messages.reverse()
     turns: list[types.Content] = []
     context_label = "日語共學" if is_japanese_dual_mode else "日常群聊"
+    included_current = False
 
     for msg in raw_messages:
         parts: list[types.Part] = []
@@ -275,7 +337,20 @@ async def build_chat_history_contents(
                 if "(來自綜合頻道)" in author_name or "(來自日文頻道)" in author_name:
                     clean_author = author_name.replace("(來自綜合頻道)", "").replace("(來自日文頻道)", "").strip()
                     role = "user"
-                    parts.append(types.Part.from_text(text=f"[{clean_author}]: {embed.description}"))
+                    mirror_text = f"[{clean_author}]: {embed.description}"
+                    if isinstance(anchor_message_id, int) and getattr(msg, "id", None) == anchor_message_id:
+                        included_current = True
+                        if "http" in (getattr(current_message, "clean_content", "") or ""):
+                            url_summary = await fetch_url_preview(current_message.clean_content, logger=logger)
+                            if url_summary:
+                                mirror_text += f"\n\n{url_summary}"
+                        parts.append(types.Part.from_text(text=mirror_text))
+                        media_parts = await build_current_message_media_parts(
+                            current_message, context_label=context_label, logger=logger
+                        )
+                        parts.extend(media_parts)
+                    else:
+                        parts.append(types.Part.from_text(text=mirror_text))
                 else:
                     continue
             else:
@@ -291,39 +366,61 @@ async def build_chat_history_contents(
                 parts.append(types.Part.from_text(text=model_text))
         else:
             role = "user"
-            author_name = msg.author.display_name
-            msg_stickers = getattr(msg, "stickers", None) or []
-            if not msg.clean_content.strip() and msg_stickers:
-                st_names = "、".join(getattr(s, "name", "貼圖") for s in msg_stickers)
-                raw_text = f"(傳送了貼圖【{st_names}】，請直接觀看貼圖畫面並自然回應)"
-            elif not msg.clean_content.strip() and msg.attachments:
-                has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
-                has_gif = any((a.filename or "").lower().endswith(".gif") or (a.content_type or "").lower() == "image/gif" for a in msg.attachments)
-                if has_vid:
-                    raw_text = "(傳送了一段短影片，請直接觀看並回應)"
-                elif has_gif:
-                    raw_text = "(傳送了一張 GIF 動圖，請直接觀看畫面並自然回應)"
-                else:
-                    raw_text = "(傳送了一張圖片，請直接觀看並回應)"
-            elif msg.clean_content.strip() and is_gif_or_media_share_url(msg.clean_content.strip()):
-                raw_text = f"{msg.clean_content.strip()} (傳送了一張 GIF 動圖，請觀看下方動圖畫面並自然回應)"
-            else:
-                raw_text = msg.clean_content.strip()
-            text = f"[{author_name}]: {raw_text}"
-
-            if msg.id == current_message.id and "http" in msg.clean_content:
-                url_summary = await fetch_url_preview(msg.clean_content, logger=logger)
-                if url_summary:
-                    text += f"\n\n{url_summary}"
-
-            parts.append(types.Part.from_text(text=text))
-
-            if msg.id == current_message.id:
-                media_parts = await build_current_message_media_parts(msg, context_label=context_label, logger=logger)
-                parts.extend(media_parts)
+            is_current = isinstance(curr_msg_id, int) and getattr(msg, "id", None) == curr_msg_id
+            if is_current:
+                included_current = True
+            parts = await _build_user_message_parts(
+                msg,
+                include_current_media=is_current,
+                context_label=context_label,
+                logger=logger,
+            )
 
         if parts:
             turns.append(types.Content(role=role, parts=parts))
+
+    if not included_current and current_message is not None:
+        curr_content = (getattr(current_message, "content", "") or "").strip()
+        has_payload = bool(
+            curr_content
+            or getattr(current_message, "attachments", None)
+            or getattr(current_message, "stickers", None)
+        )
+        curr_created_at = getattr(current_message, "created_at", None)
+        is_before_reset = bool(reset_after and curr_created_at and curr_created_at <= reset_after)
+        eligible = (
+            getattr(current_message, "author", None) != bot.user
+            and not curr_content.startswith("!")
+            and has_payload
+            and not is_before_reset
+        )
+        if eligible:
+            should_append = same_channel
+            if not same_channel:
+                expected_prefix = f"[{current_message.author.display_name}]:"
+                last_turn = turns[-1] if turns else None
+                last_first_text = ""
+                if last_turn and last_turn.role == "user" and last_turn.parts:
+                    last_first_text = getattr(last_turn.parts[0], "text", "") or ""
+                if not last_first_text.startswith(expected_prefix):
+                    should_append = True
+
+            if should_append:
+                fallback_parts = await _build_user_message_parts(
+                    current_message,
+                    include_current_media=True,
+                    context_label=context_label,
+                    logger=logger,
+                )
+                if fallback_parts:
+                    turns.append(types.Content(role="user", parts=fallback_parts))
+
+    while turns and turns[-1].role != "user":
+        dropped = turns.pop()
+        if logger:
+            logger.warning(
+                f"⚠️ ({context_label}) 偵測到歷史對話結尾為非 user 回合 (role={dropped.role})，已自動移除以符合 Gemini API 規範。"
+            )
 
     return turns
 
@@ -790,6 +887,7 @@ async def handle_japanese_learning_chat(
     main_channel = bot.get_channel(settings.target_channel_id)
     tts_channel = bot.get_channel(settings.tts_channel_id) if settings.tts_channel_id else None
 
+    mirror_msg = None
     if tts_channel and main_channel:
         author_avatar = message.author.display_avatar.url if message.author.display_avatar else None
         if not message.clean_content.strip() and message.attachments:
@@ -815,7 +913,7 @@ async def handle_japanese_learning_chat(
             if message.attachments and message.attachments[0].content_type and message.attachments[0].content_type.startswith("image/"):
                 mirror_embed.set_image(url=message.attachments[0].url)
             try:
-                await main_channel.send(embed=mirror_embed)
+                mirror_msg = await main_channel.send(embed=mirror_embed)
             except Exception as e:
                 if logger:
                     logger.error(f"❌ 鏡像小卡發送至綜合頻道失敗: {e}")
@@ -833,6 +931,7 @@ async def handle_japanese_learning_chat(
                 current_message=message,
                 is_japanese_dual_mode=True,
                 logger=logger,
+                anchor_message_id=getattr(mirror_msg, "id", None),
             )
             if not contents:
                 return

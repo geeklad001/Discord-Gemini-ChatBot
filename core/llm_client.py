@@ -32,6 +32,34 @@ def get_safety_settings(disable_safety_settings: bool = True) -> Optional[list[t
     return list(DEFAULT_SAFETY_SETTINGS) if disable_safety_settings else None
 
 
+def sanitize_contents_for_gemini(
+    contents,
+    context_label: str = "AI",
+    logger: Optional[logging.Logger] = None,
+):
+    """Ensure list-form Gemini contents never end with a model turn (prevents 400 INVALID_ARGUMENT)."""
+    if not isinstance(contents, list):
+        return contents
+
+    sanitized = list(contents)
+    while sanitized:
+        last = sanitized[-1]
+        last_role = (
+            last.role
+            if isinstance(last, types.Content)
+            else (last.get("role") if isinstance(last, dict) else None)
+        )
+        if last_role == "model":
+            sanitized.pop()
+            if logger:
+                logger.warning(
+                    f"⚠️ ({context_label}) 偵測到送往 Gemini 的對話結尾為 model 回合，已自動裁剪以防止 400 錯誤。"
+                )
+        else:
+            break
+    return sanitized
+
+
 async def generate_with_fallback(
     client: genai.Client,
     models_to_try: list[str],
@@ -42,15 +70,24 @@ async def generate_with_fallback(
     logger: Optional[logging.Logger] = None,
 ) -> tuple[types.GenerateContentResponse, str]:
     """Call Gemini asynchronously with timeout protection and ordered fallback models."""
+    prepared_contents = sanitize_contents_for_gemini(
+        contents,
+        context_label=context_label,
+        logger=logger,
+    )
+    if isinstance(prepared_contents, list) and not prepared_contents:
+        raise ValueError(f"({context_label}) 對話內容不包含有效的 user 回合，無法向 Gemini 請求。")
+
     last_error: Optional[Exception] = None
     for model_name in models_to_try:
         try:
             if logger:
                 logger.info(f"🤖 ({context_label}) 正在向 {model_name} 請求回答...")
+            call_contents = list(prepared_contents) if isinstance(prepared_contents, list) else prepared_contents
             resp = await asyncio.wait_for(
                 client.aio.models.generate_content(
                     model=model_name,
-                    contents=contents,
+                    contents=call_contents,
                     config=config,
                 ),
                 timeout=timeout,

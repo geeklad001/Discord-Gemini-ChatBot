@@ -76,7 +76,7 @@ Discord 專屬管家與生活日語學伴機器人。連接 Google AI Studio 最
 | `!lore` / `!lore import` | 查看或批次匯入世界設定集 (Lorebook) | `!lore`、`!lore import` |
 | `!lore add <詞> \| <內容>` | 新增單筆世界設定 | `!lore add 星露草 \| 深山發光解毒藥草` |
 | `!lore del <編號>` | 刪除世界設定 | `!lore del 1` |
-| `!wiki [關鍵字]` | 查詢《殭屍學園》角色、模式劇情與韓服開房黑話（另有 `add`/`import`/`list`/`del`） | `!wiki ㄷㅋㅈ`、`!wiki add 詞 \| 解釋` |
+| `!wiki [關鍵字]` | 互動分頁查詢《殭屍學園》角色、模式與韓服黑話（支援 `目錄`/`browse`、`add`/`import`/`replace`/`list`/`del`） | `!wiki 阿修羅`、`!wiki 燒瓶 2技`、`!wiki 目錄` |
 | `!card [牌組名]` / `!decks` | 開啟互動式單字卡學習 / 查看所有牌組 | `!card`、`!decks` |
 | `!card add <單字>` | 新增單字（僅打單字時由 AI 自動補齊讀音與例句） | `!card add 桜` |
 | `!card import [檔名/等級/all]` | 貼上文字、讀取 `data/imports/`（支援一鍵全分類 `all` 或指定 `N3高頻`） | `!card import all`、`!card import N3高頻` |

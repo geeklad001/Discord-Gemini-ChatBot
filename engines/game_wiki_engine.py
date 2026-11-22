@@ -1,7 +1,9 @@
 import re
 import csv
 import asyncio
+import difflib
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from google.genai import types
@@ -14,12 +16,14 @@ COMMUNITY_WIKI_PATH = WIKI_DIR / "community_contributions.md"
 
 CATEGORY_LABELS = {
     "slang": "韓服黑話與開房用語",
+    "evolution": "進化感染模式專區",
+    "cafe_meta": "韓服民間攻略與流派",
     "character": "角色深度設定",
     "character_dict": "台服角色譯名與特徵對照",
     "story_arc": "主線與分部劇情",
     "game_mode": "遊戲模式與職業機制",
     "au_series": "平行世界與活動",
-    "community_contrib": "群友補充資料",
+    "community_contrib": "群友補充與改版熱修補",
 }
 
 # 快取結構：依據各 .md 與 .csv 檔案的最後修改時間 (mtime) 自動熱重載 (Hot-Reload)
@@ -32,7 +36,7 @@ _WIKI_CACHE: dict = {
 # 判斷是否為《殭屍學園》或韓服相關提問的觸發特徵詞
 GAME_DOMAIN_TRIGGERS = (
     "殭屍學園", "殭學", "좀비고", "좀고", "zombie high", "進擊的殭屍", "진좀", "히어로즈", "히즈",
-    "디비전", "division", "아포칼립스", "아포", "apo", "啟示錄", "進化感染", "感染模式", "越獄模式",
+    "디비전", "division", "아포칼립스", "아포", "apo", "啟示錄", "進化感染", "에볼루션", "감염모드", "感染模式", "越獄模式",
     "경찰과 도둑", "경도", "래더", "엘프고", "은하고", "마법고", "픽셀고", "불새재단", "火鳥基金會",
     "火鳥財團", "靈魂石", "소울스톤", "reboot", "리부트", "重製版", "破滅的裂隙", "파멸의 균열",
     "절망의 씨앗", "투지의 불씨", "主角群", "主角", "四人組", "1年a班", "南東進", "李幼莉", "幼莉",
@@ -40,6 +44,7 @@ GAME_DOMAIN_TRIGGERS = (
     "白雪蓮", "校婆", "倫達", "론다", "Queen博士", "Dr.Q", "닥터 퀸", "클모", "ㄷㅋㅈ", "34퀸",
     "오더", "조건x", "자유킥", "다잡", "올치어", "히2하드", "머신건", "포토존", "部落", "椅子男",
     "紅弓", "綠弓", "軍醫", "揮棒男", "火焰手", "滑板", "房名", "韓服",
+    "革命感染", "에볼", "겹스", "燒瓶", "阿修羅", "武器庫", "連體機", "死亡機", "隱藏飲料機",
 )
 
 
@@ -140,6 +145,123 @@ _GENERIC_GAME_KEYWORDS = {
     "常見語境", "絕對沒有",
 }
 
+# 跨系列重複之章節修飾詞：單獨命中（如僅問 "EP1"）不得直接算入特定系列專有分數，必須搭配系列或版本座標
+_MODIFIER_CHAPTER_TOKENS = {
+    "ep0", "ep1", "ep2", "ep3", "ep4", "ep.0", "ep.1", "ep.2", "ep.3", "ep.4",
+    "第0章", "第1章", "第2章", "第3章", "第4章",
+    "第一章", "第二章", "第三章", "第四章",
+    "第一關", "第二關", "第三關", "第四關",
+    "第1關", "第2關", "第3關", "第4關",
+    "1부", "2부", "3부", "第一部", "第二部", "第三部",
+    "엪1", "엪2", "엪3", "1라", "2라", "3라",
+}
+
+_QUERY_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "石弓": ("十字弓", "紅弓", "석궁"),
+    "藥水": ("藥水瓶", "燒瓶"),
+    "擴音器": ("喇叭",),
+    "掃帚": ("掃把",),
+    "狂氣": ("警衛", "狂氣殭屍"),
+    "脈衝": ("雷射槍", "脈衝光束"),
+    "技術室": ("武器庫",),
+    "破爛的學校": ("教室",),
+    "地下監獄": ("監獄",),
+    "食堂": ("廚房",),
+    "餐廳": ("廚房",),
+}
+_QUERY_SYNONYMS_LOWER: dict[str, tuple[str, ...]] = {
+    k.lower(): tuple(s.lower() for s in v) for k, v in _QUERY_SYNONYMS.items()
+}
+
+_CATEGORY_QUERY_ALIASES: dict[str, str] = {
+    "角色": "character_dict",
+    "角色列表": "character_dict",
+    "角色目錄": "character_dict",
+    "人物": "character_dict",
+    "譯名": "character_dict",
+    "角色譯名": "character_dict",
+    "台服角色": "character_dict",
+    "黑話": "slang",
+    "黑話目錄": "slang",
+    "韓服黑話": "slang",
+    "術語": "slang",
+    "縮寫": "slang",
+    "開房用語": "slang",
+    "進化感染目錄": "evolution",
+    "革命感染目錄": "evolution",
+    "進化感染專區": "evolution",
+    "進化感染列表": "evolution",
+    "民間攻略": "cafe_meta",
+    "流派": "cafe_meta",
+    "meta": "cafe_meta",
+    "cafe": "cafe_meta",
+    "模式目錄": "game_mode",
+    "武器總表": "game_mode",
+    "武器目錄": "game_mode",
+    "群友補充": "community_contrib",
+    "補充條目": "community_contrib",
+    "熱修補": "community_contrib",
+}
+
+_SHORT_QUALIFIER_STOP_CHARS = set("的了嗎呢吧喔啊是在有和跟或與怎啥誰幾哪要會能可給把被去來打用看說")
+
+
+def _token_in_text(token: str, text: str) -> bool:
+    """邊界安全的子字串檢查：避免 '2技' 誤命中 'ep2技巧' 或短英文詞誤中單字內部。"""
+    if not token or not text:
+        return False
+    if token.isascii() and token.isalnum() and len(token) <= 3:
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", text))
+    if token[0].isascii() and token[0].isalnum():
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(token)}", text))
+    return token in text
+
+
+def _detect_query_coordinates(query_text: str) -> dict[str, set[str]]:
+    """
+    從提問文本萃取三維座標 (series / timelines / chapters)，
+    用於解決「EP1 跨系列撞車」與「經典舊版 vs. Reboot 重製版」混淆。
+    """
+    t = (query_text or "").lower()
+    series: set[str] = set()
+    timelines: set[str] = set()
+    chapters: set[str] = set()
+
+    if any(k in t for k in ("進化感染", "革命感染", "감염모드 에볼루션", "에볼루션", "에볼")):
+        series.add("evolution")
+    if any(k in t for k in ("進擊的殭屍", "進擊殭屍", "진격의 좀비", "진좀", "破滅的裂隙", "파멸의 균열", "絕望的種子", "절망의 씨앗", "鬥志的火種", "투지의 불씨")) or re.search(r"(?<![a-z0-9])진\s*[1-3](?![0-9])", t):
+        series.add("jinjom")
+    if any(k in t for k in ("英雄模式", "英雄系列", "히어로즈", "히즈")) or re.search(r"(?<![a-z0-9])(?:h|히즈?)\s*[1-4](?![0-9])", t):
+        series.add("heroes")
+    if any(k in t for k in ("啟示錄", "아포칼립스", "아포", "앞칼")) or re.search(r"(?<![a-z0-9])apo(?![a-z0-9])", t):
+        series.add("apo")
+    if any(k in t for k in ("division", "디비전", "퓨리", "닥터 퀸", "34퀸", "ㄷㅋㅈ")) or re.search(r"(?<![a-z0-9])(?:d|디비전?|디)\s*[1-3]h?(?![0-9])", t):
+        series.add("division")
+    if any(k in t for k in ("越獄", "警察抓小偷", "警察與小偷", "경찰과 도둑", "경도")):
+        series.add("prison")
+    if any(k in t for k in ("天梯", "排位", "래더")):
+        series.add("ladder")
+    if any(k in t for k in ("精靈高", "엘프고", "銀河高", "은하고", "魔法高", "마법고", "像素高", "픽셀고")):
+        series.add("au")
+
+    if any(k in t for k in ("reboot", "리부트", "重製版", "重製", "10週年重製", "破滅的裂隙", "파멸의 균열", "絕望的種子", "절망의 씨앗", "鬥志的火種", "투지의 불씨")):
+        timelines.add("reboot")
+    if any(k in t for k in ("經典版", "經典原版", "舊版", "原版", "구버전", "원작")):
+        timelines.add("classic")
+
+    if re.search(r"(?:ep\.?\s*0(?![0-9])|第\s*0\s*章|序章)", t):
+        chapters.add("ep0")
+    if re.search(r"(?:ep\.?\s*1(?![0-9])|엪1(?![0-9])|第\s*[一1]\s*[章關部]|1부(?![0-9])|(?<![a-z0-9])(?:h|히즈?|진좀?|진|d|디비전?|디)\s*1(?![0-9]))", t):
+        chapters.add("ep1")
+    if re.search(r"(?:ep\.?\s*2(?![0-9])|엪2(?![0-9])|第\s*[二2]\s*[章關部]|2부(?![0-9])|(?<![a-z0-9])(?:h|히즈?|진좀?|진|d|디비전?|디)\s*2(?![0-9]))", t):
+        chapters.add("ep2")
+    if re.search(r"(?:ep\.?\s*3(?![0-9])|엪3(?![0-9])|第\s*[三3]\s*[章關部]|3부(?![0-9])|(?<![a-z0-9])(?:h|히즈?|진좀?|진|d|디비전?|디)\s*3(?![0-9]))", t):
+        chapters.add("ep3")
+    if re.search(r"(?:ep\.?\s*4(?![0-9])|엪4(?![0-9])|第\s*[四4]\s*[章關]|(?<![a-z0-9])(?:h|히즈?)\s*4(?![0-9]))", t):
+        chapters.add("ep4")
+
+    return {"series": series, "timelines": timelines, "chapters": chapters}
+
 # 口語問句與連接詞停用表：用於將「時間術士的大招什麼時候開比較好？」或無標示長文拆解為「時間術士」、「大招」等核心檢索詞
 _ZH_STOP_PHRASES_REGEX = re.compile(
     r"(?:什麼時候|什麼地方|哪裡可以|哪裡有|哪裡|怎麼走|怎麼打|怎麼拿|怎麼開|怎麼玩|怎麼用|怎麼辦|怎麼|"
@@ -205,6 +327,30 @@ def _extract_chinese_subterms(text: str) -> list[str]:
     return dedup
 
 
+_KR_PARTICLES = (
+    "인데도", "이라서", "인데", "에서", "으로", "부터", "까지", "한테", "보다",
+    "처럼", "이랑", "하고", "이면", "라서",
+    "은", "는", "이", "가", "을", "를", "에", "로", "도", "만", "와", "과", "랑", "면", "의", "께",
+)
+
+
+def _strip_korean_particle(token: str) -> str:
+    """
+    僅對純韓文音節詞彙 (가-힣) 剝除常見後接助詞／繫詞尾碼；
+    若含初聲／相容字母 (ㄱ-ㅎ/ㅏ-ㅣ) 或剩餘詞幹不足 2 字則原樣安全回傳。
+    """
+    if not token:
+        return ""
+    if not re.fullmatch(r"[\uac00-\ud7a3]+", token):
+        return token
+    for suffix in _KR_PARTICLES:
+        if token.endswith(suffix):
+            stem = token[: -len(suffix)]
+            if len(stem) >= 2 and re.fullmatch(r"[\uac00-\ud7a3]+", stem):
+                return stem
+    return token
+
+
 def _detect_unmatched_korean_tokens(
     query_text: str,
     slang_hits: list[dict],
@@ -227,11 +373,16 @@ def _detect_unmatched_korean_tokens(
     unmatched: list[str] = []
     for tok in dict.fromkeys(kr_tokens):
         tok_l = tok.lower()
-        if tok_l in _COMMON_KR_STOPWORDS:
+        stem_l = _strip_korean_particle(tok_l)
+        if tok_l in _COMMON_KR_STOPWORDS or (stem_l and stem_l in _COMMON_KR_STOPWORDS):
             continue
         if re.match(r"^(히|진|디)\d*(이지|노말|하드|나메)?$", tok_l):
             continue
-        if tok_l not in covered_corpus:
+        is_covered = (
+            tok_l in covered_corpus
+            or (bool(stem_l) and stem_l != tok_l and stem_l in covered_corpus)
+        )
+        if not is_covered:
             unmatched.append(tok)
     return unmatched
 
@@ -318,6 +469,16 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             "category": file_path.stem,
             "name_zh": "",
             "name_kr": "",
+            "timeline": "",
+            "series": "",
+            "chapter": "",
+            "subject": "",
+            "aspects": [],
+            "source": "",
+            "updated_at": "",
+            "freshness": "stable",
+            "guide_url": "",
+            "supersedes": [],
             "keywords": [],
             "related_ids": [],
             "source_file": file_path.name,
@@ -329,9 +490,15 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             k, v = line.split(":", 1)
             k = k.strip().lower()
             v = v.strip()
-            if k in ("keywords", "related_ids"):
+            if "#" in v and "http" not in v.lower():
+                v = re.split(r"\s+#", v, maxsplit=1)[0].strip()
+            if k in ("keywords", "related_ids", "aspects", "supersedes"):
                 meta[k] = _parse_list_field(v)
-            elif k in ("id", "category", "name_zh", "name_kr"):
+            elif k in (
+                "id", "category", "name_zh", "name_kr",
+                "timeline", "series", "chapter", "subject",
+                "source", "updated_at", "freshness", "guide_url",
+            ):
                 meta[k] = v.strip("'\"")
 
         entry_id = str(meta["id"]).strip()
@@ -342,20 +509,48 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
         cat_label = CATEGORY_LABELS.get(cat, cat)
         name_zh = str(meta["name_zh"]).strip()
         name_kr = str(meta["name_kr"]).strip()
+        timeline = str(meta["timeline"]).strip().lower()
+        series = str(meta["series"]).strip().lower()
+        chapter = str(meta["chapter"]).strip().lower()
+        subject = str(meta["subject"]).strip()
+        aspects = list(meta["aspects"]) if isinstance(meta["aspects"], list) else []
+        source = str(meta["source"]).strip()
+        updated_at = str(meta["updated_at"]).strip()
+        freshness = (str(meta["freshness"]).strip().lower() or "stable")
+        guide_url = str(meta["guide_url"]).strip()
+        supersedes = list(meta["supersedes"]) if isinstance(meta["supersedes"], list) else []
 
         if not body_text.startswith("【《殭屍學園》"):
             kr_part = f" ({name_kr})" if name_kr and name_kr not in name_zh else ""
-            header = f"【《殭屍學園》[{cat_label}] — {name_zh}{kr_part}】"
+            meta_tags: list[str] = []
+            if timeline == "classic":
+                meta_tags.append("版本：經典原版 (Classic)")
+            elif timeline == "reboot":
+                meta_tags.append("版本：重製版 (Reboot)")
+            elif timeline == "au":
+                meta_tags.append("版本：平行世界 (AU)")
+            if source and updated_at:
+                meta_tags.append(f"來源：{source}｜基準：{updated_at}")
+            elif source:
+                meta_tags.append(f"來源：{source}")
+            elif updated_at:
+                meta_tags.append(f"基準：{updated_at}")
+            meta_suffix = f"｜{'｜'.join(meta_tags)}" if meta_tags else ""
+            header = f"【《殭屍學園》[{cat_label}] — {name_zh}{kr_part}{meta_suffix}】"
             body_text = f"{header}\n{body_text}"
 
         raw_kws = list(meta["keywords"]) if isinstance(meta["keywords"], list) else []
-        for extra in (name_zh, name_kr):
+        for extra in (name_zh, name_kr, subject):
             if extra:
                 raw_kws.append(extra)
-                for sub in re.split(r"[/（）()、,，&]", extra):
+                for sub in re.split(r"[/（）()、,，&與和及]", extra):
                     sub_clean = sub.strip()
                     if len(sub_clean) >= 2:
                         raw_kws.append(sub_clean)
+        for asp in aspects:
+            asp_clean = str(asp).strip()
+            if len(asp_clean) >= 2:
+                raw_kws.append(asp_clean)
 
         # 自動從內文 (body_text) 提取粗體專有名詞與引號內專有名詞加入索引，大幅提升子模式與機制的召回率
         for m_term in re.findall(r"(?:「([^」]{2,15})」|〈([^〉]{2,15})〉|\*\*([^*：:]{2,15})\*\*)", body_text):
@@ -383,6 +578,17 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             "category_label": cat_label,
             "name_zh": name_zh,
             "name_kr": name_kr,
+            "timeline": timeline,
+            "series": series,
+            "chapter": chapter,
+            "subject": subject,
+            "aspects": aspects,
+            "source": source,
+            "updated_at": updated_at,
+            "freshness": freshness,
+            "guide_url": guide_url,
+            "supersedes": supersedes,
+            "superseded_by": [],
             "keywords": dedup_kws,
             "related_ids": list(meta["related_ids"]) if isinstance(meta["related_ids"], list) else [],
             "body": body_text,
@@ -447,6 +653,17 @@ def _parse_character_csv_file(csv_path: Path) -> list[dict]:
                     "category_label": CATEGORY_LABELS["character_dict"],
                     "name_zh": disp_zh,
                     "name_kr": kr_raw,
+                    "timeline": "common",
+                    "series": "",
+                    "chapter": "",
+                    "subject": disp_zh,
+                    "aspects": [],
+                    "source": "台服角色譯名對照表",
+                    "updated_at": "",
+                    "freshness": "stable",
+                    "guide_url": "",
+                    "supersedes": [],
+                    "superseded_by": [],
                     "keywords": dedup_kws,
                     "related_ids": [],
                     "body": "\n".join(body_lines),
@@ -494,6 +711,15 @@ def load_wiki_entries(force_reload: bool = False) -> list[dict]:
         all_entries.append(item)
         by_id[item["id"]] = item
 
+    superseded_by_map: dict[str, list[str]] = {}
+    for item in all_entries:
+        for old_id in item.get("supersedes", []):
+            oid_l = str(old_id).strip().lower()
+            if oid_l:
+                superseded_by_map.setdefault(oid_l, []).append(item["id"])
+    for item in all_entries:
+        item["superseded_by"] = superseded_by_map.get(item["id"].lower(), [])
+
     _WIKI_CACHE["mtimes"] = current_mtimes
     _WIKI_CACHE["entries"] = all_entries
     _WIKI_CACHE["entries_by_id"] = by_id
@@ -508,12 +734,19 @@ def get_wiki_stats() -> dict:
     """回傳知識庫各分類統計資訊"""
     entries = load_wiki_entries()
     counts: dict[str, int] = {}
+    active_total = 0
+    superseded_count = 0
     for e in entries:
+        if e.get("superseded_by"):
+            superseded_count += 1
+            continue
+        active_total += 1
         cat = e["category"]
         counts[cat] = counts.get(cat, 0) + 1
     return {
-        "total": len(entries),
+        "total": active_total,
         "by_category": counts,
+        "superseded_count": superseded_count,
     }
 
 
@@ -522,18 +755,21 @@ def search_wiki_entries(
     max_slang: int = 8,
     max_lore: int = 4,
     expand_lightrag: bool = True,
+    allow_bare_chapter_disambig: bool = True,
 ) -> dict:
     """
-    混合式精準檢索 + LightRAG 1-hop 實體關聯展開 + CRAG 精準度評分：
-    1. 區分「泛用遊戲大類詞（如 殭屍學園、좀고、PVE）」與「具體專有名詞（角色、特定模式、特定黑話）」，
-       單憑命中泛用詞不計入有效專有命中，防止拿無關條目餵給小模型引發幻覺。
-    2. 回傳 max_specific_score 供上層判定是否應直接觸發「不知道就直說 (Selective Abstention)」拒答閘門。
+    混合式精準檢索 + LightRAG 1-hop 實體關聯展開 + CRAG 精準度評分 + 三維座標消歧義：
+    1. 區分「泛用遊戲大類詞（如 殭屍學園、좀고、PVE）」與「跨系列章節修飾詞（如 EP1、第一章）」，
+       單憑命中泛用詞或孤立章節詞不計入有效專有分數，防止跨系列撞車與拿無關條目餵給小模型。
+    2. 支援 YAML V2 座標鎖定（series × timeline × chapter）、subject+aspects 雙層加權，以及 supersedes 軟屏蔽。
+    3. 回傳 max_specific_score 供上層判定是否應直接觸發「不知道就直說 (Selective Abstention)」拒答閘門。
     """
     entries = load_wiki_entries()
     if not entries or not query_text or not query_text.strip():
         return {
             "slang_hits": [],
             "lore_hits": [],
+            "ranked_hits": [],
             "related_hits": [],
             "dynamic_notes": [],
             "max_specific_score": 0.0,
@@ -548,25 +784,84 @@ def search_wiki_entries(
         " ",
         text_lower,
     ).strip()
-    core_tokens = [t for t in re.split(r"[\s/、,，]+", core_query) if len(t) >= 2 and t not in _GENERIC_GAME_KEYWORDS]
+    core_tokens = [
+        t for t in re.split(r"[\s/、,，]+", core_query)
+        if len(t) >= 2 and t not in _GENERIC_GAME_KEYWORDS and t not in _MODIFIER_CHAPTER_TOKENS
+    ]
     # 針對連續無空格的中文口語問句（如「時間術士的大招什麼時候開比較好？」），拆解出「時間術士」、「大招」等核心詞片段
-    query_subterms = _extract_chinese_subterms(core_query)
+    query_subterms = [
+        st for st in _extract_chinese_subterms(core_query)
+        if st.lower() not in _MODIFIER_CHAPTER_TOKENS
+    ]
+
+    token_groups: list[tuple[str, ...]] = []
+    expanded_alias_set: set[str] = set()
+    for ct in core_tokens:
+        syns = _QUERY_SYNONYMS_LOWER.get(ct, ())
+        token_groups.append(tuple(dict.fromkeys((ct,) + syns)))
+        expanded_alias_set.update(syns)
+
+    if not expanded_alias_set and len(text_compact) <= 8:
+        for syn_k, syn_vals in _QUERY_SYNONYMS_LOWER.items():
+            if syn_k in text_lower:
+                expanded_alias_set.update(syn_vals)
+                if not token_groups:
+                    token_groups.append((syn_k,) + syn_vals)
+
+    short_qualifiers: list[str] = []
+    if token_groups:
+        for raw_tok in re.split(r"[\s/、,，]+", core_query):
+            rt = raw_tok.strip()
+            if len(rt) == 1 and rt not in _SHORT_QUALIFIER_STOP_CHARS and not rt.isascii():
+                short_qualifiers.append(rt)
 
     # 1. 執行韓服房名實戰語法結構解析（辨識自由頻道部落招生看板房 vs 副本攻略房）
     dynamic_notes, extra_boost_keywords = _analyze_dynamic_room_patterns(query_text)
+
+    # 2. 解析提問中的「系列 × 版本(經典/Reboot) × 章節」三維座標，解決 EP1 等跨系列撞車
+    coords = _detect_query_coordinates(query_text)
+    if (
+        allow_bare_chapter_disambig
+        and coords["chapters"]
+        and not coords["series"]
+        and not coords["timelines"]
+    ):
+        ch_list = "、".join(sorted(c.upper() for c in coords["chapters"]))
+        dynamic_notes.append(
+            f"🔀 **【跨系列與新舊版本章節消歧義提醒（偵測到未指明系列的章節詞：{ch_list}）】**：\n"
+            f"  * 在《殭屍學園》中，`{ch_list}` 同時存在於多個完全不同的系列與時間線：\n"
+            "    1. **經典原版《進擊的殭屍 (진격의 좀비)》** EP.0~EP.3（舊版主線故事）\n"
+            "    2. **10 週年重製版《Reboot (리부트)》** 1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》（劇情與關卡重新編排）\n"
+            "    3. **《英雄模式 (Heroes / H1~H4)》**（反派／實驗體視角副本）\n"
+            "    4. **《Division (디비전 / D1~D3)》**（第二季主線副本）\n"
+            "  * **回答原則**：在群友還沒明確講出是哪一個系列或新舊版之前，**嚴禁自行猜測並混拼不同系列的劇情或攻略**！請先簡短列出上述常見選項並反問對方想查哪一個（或請他補充模式名稱）。"
+        )
 
     scored_slang: list[tuple[float, dict]] = []
     scored_lore: list[tuple[float, dict]] = []
     max_specific_score = 0.0
 
     for entry in entries:
+        # 若已被 Runtime 熱修補 (supersedes) 軟屏蔽，跳過此舊條目
+        if entry.get("superseded_by"):
+            continue
+
         specific_score = 0.0
         generic_score = 0.0
         matched_specific_kws = 0
+        name_zh_compact = re.sub(r"\s+", "", (entry.get("name_zh") or "").lower())
+        name_kr_compact = re.sub(r"\s+", "", (entry.get("name_kr") or "").lower())
+        subject_compact = re.sub(r"\s+", "", (entry.get("subject") or "").lower())
+        is_mega_glossary = len(entry.get("keywords", [])) >= 35 and len(entry.get("body", "")) >= 1500
+        exact_kw_matched = False
+        direct_kw_hit_count = 0
+        matched_partial_groups: set[int] = set()
 
         if entry["id"].lower() in text_lower:
             specific_score += 15.0
             matched_specific_kws += 1
+            if entry["id"].lower() == text_lower.strip():
+                exact_kw_matched = True
 
         for kw in entry["keywords"]:
             kw_l = kw.lower()
@@ -577,42 +872,79 @@ def search_wiki_entries(
             if len(kw_l) == 1 and ord(kw_l[0]) < 0xAC00:
                 continue
 
-            is_generic_kw = kw_l in _GENERIC_GAME_KEYWORDS
+            is_generic_kw = kw_l in _GENERIC_GAME_KEYWORDS or kw_l in _MODIFIER_CHAPTER_TOKENS
 
             if kw_l in extra_boost_keywords:
                 specific_score += 12.0
                 matched_specific_kws += 1
+                if kw_l == text_lower or kw_compact == text_compact:
+                    exact_kw_matched = True
                 continue
 
             if kw_l.isascii() and kw_l.isalnum() and len(kw_l) <= 3:
-                if re.search(rf"(?<![a-z0-9]){re.escape(kw_l)}(?![a-z0-9])", text_lower) or kw_l in core_tokens:
+                if (
+                    re.search(rf"(?<![a-z0-9]){re.escape(kw_l)}(?![a-z0-9])", text_lower)
+                    or kw_l in core_tokens
+                    or kw_l in expanded_alias_set
+                ):
                     if is_generic_kw:
                         generic_score += 0.5
                     else:
-                        specific_score += 12.0
+                        if (
+                            kw_l == text_lower
+                            or kw_compact == text_compact
+                            or (text_compact in _QUERY_SYNONYMS_LOWER and kw_l in expanded_alias_set)
+                        ):
+                            exact_kw_matched = True
+                        direct_kw_hit_count += 1
+                        specific_score += 12.0 if direct_kw_hit_count <= 3 else 2.0
                         matched_specific_kws += 1
                 continue
 
-            if kw_l in text_lower or (len(kw_compact) >= 2 and kw_compact in text_compact):
+            is_direct_hit = (
+                kw_l in text_lower
+                or (len(kw_compact) >= 2 and kw_compact in text_compact)
+                or kw_l in expanded_alias_set
+                or kw_compact in expanded_alias_set
+            )
+            if is_direct_hit:
                 if is_generic_kw:
                     generic_score += 0.5
                 else:
+                    if (
+                        kw_l == text_lower
+                        or kw_compact == text_compact
+                        or (
+                            text_compact in _QUERY_SYNONYMS_LOWER
+                            and (kw_l in expanded_alias_set or kw_compact in expanded_alias_set)
+                        )
+                    ):
+                        exact_kw_matched = True
                     has_hangul_or_choseong = bool(re.search(r"[\u3131-\u3163\uac00-\ud7a3]", kw_l))
                     weight = 14.0 if has_hangul_or_choseong else (8.0 + min(len(kw_l), 6) * 0.8)
-                    specific_score += weight
+                    direct_kw_hit_count += 1
+                    specific_score += weight if direct_kw_hit_count <= 3 else min(weight, 2.0)
                     matched_specific_kws += 1
-            elif not is_generic_kw and any(ct in kw_compact for ct in core_tokens if len(ct) >= 2):
-                specific_score += 7.0
-                matched_specific_kws += 1
+            elif not is_generic_kw and token_groups:
+                for g_idx, aliases in enumerate(token_groups):
+                    if g_idx not in matched_partial_groups and any(_token_in_text(a, kw_compact) for a in aliases):
+                        matched_partial_groups.add(g_idx)
+                        specific_score += 7.0
+                        matched_specific_kws += 1
 
         # 補充：若關鍵字清單未直接命中，檢查脫去贅字後的 core_tokens 與中文斷詞片段 (query_subterms) 是否出現在內文 (body) 中
-        if specific_score == 0.0 and (core_tokens or query_subterms):
+        if specific_score == 0.0 and (core_tokens or query_subterms or expanded_alias_set):
             body_l = entry["body"].lower()
             body_no_de = body_l.replace("的", "")
-            for ct in core_tokens:
-                if len(ct) >= 2 and (ct in body_l or ct.replace("的", "") in body_no_de):
-                    specific_score += 6.5
-                    matched_specific_kws += 1
+            for group in token_groups:
+                for alias in group:
+                    if len(alias) >= 2 and (
+                        _token_in_text(alias, body_l)
+                        or _token_in_text(alias.replace("的", ""), body_no_de)
+                    ):
+                        specific_score += 6.5
+                        matched_specific_kws += 1
+                        break
 
             if specific_score == 0.0 and query_subterms:
                 matched_long_subterms = 0
@@ -629,11 +961,109 @@ def search_wiki_entries(
                     specific_score += matched_long_subterms * 7.5 + matched_short_subterms * 3.5
                     matched_specific_kws += matched_long_subterms + matched_short_subterms
 
+        # YAML V2 三維座標鎖定與跨系列排擠抑制
+        entry_series = entry.get("series") or ""
+        entry_chapter = entry.get("chapter") or ""
+        entry_timeline = entry.get("timeline") or ""
+
+        if coords["series"] and entry_series:
+            if entry_series in coords["series"]:
+                if coords["chapters"] and entry_chapter in coords["chapters"]:
+                    specific_score += 22.0
+                    matched_specific_kws += 2
+                elif coords["chapters"] and entry_chapter and entry_chapter != "all" and entry_chapter not in coords["chapters"]:
+                    specific_score *= 0.45
+                elif not coords["chapters"]:
+                    specific_score += 8.0
+                    matched_specific_kws += 1
+            else:
+                if coords["chapters"] and entry_chapter in coords["chapters"]:
+                    specific_score *= 0.2
+
+        if coords["timelines"] and entry_timeline in ("classic", "reboot"):
+            if entry_timeline in coords["timelines"]:
+                specific_score += 14.0
+                matched_specific_kws += 1
+            else:
+                specific_score *= 0.35
+
+        # YAML V2「主詞 (subject) + 子面向 (aspects)」雙層組合加權，避免同名多卡排擠
+        subject_raw = (entry.get("subject") or "").strip().lower()
+        if specific_score > 0 and subject_raw:
+            subject_parts = [p.strip() for p in re.split(r"[/（）()、,，&與和及]", subject_raw) if len(p.strip()) >= 2]
+            if not subject_parts:
+                subject_parts = [subject_raw]
+            if any(sp in text_lower or sp.replace(" ", "") in text_compact for sp in subject_parts):
+                aspects_list = [str(a).strip().lower() for a in entry.get("aspects", []) if len(str(a).strip()) >= 2]
+                if any(asp in text_lower or asp.replace(" ", "") in text_compact for asp in aspects_list):
+                    specific_score = specific_score * 1.8 + 12.0
+                    matched_specific_kws += 1
+
+        # 精準匹配、標題加權、多詞覆蓋率與巨型總表降噪
+        if specific_score > 0:
+            if exact_kw_matched:
+                specific_score += 12.0 if is_mega_glossary else 22.0
+            if not is_mega_glossary and len(text_compact) >= 2:
+                if text_compact in (name_zh_compact, name_kr_compact, subject_compact):
+                    specific_score += 28.0
+                elif (
+                    _token_in_text(text_compact, name_zh_compact)
+                    or _token_in_text(text_compact, subject_compact)
+                    or _token_in_text(text_compact, name_kr_compact)
+                ):
+                    specific_score += 14.0
+
+            if len(token_groups) >= 2 or (len(token_groups) == 1 and short_qualifiers):
+                header_parts = [
+                    name_zh_compact,
+                    name_kr_compact,
+                    subject_compact,
+                    *(re.sub(r"\s+", "", str(a).lower()) for a in entry.get("aspects", [])),
+                    *(re.sub(r"\s+", "", str(k).lower()) for k in entry.get("keywords", [])),
+                ]
+                header_compact = " ".join(p for p in header_parts if p)
+                body_compact = re.sub(r"\s+", "", entry["body"].lower())
+
+                header_covered = 0
+                any_covered = 0
+                for aliases in token_groups:
+                    in_header = any(_token_in_text(a, header_compact) for a in aliases)
+                    in_body = in_header or any(_token_in_text(a, body_compact) for a in aliases)
+                    if in_header:
+                        header_covered += 1
+                    if in_body:
+                        any_covered += 1
+
+                for sq in short_qualifiers:
+                    if sq in header_compact:
+                        specific_score += 14.0
+                    elif sq in body_compact:
+                        specific_score += 6.0
+
+                if len(token_groups) >= 2:
+                    if any_covered == len(token_groups):
+                        specific_score += 30.0 * (any_covered - 1)
+                        if header_covered == len(token_groups):
+                            specific_score += 18.0
+                    elif any_covered >= 2:
+                        specific_score += 14.0 * (any_covered - 1)
+                    else:
+                        specific_score *= 0.55
+
+            if (
+                is_mega_glossary
+                and not exact_kw_matched
+                and not _token_in_text(text_compact, name_zh_compact)
+            ):
+                specific_score *= 0.5
+
         # 只有真正命中「具體專有關鍵字 (specific_score > 0)」的條目才納入檢索結果！
         if specific_score > 0:
             total_score = specific_score + generic_score
+            if entry.get("category") == "community_contrib":
+                total_score += 8.0
             if matched_specific_kws >= 2:
-                total_score += matched_specific_kws * 2.5
+                total_score += min(matched_specific_kws, 5) * 2.5
             if total_score > max_specific_score:
                 max_specific_score = total_score
             if entry["category"] == "slang":
@@ -647,7 +1077,21 @@ def search_wiki_entries(
     slang_hits = [item[1] for item in scored_slang[:max_slang]]
     lore_hits = [item[1] for item in scored_lore[:max_lore]]
 
-    # LightRAG 1-hop 實體關聯圖譜展開
+    all_scored = sorted(
+        scored_slang + scored_lore,
+        key=lambda x: (-x[0], x[1]["id"]),
+    )
+    ranked_hits: list[dict] = []
+    seen_ranked_ids: set[str] = set()
+    max_ranked = max(max_slang + max_lore, 12)
+    for _, item in all_scored:
+        if item["id"] not in seen_ranked_ids:
+            seen_ranked_ids.add(item["id"])
+            ranked_hits.append(item)
+            if len(ranked_hits) >= max_ranked:
+                break
+
+    # LightRAG 1-hop 實體關聯圖譜展開（若關聯條目已被取代則自動導向最新版本）
     related_hits: list[dict] = []
     if expand_lightrag and (slang_hits or lore_hits):
         selected_ids = {e["id"] for e in slang_hits} | {e["id"] for e in lore_hits}
@@ -656,7 +1100,16 @@ def search_wiki_entries(
 
         for primary_entry in (lore_hits[:2] + slang_hits[:2]):
             for rel_id in primary_entry.get("related_ids", []):
-                if rel_id not in selected_ids and rel_id not in candidate_rel_ids and rel_id in by_id:
+                if rel_id not in by_id:
+                    continue
+                target_rel = by_id[rel_id]
+                if target_rel.get("superseded_by"):
+                    rep_id = target_rel["superseded_by"][-1]
+                    if rep_id in by_id and not by_id[rep_id].get("superseded_by"):
+                        rel_id = rep_id
+                    else:
+                        continue
+                if rel_id not in selected_ids and rel_id not in candidate_rel_ids:
                     candidate_rel_ids.append(rel_id)
 
         for rel_id in candidate_rel_ids[:2]:
@@ -665,6 +1118,7 @@ def search_wiki_entries(
     return {
         "slang_hits": slang_hits,
         "lore_hits": lore_hits,
+        "ranked_hits": ranked_hits,
         "related_hits": related_hits,
         "dynamic_notes": dynamic_notes,
         "max_specific_score": max_specific_score,
@@ -683,6 +1137,49 @@ def is_game_or_korean_context(text: str) -> bool:
     if re.search(r"[\u3131-\u3163\uac00-\ud7a3]{2,}", text):
         return True
     if re.search(r"\d+\s*[퀸렙]", text):
+        return True
+    return False
+
+
+def _format_entry_for_rag(e: dict) -> str:
+    """為隨改版變動 (volatile) 的條目補上時效基準提醒，並於含有站內導覽連結時附上真實連結。"""
+    body = e["body"]
+    if e.get("freshness") == "volatile" and "時效提醒" not in body:
+        src = e.get("source") or e.get("source_file") or "本地知識庫"
+        upd = e.get("updated_at") or "近期整理"
+        body += (
+            f"\n- 📌 **時效提醒**：此為隨版本變動之實戰戰術／生態資料"
+            f"（來源：{src}｜基準：{upd}），回答時請帶上整理基準口吻。"
+        )
+    guide_url = str(e.get("guide_url") or "").strip()
+    if guide_url and guide_url not in e["body"]:
+        body += (
+            f"\n- 📍 **伺服器站內圖文攻略導覽**：{guide_url}"
+            "（若群友想看地圖標點／完整圖文，請直接附上此真實連結導覽；嚴禁自行捏造未記載的 Discord 連結！）"
+        )
+    return body
+
+
+_KR_TRANSLATION_CUES = (
+    "翻譯", "翻一下", "翻成中文", "幫我翻", "這句韓文", "韓文意思",
+    "韓文是什麼", "看不懂這句", "寫什麼", "在說什麼", "什麼意思", "啥意思", "translate",
+)
+
+
+def _is_korean_translation_request(query_text: str, ocr_extracted_text: str = "") -> bool:
+    """
+    判斷是否為「韓文攻略短句／截圖翻譯請求」：
+    1. 提問或 OCR 文字必須至少包含韓文音節詞塊 (가-힣, 長度>=2)；純初聲縮寫不觸發翻譯模式。
+    2. 提問出現翻譯／意思關鍵詞，或包含 >= 3 個空白分隔之韓文音節詞塊時，啟動翻譯輔助模式。
+    """
+    q_text = query_text or ""
+    combined = f"{q_text}\n{ocr_extracted_text or ''}"
+    if not re.search(r"[\uac00-\ud7a3]{2,}", combined):
+        return False
+    q_lower = q_text.lower()
+    if any(cue in q_lower for cue in _KR_TRANSLATION_CUES):
+        return True
+    if len(re.findall(r"[\uac00-\ud7a3]{2,}", q_text)) >= 3:
         return True
     return False
 
@@ -707,11 +1204,15 @@ def build_auto_rag_context(
         kw in primary_query.lower()
         for kw in ("主角群", "主角", "四人組", "1年a班", "10種", "十種", "常見", "種類", "哪些殭屍", "reboot", "리부트", "重製")
     )
+    in_domain_for_disambig = is_game_or_korean_context(primary_query) or bool(
+        recent_context_text and is_game_or_korean_context(recent_context_text)
+    )
     result = search_wiki_entries(
         primary_query,
         max_slang=10 if is_vision else 6,
         max_lore=6 if is_group_query else 4,
         expand_lightrag=True,
+        allow_bare_chapter_disambig=in_domain_for_disambig,
     )
 
     # 若當前句子未命中任何專有名詞，且屬於代名詞追問/短句追問，才拿最近上下文輔助檢索
@@ -730,6 +1231,7 @@ def build_auto_rag_context(
             max_slang=6,
             max_lore=4,
             expand_lightrag=True,
+            allow_bare_chapter_disambig=is_game_or_korean_context(recent_context_text),
         )
         if fallback_result["max_specific_score"] > 0 or fallback_result["dynamic_notes"]:
             result = fallback_result
@@ -739,6 +1241,14 @@ def build_auto_rag_context(
     related_hits = result["related_hits"]
     dynamic_notes = result["dynamic_notes"]
 
+    hotfix_hits = [
+        e for e in (slang_hits + lore_hits)
+        if e.get("category") == "community_contrib"
+    ]
+    hotfix_ids = {e["id"] for e in hotfix_hits}
+    std_slang_hits = [e for e in slang_hits if e.get("category") != "community_contrib"]
+    std_lore_hits = [e for e in lore_hits if e.get("category") != "community_contrib"]
+
     has_hits = bool(slang_hits or lore_hits or dynamic_notes)
     in_domain = is_game_or_korean_context(primary_query) or (
         is_pronoun_followup and is_game_or_korean_context(recent_context_text)
@@ -747,10 +1257,46 @@ def build_auto_rag_context(
     if not has_hits and not in_domain:
         return ""
 
+    is_kr_translation = _is_korean_translation_request(query_text, ocr_extracted_text)
+
     # =========================================================================
     # 🛑 情況 A：屬於《殭屍學園》或韓服提問，但本地知識庫【完全沒有】對應專有條目！
     # =========================================================================
     if not has_hits and in_domain:
+        if is_kr_translation:
+            choseong_tokens = [
+                t for t in dict.fromkeys(
+                    re.findall(
+                        r"(?:[\u3131-\u3163][\u3131-\u3163\uac00-\ud7a3]*|[\uac00-\ud7a3]*[\u3131-\u3163]+)",
+                        primary_query,
+                    )
+                )
+                if len(t) >= 2 and t.lower() not in _COMMON_KR_STOPWORDS
+            ]
+            trans_blocks: list[str] = [
+                "\n\n==========================================",
+                "🌐【韓文短句翻譯模式（未命中特定專有條目）】",
+            ]
+            if ocr_extracted_text.strip():
+                trans_blocks.append(
+                    f"\n📸 **【Pass-1 圖中提取之文字與畫面視覺實體】**：\n"
+                    f"{ocr_extracted_text.strip()}"
+                )
+            if choseong_tokens:
+                choseong_str = "、".join(f"`{t}`" for t in choseong_tokens[:8])
+                trans_blocks.append(
+                    f"\n🛑 **【CRAG 未知韓文初聲縮寫攔截】**：\n"
+                    f"  * 系統偵測到提問或圖片中含有未收錄於本地知識庫的韓文初聲縮寫：{choseong_str}。\n"
+                    f"  * **絕對禁止猜測或腦補該縮寫意思**，請保留原詞並直接坦白說明這部分不確定。"
+                )
+            trans_blocks.append(
+                "\n💡 **【翻譯與防幻覺原則】**：\n"
+                "  1. 對於一般韓文日常文法詞、動詞、副詞與句子，請直接自然流暢地翻譯成台灣繁體中文。\n"
+                "  2. 嚴禁自行編造未收錄於知識庫的《殭屍學園》角色、模式、機制或專有名詞設定；若遇不確定的遊戲縮寫或未知初聲縮寫，請保留原詞並坦白註明不確定。"
+            )
+            trans_blocks.append("==========================================")
+            return "\n".join(trans_blocks)
+
         return (
             "\n\n==========================================\n"
             "🛑【CRAG 知識邊界提醒：本地預檢索未直接命中特定條目】\n"
@@ -767,7 +1313,13 @@ def build_auto_rag_context(
     unmatched_specific = _extract_unmatched_specific_zh_en_terms(
         query_text, slang_hits, lore_hits, related_hits
     )
-    all_unmatched = list(dict.fromkeys(unmatched_kr + unmatched_specific))
+    if is_kr_translation:
+        unmatched_jamo = [t for t in unmatched_kr if re.search(r"[\u3131-\u3163]", t)]
+        unmatched_general_kr = [t for t in unmatched_kr if not re.search(r"[\u3131-\u3163]", t)]
+        del unmatched_general_kr  # 一般韓文文法／動詞詞塊由翻譯輔助模式順譯，不觸發 CRAG 未知攔截
+        all_unmatched = list(dict.fromkeys(unmatched_jamo + unmatched_specific))
+    else:
+        all_unmatched = list(dict.fromkeys(unmatched_kr + unmatched_specific))
 
     blocks: list[str] = []
     blocks.append("\n\n==========================================")
@@ -794,23 +1346,41 @@ def build_auto_rag_context(
             f"    2. 針對上述【未收錄的詞彙 `{unmatched_str}`】，**絕對禁止自己亂猜意思，也嚴禁硬湊到旁邊已知的詞彙上**！請直接在回覆中老實說：「至於 `{unmatched_str}` 這部分我手邊沒確切資料／沒印象，就不亂猜了。」"
         )
 
-    if slang_hits:
+    if is_kr_translation:
+        blocks.append(
+            "\n🌐 **【韓文攻略短句翻譯輔助模式】**：\n"
+            "  1. 凡下方【參考資料】已命中的遊戲專有名詞、報位與黑話，必須優先使用知識庫對應之台灣玩家慣用語"
+            "（如 `기술실`→武器庫、`겹스`→連體機、`광기`→警衛、`넘치는 광기`→藍光、`액체`→燒瓶、`스워드`→武器庫1技/刀、`석궁`→紅弓、`확성기`→喇叭、`빗자루`→掃把、`펄스 빔`→雷射槍、`고정`→固定機、`우산`→雨傘）。\n"
+            "  2. 其餘一般韓文日常文法詞、動詞、副詞與語氣詞，請自然流暢地翻成台灣繁體中文短句。\n"
+            "  3. 若夾雜未收錄之韓文初聲縮寫或疑似未收錄的冷門專有名詞，仍嚴禁腦補猜測，應保留原詞並坦白註明不確定該詞意思。"
+        )
+
+    if hotfix_hits:
+        blocks.append("\n⚡ **【群友最新實測與改版熱修補（最高優先！若與下方基礎資料衝突，請 100% 以此處最新資訊為準）】**：")
+        for e in hotfix_hits:
+            blocks.append(_format_entry_for_rag(e))
+
+    if std_slang_hits:
         blocks.append("\n📖 **【對應之韓服開房術語與縮寫釋義】**：")
-        for e in slang_hits:
-            blocks.append(e["body"])
+        for e in std_slang_hits:
+            blocks.append(_format_entry_for_rag(e))
 
-    if lore_hits:
+    if std_lore_hits:
         blocks.append("\n🗂️ **【對應之《殭屍學園》台服官方角色譯名／模式／劇情設定】**：")
-        for e in lore_hits:
-            blocks.append(e["body"])
+        for e in std_lore_hits:
+            blocks.append(_format_entry_for_rag(e))
 
-    if related_hits:
+    filtered_related = [
+        r for r in related_hits
+        if not r.get("superseded_by") and r["id"] not in hotfix_ids
+    ]
+    if filtered_related:
         blocks.append("\n🔗 **【延伸背景補充】**：")
-        for e in related_hits:
+        for e in filtered_related:
             compact_body = e["body"]
             if len(compact_body) > 240:
                 compact_body = compact_body[:240] + "..."
-            blocks.append(compact_body)
+            blocks.append(_format_entry_for_rag({**e, "body": compact_body}))
 
     blocks.append(
         "\n🛡️ **【100% 閉卷考防幻覺鐵律（務必遵守）】**：\n"
@@ -829,32 +1399,420 @@ def build_auto_rag_context(
     return "\n".join(blocks)
 
 
+def _format_entry_for_lookup(e: dict) -> str:
+    """為 `!wiki` 指令與工具查詢結果附加精簡的條目 ID、來源與整理基準日註記。"""
+    src = e.get("source") or e.get("source_file") or "本地知識庫"
+    upd = e.get("updated_at") or "基礎庫"
+    fresh_note = "（會隨改版變動）" if e.get("freshness") == "volatile" else ""
+    sup = e.get("supersedes") or []
+    sup_note = f" ｜ 🔄 取代：{', '.join(sup)}" if sup else ""
+    guide_url = str(e.get("guide_url") or "").strip()
+    guide_note = f" ｜ 📍 導覽：{guide_url}" if guide_url else ""
+    footer = f"\n└ `ID: {e['id']}` ｜ 📂 來源：{src} ｜ 📅 基準：{upd}{fresh_note}{sup_note}{guide_note}"
+    return f"{e['body']}{footer}"
+
+
+def extract_focused_entry_body(
+    entry: dict,
+    query_text: str,
+    max_chars: int = 1200,
+) -> tuple[str, bool]:
+    """
+    對長篇總表條目（如 4,200 字武器總表或 3,000 字黑話總表）精準萃取與查詢直接相關的子條目與表格列，
+    避免使用者一查單詞就看到整頁被截斷的無關清單。回傳 (excerpt_or_full, was_focused)。
+    """
+    body = (entry.get("body") or "").strip()
+    if len(body) <= max_chars:
+        return body, False
+
+    q_lower = (query_text or "").strip().lower()
+    q_compact = re.sub(r"\s+", "", q_lower)
+    core_q = re.sub(
+        r"(?:你可以|可以|能不能|能問|請問|幫我|跟我|介紹一下|介紹|講一下|說明一下|解釋一下|有關|關於|的問題嗎|的問題|是什麼意思|是什麼|是啥|嗎|呢|吧|喔|啊|系列|殭屍學園|殭學|[?？!！。，,\s])+",
+        " ",
+        q_lower,
+    ).strip()
+
+    raw_terms: list[str] = []
+    if q_lower:
+        raw_terms.append(q_lower)
+    if q_compact and q_compact != q_lower:
+        raw_terms.append(q_compact)
+    for tok in re.split(r"[\s/、,，]+", core_q):
+        t = tok.strip()
+        if not t:
+            continue
+        raw_terms.append(t)
+        raw_terms.extend(_QUERY_SYNONYMS_LOWER.get(t, ()))
+        stem = _strip_korean_particle(t)
+        if stem and stem != t:
+            raw_terms.append(stem)
+    for st in _extract_chinese_subterms(core_q):
+        raw_terms.append(st.lower())
+    if not raw_terms and q_compact:
+        raw_terms.append(q_compact)
+
+    search_terms: list[str] = []
+    seen_terms: set[str] = set()
+    for term in raw_terms:
+        tl = term.strip().lower()
+        if not tl or tl in seen_terms:
+            continue
+        if len(tl) == 1 and tl != q_compact and (tl in _SHORT_QUALIFIER_STOP_CHARS or tl.isascii()):
+            continue
+        if len(tl) >= 2 or tl == q_compact or (not tl.isascii() and tl not in _SHORT_QUALIFIER_STOP_CHARS):
+            seen_terms.add(tl)
+            search_terms.append(tl)
+
+    lines = body.splitlines()
+    header_line = ""
+    start_idx = 0
+    if lines and lines[0].startswith("【《殭屍學園》"):
+        header_line = lines[0]
+        start_idx = 1
+
+    # 將長文拆解為可獨立挑選的「項目塊」(bullet block 或 markdown table row)，並保留所屬 ### 標題與表格表頭
+    blocks: list[dict] = []
+    current_section = ""
+    current_table_header: list[str] = []
+    i = start_idx
+    n = len(lines)
+    while i < n:
+        ln = lines[i]
+        stripped = ln.strip()
+        if not stripped:
+            current_table_header = []
+            i += 1
+            continue
+        if stripped.startswith("### "):
+            current_section = ln
+            current_table_header = []
+            i += 1
+            continue
+        if (
+            stripped.startswith("|")
+            and i + 1 < n
+            and re.fullmatch(r"[\|\s:\-]+", lines[i + 1].strip())
+        ):
+            current_table_header = [ln, lines[i + 1]]
+            i += 2
+            continue
+        if stripped.startswith("|") and not re.fullmatch(r"[\|\s:\-]+", stripped):
+            blocks.append({
+                "idx": len(blocks),
+                "section": current_section,
+                "table_header": list(current_table_header),
+                "text": ln,
+            })
+            i += 1
+            continue
+        if re.match(r"^[-*]\s+", ln):
+            current_table_header = []
+            buf = [ln]
+            j = i + 1
+            while j < n:
+                nxt = lines[j]
+                if nxt.startswith(("  ", "\t")) or re.match(r"^\s+[-*]\s+", nxt):
+                    buf.append(nxt)
+                    j += 1
+                else:
+                    break
+            blocks.append({
+                "idx": len(blocks),
+                "section": current_section,
+                "table_header": [],
+                "text": "\n".join(buf),
+            })
+            i = j
+            continue
+        current_table_header = []
+        blocks.append({
+            "idx": len(blocks),
+            "section": current_section,
+            "table_header": [],
+            "text": ln,
+        })
+        i += 1
+
+    scored_blocks: list[tuple[float, int, dict]] = []
+    for blk in blocks:
+        blk_l = blk["text"].lower()
+        bold_text = " ".join(re.findall(r"\*\*(.+?)\*\*", blk_l))
+        score = 0.0
+        distinct_hits = 0
+        for term in search_terms:
+            if _token_in_text(term, bold_text):
+                score += 6.0 if term == q_lower else 5.0
+                distinct_hits += 1
+            elif _token_in_text(term, blk_l):
+                score += 2.5 if term == q_lower else 2.0
+                distinct_hits += 1
+        if distinct_hits > 0:
+            score += distinct_hits * 1.5
+            scored_blocks.append((score, -blk["idx"], blk))
+
+    if scored_blocks:
+        scored_blocks.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        budget = max(300, max_chars - 100)
+        used = len(header_line) + (1 if header_line else 0)
+        chosen: list[dict] = []
+        seen_sections: set[str] = set()
+
+        for _, _, blk in scored_blocks:
+            extra = len(blk["text"]) + 1
+            if blk["section"] and blk["section"] not in seen_sections:
+                extra += len(blk["section"]) + 2
+            if blk["table_header"]:
+                extra += sum(len(h) + 1 for h in blk["table_header"])
+            if chosen and used + extra > budget:
+                continue
+            chosen.append(blk)
+            used += extra
+            if blk["section"]:
+                seen_sections.add(blk["section"])
+            if used >= budget:
+                break
+
+        chosen.sort(key=lambda b: b["idx"])
+        out_lines: list[str] = []
+        if header_line:
+            out_lines.append(header_line)
+        last_section = None
+        last_table_header: Optional[list[str]] = None
+        for blk in chosen:
+            if blk["section"] and blk["section"] != last_section:
+                if out_lines:
+                    out_lines.append("")
+                out_lines.append(blk["section"])
+                last_section = blk["section"]
+                last_table_header = None
+            if blk["table_header"] and blk["table_header"] != last_table_header:
+                out_lines.extend(blk["table_header"])
+                last_table_header = blk["table_header"]
+            elif not blk["table_header"]:
+                last_table_header = None
+            out_lines.append(blk["text"])
+
+        out_lines.append(
+            f"\n*(🔎 已從長篇總表精選 {len(chosen)}/{len(scored_blocks)} 條直接相關項目；全文共 {len(body)} 字)*"
+        )
+        return "\n".join(out_lines).strip(), True
+
+    cut_limit = max(200, max_chars - 60)
+    snippet = body[:cut_limit]
+    nl_pos = snippet.rfind("\n")
+    if nl_pos > cut_limit // 2:
+        snippet = snippet[:nl_pos]
+    return f"{snippet.rstrip()}\n\n*(📄 長篇條目預覽，全文共 {len(body)} 字)*", True
+
+
+def list_wiki_entries_by_category(category_key: Optional[str] = None) -> list[dict]:
+    """依分類回傳所有有效（未被覆寫）的知識庫條目。"""
+    entries = [e for e in load_wiki_entries() if not e.get("superseded_by")]
+    if category_key:
+        entries = [e for e in entries if e.get("category") == category_key]
+    entries.sort(key=lambda e: ((e.get("name_zh") or e["id"]), e["id"]))
+    return entries
+
+
+def suggest_wiki_entries(query_text: str, max_suggestions: int = 6) -> list[dict]:
+    """針對錯字或模糊搜尋詞提供相近條目建議。"""
+    q_compact = re.sub(r"\s+", "", (query_text or "").strip().lower())
+    if not q_compact:
+        return []
+
+    q_chars = set(re.findall(r"[\u4e00-\u9fff\uac00-\ud7a3\u3131-\u3163]", q_compact))
+    entries = [e for e in load_wiki_entries() if not e.get("superseded_by")]
+    scored: list[tuple[float, dict]] = []
+
+    for entry in entries:
+        candidates = [
+            entry.get("name_zh") or "",
+            entry.get("name_kr") or "",
+            entry.get("subject") or "",
+            *entry.get("keywords", [])[:15],
+        ]
+        best_seq = 0.0
+        for cand in candidates:
+            c_comp = re.sub(r"\s+", "", str(cand).lower())
+            if not c_comp:
+                continue
+            ratio = difflib.SequenceMatcher(None, q_compact, c_comp).ratio()
+            if ratio > best_seq:
+                best_seq = ratio
+
+        overlap_score = 0.0
+        if q_chars:
+            cand_blob = " ".join(str(c) for c in candidates[:12])
+            cand_chars = set(re.findall(r"[\u4e00-\u9fff\uac00-\ud7a3\u3131-\u3163]", cand_blob.lower()))
+            if cand_chars:
+                overlap_score = (len(q_chars & cand_chars) / max(len(q_chars), 1)) * 0.78
+
+        sim = max(best_seq, overlap_score)
+        if sim >= 0.32:
+            len_penalty = min(len(entry.get("body", "")), 4000) * 1e-5
+            scored.append((sim - len_penalty, entry))
+
+    scored.sort(key=lambda x: (-x[0], x[1]["id"]))
+    return [item[1] for item in scored[:max_suggestions]]
+
+
+def search_wiki_interactive(query_text: str, max_results: int = 20) -> dict:
+    """
+    專供 Discord `!wiki` 互動指令使用的查詢介面：
+    支援分類目錄直達 (`角色` / `黑話`)、精準排名前綴、單字/短詞備援、長表重點摘錄與錯字推薦，
+    且完全不影響對話 RAG 的 CRAG 拒答防線。
+    """
+    q = (query_text or "").strip()
+    if not q:
+        return {
+            "mode": "empty",
+            "query": "",
+            "category_key": None,
+            "results": [],
+            "related_entries": [],
+            "dynamic_notes": [],
+            "focused_snippets": {},
+        }
+
+    q_compact = re.sub(r"\s+", "", q.lower())
+    cat_key = _CATEGORY_QUERY_ALIASES.get(q_compact)
+    if cat_key:
+        cat_entries = list_wiki_entries_by_category(cat_key)
+        return {
+            "mode": "category",
+            "query": q,
+            "category_key": cat_key,
+            "results": cat_entries,
+            "related_entries": [],
+            "dynamic_notes": [],
+            "focused_snippets": {},
+        }
+
+    res = search_wiki_entries(q, max_slang=12, max_lore=15, expand_lightrag=True)
+    results = list(res.get("ranked_hits") or [])[:max_results]
+    related_entries = [
+        r for r in res.get("related_hits", [])
+        if not r.get("superseded_by") and all(r["id"] != x["id"] for x in results)
+    ]
+    dynamic_notes = list(res.get("dynamic_notes") or [])
+
+    if not results:
+        q_lower = q.lower()
+        active_entries = [e for e in load_wiki_entries() if not e.get("superseded_by")]
+        fallback_scored: list[tuple[float, dict]] = []
+        for entry in active_entries:
+            score = 0.0
+            kws_l = [k.lower() for k in entry.get("keywords", [])]
+            if q_lower in kws_l:
+                score += 20.0
+            if entry["id"].lower().startswith(f"{q_lower}_") or entry["id"].lower() == q_lower:
+                score += 18.0
+            if f"**{q_lower}**" in entry["body"].lower():
+                score += 12.0
+            elif len(q_compact) >= 2 and q_compact in re.sub(r"\s+", "", entry["name_zh"].lower()):
+                score += 10.0
+            if score > 0:
+                fallback_scored.append((score, entry))
+        fallback_scored.sort(key=lambda x: (-x[0], x[1]["id"]))
+        results = [item[1] for item in fallback_scored[:max_results]]
+
+    if results:
+        focused_snippets = {
+            e["id"]: extract_focused_entry_body(e, q, max_chars=1200)
+            for e in (results + related_entries)
+        }
+        return {
+            "mode": "results",
+            "query": q,
+            "category_key": None,
+            "results": results,
+            "related_entries": related_entries,
+            "dynamic_notes": dynamic_notes,
+            "focused_snippets": focused_snippets,
+        }
+
+    if dynamic_notes:
+        return {
+            "mode": "results",
+            "query": q,
+            "category_key": None,
+            "results": [],
+            "related_entries": [],
+            "dynamic_notes": dynamic_notes,
+            "focused_snippets": {},
+        }
+
+    suggestions = suggest_wiki_entries(q, max_suggestions=6)
+    if suggestions:
+        focused_snippets = {
+            e["id"]: extract_focused_entry_body(e, q, max_chars=1200)
+            for e in suggestions
+        }
+        return {
+            "mode": "suggestions",
+            "query": q,
+            "category_key": None,
+            "results": suggestions,
+            "related_entries": [],
+            "dynamic_notes": [],
+            "focused_snippets": focused_snippets,
+        }
+
+    return {
+        "mode": "empty",
+        "query": q,
+        "category_key": None,
+        "results": [],
+        "related_entries": [],
+        "dynamic_notes": [],
+        "focused_snippets": {},
+    }
+
+
 def lookup_game_wiki_tool_impl(query: str) -> str:
     """
-    供 `!wiki` 指令與 Gemini Tool Calling 調用的《殭屍學園》本地知識庫檢索函式。
+    供 Gemini Tool Calling 調用的《殭屍學園》本地知識庫檢索函式（依相關度統一排序並精簡摘錄）。
     """
     q = (query or "").strip()
     if not q:
         return "請提供欲查詢的《殭屍學園》角色、模式、劇情或韓文黑話關鍵字（例如：'ㄷㅋㅈ'、'클모'、'李幼莉'、'Queen博士'、'올치어'）。"
 
-    result = search_wiki_entries(q, max_slang=6, max_lore=5, expand_lightrag=True)
-    slang_hits = result["slang_hits"]
-    lore_hits = result["lore_hits"]
-    related_hits = result["related_hits"]
-    dynamic_notes = result["dynamic_notes"]
+    result = search_wiki_entries(q, max_slang=6, max_lore=6, expand_lightrag=True)
+    ranked_hits = result.get("ranked_hits", [])[:5]
+    related_hits = result.get("related_hits", [])
+    dynamic_notes = result.get("dynamic_notes", [])
 
-    if not slang_hits and not lore_hits and not dynamic_notes:
+    if not ranked_hits and not dynamic_notes:
+        suggestions = suggest_wiki_entries(q, max_suggestions=4)
+        if suggestions:
+            sug_lines = "\n".join(
+                f"- 【{s['name_zh']}】(`ID: {s['id']}`｜關鍵字：`{'、'.join(s.get('keywords', [])[:4])}`)"
+                for s in suggestions
+            )
+            return (
+                f"目前知識庫尚未收錄與「{q}」直接相符的《殭屍學園》條目。\n"
+                f"相近條目參考（可改用以下關鍵字重查）：\n{sug_lines}"
+            )
         return f"目前知識庫尚未收錄與「{q}」直接相符的《殭屍學園》條目。"
 
     out: list[str] = []
     for note in dynamic_notes:
         out.append(note)
-    for e in slang_hits + lore_hits:
-        out.append(e["body"])
-    if related_hits:
+    for e in ranked_hits:
+        focused_body, _ = extract_focused_entry_body(e, q, max_chars=1200)
+        out.append(_format_entry_for_lookup({**e, "body": focused_body}))
+
+    seen_ids = {e["id"] for e in ranked_hits}
+    filtered_related = [
+        r for r in related_hits
+        if not r.get("superseded_by") and r["id"] not in seen_ids
+    ][:2]
+    if filtered_related:
         out.append("\n**【延伸關聯條目】**：")
-        for r in related_hits:
-            out.append(r["body"])
+        for r in filtered_related:
+            rel_body, _ = extract_focused_entry_body(r, q, max_chars=400)
+            out.append(_format_entry_for_lookup({**r, "body": rel_body}))
     return "\n\n".join(out)
 
 
@@ -1214,6 +2172,18 @@ def _get_next_contrib_id() -> int:
     return max_num + 1
 
 
+def _clean_yaml_list_tokens(items) -> list[str]:
+    """清理 YAML 行內陣列元素中的逗號與方括號，並去重保留順序。"""
+    if isinstance(items, str):
+        items = [items]
+    cleaned: list[str] = []
+    for k in items or []:
+        ks = str(k).strip().replace(",", " ").replace("[", "").replace("]", "")
+        if ks and ks not in cleaned:
+            cleaned.append(ks)
+    return cleaned
+
+
 def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = "") -> list[dict]:
     """
     將解析後的群友補充條目寫入 data/game_wiki/community_contributions.md，
@@ -1233,10 +2203,11 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
     if not existing_text:
         existing_text = (
             "# 《殭屍學園 (좀비고등학교)》群友補充知識庫 (Community Contributions)\n"
-            "> 本檔案由伺服器成員透過 `!wiki add` 與 `!wiki import` 指令共同編輯維護，修改後自動熱重載生效。\n"
+            "> 本檔案由伺服器成員透過 `!wiki add`、`!wiki import` 與 `!wiki replace` 指令共同編輯維護，修改後自動熱重載生效。\n"
         )
 
     next_num = _get_next_contrib_id()
+    today_str = datetime.now().strftime("%Y-%m-%d")
     added_records: list[dict] = []
     new_blocks: list[str] = []
 
@@ -1244,29 +2215,53 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
         entry_id = f"contrib_{next_num}"
         next_num += 1
         name_zh = (item.get("name_zh") or "群友補充條目").strip().replace("\n", " ")
-        kws = item.get("keywords") or [name_zh]
-        clean_kws = []
-        for k in kws:
-            ks = str(k).strip().replace(",", " ").replace("[", "").replace("]", "")
-            if ks and ks not in clean_kws:
-                clean_kws.append(ks)
+        clean_kws = _clean_yaml_list_tokens(item.get("keywords") or [name_zh])
+        if not clean_kws:
+            clean_kws = _clean_yaml_list_tokens([name_zh])
+
         body = (item.get("body") or "").strip()
         if author_name:
             body_with_credit = f"{body}\n- **補充提供者**：{author_name}"
         else:
             body_with_credit = body
 
-        kw_str = ", ".join(clean_kws)
+        updated_at = str(item.get("updated_at") or "").strip().replace("\n", " ") or today_str
+        default_source = f"群友補充 ({author_name})" if author_name else "群友補充"
+        source = str(item.get("source") or "").strip().replace("\n", " ") or default_source
+        freshness = str(item.get("freshness") or "volatile").strip().lower() or "volatile"
+        guide_url = str(item.get("guide_url") or "").strip().replace("\n", " ")
+        clean_supersedes = _clean_yaml_list_tokens(item.get("supersedes") or [])
+        clean_aspects = _clean_yaml_list_tokens(item.get("aspects") or [])
+        clean_related = _clean_yaml_list_tokens(item.get("related_ids") or [])
+
+        yaml_lines = [
+            "---",
+            f"id: {entry_id}",
+            "category: community_contrib",
+            f"name_zh: {name_zh}",
+        ]
+        for opt_key in ("timeline", "series", "chapter", "subject", "guide_url"):
+            opt_val = str(item.get(opt_key) or "").strip().replace("\n", " ")
+            if opt_val:
+                yaml_lines.append(f"{opt_key}: {opt_val}")
+        if clean_aspects:
+            yaml_lines.append(f"aspects: [{', '.join(clean_aspects)}]")
+
+        yaml_lines.extend([
+            f"source: {source}",
+            f"updated_at: {updated_at}",
+            f"freshness: {freshness}",
+            f"supersedes: [{', '.join(clean_supersedes)}]",
+            f"keywords: [{', '.join(clean_kws)}]",
+            f"related_ids: [{', '.join(clean_related)}]",
+            "---",
+        ])
+
         block = (
-            f"\n---\n"
-            f"id: {entry_id}\n"
-            f"category: community_contrib\n"
-            f"name_zh: {name_zh}\n"
-            f"keywords: [{kw_str}]\n"
-            f"related_ids: []\n"
-            f"---\n"
-            f"【《殭屍學園》[群友補充資料] — {name_zh}】\n"
-            f"{body_with_credit}\n"
+            "\n"
+            + "\n".join(yaml_lines)
+            + f"\n【《殭屍學園》[群友補充資料] — {name_zh}】\n"
+            + f"{body_with_credit}\n"
         )
         new_blocks.append(block)
         added_records.append({
@@ -1274,12 +2269,110 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
             "name_zh": name_zh,
             "keywords": clean_kws,
             "body": body,
+            "supersedes": clean_supersedes,
+            "updated_at": updated_at,
+            "guide_url": guide_url,
         })
 
     updated_content = existing_text + "\n" + "".join(new_blocks)
     COMMUNITY_WIKI_PATH.write_text(updated_content, encoding="utf-8")
     load_wiki_entries(force_reload=True)
     return added_records
+
+
+def replace_wiki_entry_with_community_hotfix(
+    target_id_or_kw: str,
+    new_body_text: str,
+    author_name: str = "",
+) -> dict:
+    """
+    透過 Runtime 熱修補 (`!wiki replace`) 新增一筆帶有 `supersedes` 的群友勘誤條目，
+    軟屏蔽舊條目（不直接修改靜態基礎庫），並讓 `!wiki del` 可隨時撤銷還原。
+    """
+    target_q = (target_id_or_kw or "").strip()
+    new_body = (new_body_text or "").strip()
+    if not target_q or not new_body:
+        return {
+            "success": False,
+            "error": "請提供欲替換的舊條目 ID（或關鍵字）以及更新後的新內容。",
+        }
+
+    entries = load_wiki_entries()
+    target_entry: Optional[dict] = None
+    target_q_lower = target_q.lower()
+    for e in entries:
+        if e["id"].lower() == target_q_lower:
+            target_entry = e
+            break
+
+    if target_entry is None:
+        res = search_wiki_entries(
+            target_q,
+            max_slang=3,
+            max_lore=3,
+            expand_lightrag=False,
+            allow_bare_chapter_disambig=False,
+        )
+        candidates = res.get("ranked_hits") or (res["lore_hits"] + res["slang_hits"])
+        if candidates:
+            target_entry = candidates[0]
+
+    if target_entry is None:
+        return {
+            "success": False,
+            "error": f"找不到與「{target_q}」相符的既有知識庫條目，請先用 `!wiki <關鍵字>` 確認條目 ID。",
+        }
+
+    base_name = (target_entry.get("name_zh") or target_entry["id"]).strip()
+    while base_name.endswith("（改版勘誤）"):
+        base_name = base_name[:-len("（改版勘誤）")].strip()
+    new_name_zh = f"{base_name}（改版勘誤）"
+
+    merged_kws: list[str] = []
+    seen_kws: set[str] = set()
+    raw_combined = list(target_entry.get("keywords", [])) + _extract_auto_keywords_from_text(
+        new_body, max_kws=25
+    )
+    for kw in raw_combined:
+        kw_s = str(kw).strip()
+        kw_l = kw_s.lower()
+        if (
+            kw_s
+            and kw_l not in seen_kws
+            and kw_l not in _GENERIC_GAME_KEYWORDS
+            and kw_l not in _MODIFIER_CHAPTER_TOKENS
+        ):
+            seen_kws.add(kw_l)
+            merged_kws.append(kw_s)
+
+    if not merged_kws:
+        merged_kws = [base_name]
+
+    hotfix_source = f"群友熱修補 ({author_name})" if author_name else "群友熱修補"
+    added = add_community_wiki_entries(
+        [
+            {
+                "name_zh": new_name_zh,
+                "keywords": merged_kws,
+                "body": new_body,
+                "supersedes": [target_entry["id"]],
+                "timeline": target_entry.get("timeline") or "",
+                "series": target_entry.get("series") or "",
+                "chapter": target_entry.get("chapter") or "",
+                "subject": target_entry.get("subject") or "",
+                "aspects": list(target_entry.get("aspects") or []),
+                "source": hotfix_source,
+                "freshness": "volatile",
+                "guide_url": target_entry.get("guide_url") or "",
+            }
+        ],
+        author_name=author_name,
+    )
+    return {
+        "success": True,
+        "replaced_entry": target_entry,
+        "new_entry": added[0],
+    }
 
 
 def list_community_wiki_entries() -> list[dict]:

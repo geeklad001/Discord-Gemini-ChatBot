@@ -31,10 +31,12 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
         embed.add_field(
             name="🧟 《殭屍學園》知識庫 (`!wiki` / `!圖鑑`)",
             value=(
-                "`!wiki <關鍵字>` — 查詢韓服黑話、角色、模式或攻略\n"
+                "`!wiki <關鍵字>` — 互動分頁／下拉切換查詢黑話、角色、模式與重點摘錄\n"
+                "`!wiki 目錄 [分類]` — 開啟分類目錄瀏覽（也可直接查 `!wiki 角色`、`!wiki 黑話`）\n"
                 "`!wiki add <關鍵字> | <內容>` — 單筆補充設定或黑話\n"
                 "`!wiki import` — 貼上長文或**夾帶 `.txt`/`.md` 檔**批次擴充資料庫\n"
-                "`!wiki list` / `!wiki del <編號>` — 查看或刪除群友補充條目"
+                "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫舊條目（熱修補）\n"
+                "`!wiki list` / `!wiki del <編號>` — 查看或刪除群友補充／撤銷覆寫"
             ),
             inline=False,
         )
@@ -435,7 +437,7 @@ class AssistantCog(commands.Cog):
 
         sub = (topic or "").strip().lower()
 
-        if sub in ("wiki", "圖鑑", "黑話", "좀고", "知識庫", "補充", "import"):
+        if sub in ("wiki", "圖鑑", "黑話", "좀고", "知識庫", "補充", "import", "replace", "勘誤"):
             if not self.settings.enable_game_wiki:
                 await ctx.send("ℹ️ 此伺服器目前未啟用《殭屍學園》知識庫模組（`ENABLE_GAME_WIKI=false`）。")
                 return
@@ -447,8 +449,9 @@ class AssistantCog(commands.Cog):
             embed.add_field(
                 name="🔍 查詢指令（別名：`!圖鑑`、`!黑話`、`!좀고`）",
                 value=(
-                    "`!wiki` — 查看收錄統計\n"
-                    "`!wiki <關鍵字>` — 查黑話、角色、模式（如 `!wiki ㄷㅋㅈ`、`!wiki 進化感染`）"
+                    "`!wiki` — 查看收錄統計並使用分類下拉選單瀏覽\n"
+                    "`!wiki <關鍵字>` — 互動分頁查詢黑話、角色、技能與點位（如 `!wiki 燒瓶 2技`、`!wiki ㅎㅇ`）\n"
+                    "`!wiki 目錄 [分類]` — 瀏覽全分類條目清單（也可直接輸入 `!wiki 角色`、`!wiki 黑話`）"
                 ),
                 inline=False,
             )
@@ -463,10 +466,11 @@ class AssistantCog(commands.Cog):
                 inline=False,
             )
             embed.add_field(
-                name="🗂️ 管理補充條目",
+                name="🛠️ 勘誤覆寫與管理條目",
                 value=(
-                    "`!wiki list` — 查看群友補充的條目與編號\n"
-                    "`!wiki del <編號>` — 刪除補充條目（如 `!wiki del contrib_1`）"
+                    "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫並軟屏蔽舊條目\n"
+                    "`!wiki list` — 查看群友補充／熱修補條目與編號\n"
+                    "`!wiki del <編號>` — 刪除補充條目或撤銷覆寫還原舊條目（如 `!wiki del contrib_1`）"
                 ),
                 inline=False,
             )

@@ -310,6 +310,331 @@ class TestDatabaseAndEngines(unittest.TestCase):
             self.assertEqual(len(chars), 1)
             self.assertTrue(chars[0]["is_in_party"])
 
+    def test_game_wiki_v2_coordinates_disambiguation_and_hotfix_supersede(self):
+        c1 = game_wiki_engine._detect_query_coordinates("H1 怎麼打")
+        self.assertIn("heroes", c1["series"])
+        self.assertIn("ep1", c1["chapters"])
+
+        c2 = game_wiki_engine._detect_query_coordinates("進擊的殭屍 Reboot 第一章")
+        self.assertIn("jinjom", c2["series"])
+        self.assertIn("reboot", c2["timelines"])
+        self.assertIn("ep1", c2["chapters"])
+
+        wiki_tmp = Path(self.tmpdir.name) / "game_wiki_tmp"
+        wiki_tmp.mkdir(parents=True, exist_ok=True)
+        (wiki_tmp / "test_v2.md").write_text(
+            """---
+id: jinjom_classic_ep1
+category: story_arc
+timeline: classic
+series: jinjom
+chapter: ep1
+name_zh: 進擊的殭屍 EP1 (舊版)
+source: Namuwiki
+updated_at: 2026-11
+freshness: stable
+keywords: [進擊的殭屍, EP1, 舊版主線]
+related_ids: []
+---
+舊版進擊的殭屍第一章劇情說明。
+
+---
+id: jinjom_reboot_ep1
+category: story_arc
+timeline: reboot
+series: jinjom
+chapter: ep1
+name_zh: 進擊的殭屍 Reboot 1部：破滅的裂隙
+source: Namuwiki
+updated_at: 2026-11
+freshness: stable
+keywords: [進擊的殭屍, 破滅的裂隙, 파멸의 균열, EP1]
+related_ids: []
+---
+重製版進擊的殭屍第一部破滅的裂隙劇情說明。
+
+---
+id: heroes_ep1
+category: game_mode
+timeline: classic
+series: heroes
+chapter: ep1
+name_zh: 英雄模式 EP1 (H1)
+source: Namuwiki
+updated_at: 2026-11
+freshness: stable
+keywords: [英雄模式, H1, EP1]
+related_ids: []
+---
+英雄模式第一章實戰說明。
+
+---
+id: char_nam_base
+category: character
+timeline: common
+subject: 南東進
+aspects: [基本設定, 班級]
+name_zh: 南東進 基本設定
+keywords: [南東進]
+related_ids: []
+---
+南東進是一年A班的學生。
+
+---
+id: char_nam_division
+category: character
+timeline: common
+series: division
+subject: 南東進
+aspects: [Division, 디비전, 第二季]
+name_zh: 南東進 Division 表現
+keywords: [南東進]
+related_ids: []
+---
+南東進在第二季的行動紀錄。
+
+---
+id: evo_host_sample
+category: evolution
+timeline: common
+series: evolution
+chapter: all
+subject: 宿主殭屍
+aspects: [技能, 進化]
+name_zh: 進化感染 宿主殭屍機制
+source: Namuwiki / Naver Cafe
+updated_at: 2026-11
+freshness: volatile
+guide_url: https://discord.com/channels/111/222/333
+keywords: [宿主殭屍, 숙주 좀비, 進化感染]
+related_ids: []
+---
+舊基準：宿主殭屍初始技能冷卻為 8 秒。
+""",
+            encoding="utf-8",
+        )
+
+        orig_wiki_dir = game_wiki_engine.WIKI_DIR
+        orig_csv_path = game_wiki_engine.CHAR_CSV_PATH
+        orig_comm_path = game_wiki_engine.COMMUNITY_WIKI_PATH
+        try:
+            game_wiki_engine.WIKI_DIR = wiki_tmp
+            game_wiki_engine.CHAR_CSV_PATH = wiki_tmp / "missing_chars.csv"
+            game_wiki_engine.COMMUNITY_WIKI_PATH = wiki_tmp / "community_contributions.md"
+            entries = game_wiki_engine.load_wiki_entries(force_reload=True)
+            by_id = {e["id"]: e for e in entries}
+            self.assertEqual(by_id["evo_host_sample"]["guide_url"], "https://discord.com/channels/111/222/333")
+            self.assertEqual(by_id["char_nam_base"]["guide_url"], "")
+
+            # 1. 非遊戲日常提及 EP1 不應誤觸發消歧義
+            self.assertEqual(game_wiki_engine.build_auto_rag_context("我昨天聽了 Podcast EP1"), "")
+
+            # 2. 遊戲領域中單問 EP1 應觸發消歧義，且不亂混入各系列細節
+            disambig_rag = game_wiki_engine.build_auto_rag_context("請問殭屍學園 EP1 劇情在演什麼")
+            self.assertIn("跨系列與新舊版本章節消歧義提醒", disambig_rag)
+            self.assertNotIn("英雄模式第一章實戰說明", disambig_rag)
+
+            # 3. 明確指定系列與時間線可精準鎖定 V2 條目
+            reboot_hits = game_wiki_engine.search_wiki_entries("進擊的殭屍 Reboot EP1")
+            self.assertEqual(reboot_hits["lore_hits"][0]["id"], "jinjom_reboot_ep1")
+
+            # 4. subject + aspects 雙層加權優先命中對應面向卡片（無 guide_url 時不額外渲染導覽）
+            aspect_hits = game_wiki_engine.search_wiki_entries("南東進 Division 劇情")
+            self.assertEqual(aspect_hits["lore_hits"][0]["id"], "char_nam_division")
+            no_guide_rag = game_wiki_engine.build_auto_rag_context("南東進 班級")
+            self.assertNotIn("伺服器站內圖文攻略導覽", no_guide_rag)
+
+            # 4.5 guide_url 應於 RAG 與 lookup 輸出正確呈現，且內文已含該 URL 時不重複附加
+            rag_before = game_wiki_engine.build_auto_rag_context("宿主殭屍技能")
+            self.assertIn("伺服器站內圖文攻略導覽", rag_before)
+            self.assertIn("https://discord.com/channels/111/222/333", rag_before)
+            lookup_before = game_wiki_engine.lookup_game_wiki_tool_impl("宿主殭屍")
+            self.assertIn("📍 導覽：https://discord.com/channels/111/222/333", lookup_before)
+            dedup_rag = game_wiki_engine._format_entry_for_rag({
+                "body": "參考 https://discord.com/channels/111/222/333",
+                "guide_url": "https://discord.com/channels/111/222/333",
+                "freshness": "stable",
+            })
+            self.assertNotIn("伺服器站內圖文攻略導覽", dedup_rag)
+
+            # 5. Runtime 熱修補軟屏蔽舊條目（並繼承 guide_url），且刪除後可立即還原
+            rep_res = game_wiki_engine.replace_wiki_entry_with_community_hotfix(
+                "evo_host_sample",
+                "2026-11 改版後宿主殭屍技能冷卻縮短為 5 秒。",
+                author_name="Tester",
+            )
+            self.assertTrue(rep_res["success"])
+            self.assertEqual(rep_res["new_entry"]["guide_url"], "https://discord.com/channels/111/222/333")
+            new_id = rep_res["new_entry"]["id"]
+
+            hotfix_hits = game_wiki_engine.search_wiki_entries("宿主殭屍")
+            hit_ids = [e["id"] for e in hotfix_hits["lore_hits"]]
+            self.assertIn(new_id, hit_ids)
+            self.assertNotIn("evo_host_sample", hit_ids)
+            self.assertEqual(hotfix_hits["lore_hits"][0]["guide_url"], "https://discord.com/channels/111/222/333")
+
+            rag_after = game_wiki_engine.build_auto_rag_context("宿主殭屍技能")
+            self.assertIn("群友最新實測與改版熱修補", rag_after)
+            self.assertIn("時效提醒", rag_after)
+            self.assertIn("伺服器站內圖文攻略導覽", rag_after)
+            self.assertIn("https://discord.com/channels/111/222/333", rag_after)
+            self.assertIn("5 秒", rag_after)
+            self.assertNotIn("冷卻為 8 秒", rag_after)
+            lookup_after = game_wiki_engine.lookup_game_wiki_tool_impl("宿主殭屍")
+            self.assertIn("📍 導覽：https://discord.com/channels/111/222/333", lookup_after)
+
+            # 刪除 hotfix 後，原條目立即恢復生效
+            self.assertTrue(game_wiki_engine.delete_community_wiki_entry(new_id))
+            restored_hits = game_wiki_engine.search_wiki_entries("宿主殭屍")
+            self.assertEqual(restored_hits["lore_hits"][0]["id"], "evo_host_sample")
+        finally:
+            game_wiki_engine.WIKI_DIR = orig_wiki_dir
+            game_wiki_engine.CHAR_CSV_PATH = orig_csv_path
+            game_wiki_engine.COMMUNITY_WIKI_PATH = orig_comm_path
+            game_wiki_engine.load_wiki_entries(force_reload=True)
+
+    def test_wiki_linter_validation_and_promote(self):
+        from scripts.wiki_linter import lint_wiki_file, promote_review_file
+
+        staging_tmp = Path(self.tmpdir.name) / "staging"
+        staging_tmp.mkdir(parents=True, exist_ok=True)
+
+        bad_review = staging_tmp / "bad.review.md"
+        bad_review.write_text(
+            "---\n"
+            "id: bad_card\n"
+            "category: evolution\n"
+            "name_zh: 錯誤示範\n"
+            "guide_url: not-a-url\n"
+            "keywords: [攻略, EP1, 進化感染]\n"
+            "---\n"
+            "南東進남동진 的測試文字。\n" + ("字" * 460) + "\n",
+            encoding="utf-8",
+        )
+        bad_res = lint_wiki_file(bad_review)
+        self.assertFalse(bad_res["ok"])
+        self.assertTrue(any("超過硬性上限" in err for err in bad_res["errors"]))
+        self.assertTrue(any("中韓黏連" in err for err in bad_res["errors"]))
+        self.assertTrue(any("guide_url" in err for err in bad_res["errors"]))
+        self.assertTrue(any("泛用詞" in warn for warn in bad_res["warnings"]))
+
+        bad_discord_review = staging_tmp / "bad_discord.review.md"
+        bad_discord_review.write_text(
+            "---\n"
+            "id: bad_discord_card\n"
+            "category: evolution\n"
+            "name_zh: 錯誤 Discord 連結\n"
+            "guide_url: https://discord.com/invite/not-a-channel\n"
+            "keywords: [進化階段]\n"
+            "---\n"
+            "這是測試 Discord 非頻道跳轉連結的卡片。\n",
+            encoding="utf-8",
+        )
+        bad_discord_res = lint_wiki_file(bad_discord_review)
+        self.assertFalse(bad_discord_res["ok"])
+        self.assertTrue(any("guide_url" in err for err in bad_discord_res["errors"]))
+
+        good_review = staging_tmp / "good.review.md"
+        good_review.write_text(
+            "---\n"
+            "id: evo_sample_rule\n"
+            "category: evolution\n"
+            "timeline: common\n"
+            "series: evolution\n"
+            "chapter: all\n"
+            "name_zh: 進化感染 階段機制\n"
+            "source: Namuwiki\n"
+            "updated_at: 2026-11\n"
+            "freshness: volatile\n"
+            "guide_url: https://discord.com/channels/111/222/333\n"
+            "status: pending_review\n"
+            "keywords: [進化階段, 進化點數, 에볼루션]\n"
+            "related_ids: []\n"
+            "---\n"
+            "【《殭屍學園》[進化感染模式專區] — 進化感染 階段機制｜來源：Namuwiki｜基準：2026-11】\n"
+            "- **核心機制**：累積能量後可進行階段進化。\n"
+            "> 🔍 [原文佐證]：`게이지를 모아 진화합니다.`\n"
+            "> ⚠️ [待人工確認]：待確認中文俗稱。\n",
+            encoding="utf-8",
+        )
+        good_res = lint_wiki_file(good_review)
+        self.assertTrue(good_res["ok"])
+        self.assertEqual(good_res["unresolved_reviews"], 1)
+
+        target_md = staging_tmp / "evolution_mode.md"
+        blocked = promote_review_file(good_review, target_md, force=False)
+        self.assertFalse(blocked["success"])
+
+        promoted = promote_review_file(good_review, target_md, force=True)
+        self.assertTrue(promoted["success"])
+        self.assertEqual(promoted["promoted_count"], 1)
+        written = target_md.read_text(encoding="utf-8")
+        self.assertNotIn("pending_review", written)
+        self.assertNotIn("> 🔍", written)
+        self.assertNotIn("> ⚠️", written)
+        parsed = game_wiki_engine._parse_markdown_wiki_file(target_md)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["id"], "evo_sample_rule")
+        self.assertEqual(parsed[0]["guide_url"], "https://discord.com/channels/111/222/333")
+
+    def test_game_wiki_ranking_excerpts_and_interactive_modes(self):
+        game_wiki_engine.load_wiki_entries(force_reload=True)
+
+        # 1. Multi-token ranking & boundary-safe matching (no '2技' inside 'ep2技巧')
+        res_liquid = game_wiki_engine.search_wiki_entries("燒瓶 2技")
+        self.assertEqual(res_liquid["ranked_hits"][0]["id"], "evo_zombie_liquid_boiling")
+        self.assertNotIn("ep2_gaon_and_basic_hits", [e["id"] for e in res_liquid["ranked_hits"]])
+
+        res_guard = game_wiki_engine.search_wiki_entries("警衛 2技")
+        self.assertEqual(res_guard["ranked_hits"][0]["id"], "evo_zombie_madness_skill_flashlight")
+
+        res_school = game_wiki_engine.search_wiki_entries("教室 紅房")
+        self.assertEqual(res_school["ranked_hits"][0]["id"], "evo_map_school_callouts")
+
+        # 2. Unified relevance-sorted ranked_hits puts core card ahead of slang mega-glossaries
+        self.assertEqual(game_wiki_engine.search_wiki_entries("阿修羅")["ranked_hits"][0]["id"], "evo_zombie_asura")
+        self.assertEqual(game_wiki_engine.search_wiki_entries("紅弓")["ranked_hits"][0]["id"], "evo_weapon_crossbow_and_pulse_beam")
+
+        # 3. Focused excerpt extraction for mega-glossaries (bullets & markdown tables)
+        by_id = game_wiki_engine._WIKI_CACHE["entries_by_id"]
+        slang_excerpt, slang_focused = game_wiki_engine.extract_focused_entry_body(
+            by_id["general_chat_slang"], "ㅎㅇ", max_chars=1200
+        )
+        self.assertTrue(slang_focused)
+        self.assertLessEqual(len(slang_excerpt), 1200)
+        self.assertIn("ㅎㅇ", slang_excerpt)
+
+        weapon_excerpt, weapon_focused = game_wiki_engine.extract_focused_entry_body(
+            by_id["weapon_database_s1_s2"], "椅子", max_chars=1200
+        )
+        self.assertTrue(weapon_focused)
+        self.assertLessEqual(len(weapon_excerpt), 1200)
+        self.assertIn("椅子", weapon_excerpt)
+        self.assertIn("체어맨", weapon_excerpt)
+
+        # 4. Interactive search modes: synonym, single-char fallback, category browse, typo suggestions
+        syn_res = game_wiki_engine.search_wiki_interactive("石弓")
+        self.assertEqual(syn_res["mode"], "results")
+        self.assertEqual(syn_res["results"][0]["id"], "evo_weapon_crossbow_and_pulse_beam")
+
+        single_res = game_wiki_engine.search_wiki_interactive("噴")
+        self.assertEqual(single_res["mode"], "results")
+        self.assertEqual(single_res["results"][0]["id"], "h1_weapons_and_boss_terms")
+
+        cat_res = game_wiki_engine.search_wiki_interactive("角色")
+        self.assertEqual(cat_res["mode"], "category")
+        self.assertEqual(cat_res["category_key"], "character_dict")
+        self.assertGreaterEqual(len(cat_res["results"]), 100)
+
+        sug_res = game_wiki_engine.search_wiki_interactive("阿修邏")
+        self.assertEqual(sug_res["mode"], "suggestions")
+        self.assertTrue(any("阿修羅" in (e.get("name_zh") or "") for e in sug_res["results"]))
+
+        # 5. Tool lookup uses focused excerpts and ranked order
+        lookup_hi = game_wiki_engine.lookup_game_wiki_tool_impl("ㅎㅇ")
+        self.assertIn("ㅎㅇ / 하이", lookup_hi)
+        self.assertLess(len(lookup_hi), 2500)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,6 +38,7 @@ GAME_DOMAIN_TRIGGERS = (
     "오더", "조건x", "자유킥", "다잡", "올치어", "히2하드", "머신건", "포토존", "部落", "椅子男",
     "紅弓", "綠弓", "軍醫", "揮棒男", "火焰手", "滑板", "房名", "韓服",
     "革命感染", "에볼", "겹스", "燒瓶", "阿修羅", "武器庫", "連體機", "死亡機", "隱藏飲料機",
+    "9週年", "九週年", "9周年", "九周年", "9주년", "聖誕節", "聖誕活動", "크리스마스", "용어집",
 )
 
 _COMMON_KR_STOPWORDS = {
@@ -118,6 +119,12 @@ _CATEGORY_QUERY_ALIASES: dict[str, str] = {
     "群友補充": "community_contrib",
     "補充條目": "community_contrib",
     "熱修補": "community_contrib",
+    "平行世界": "au_series",
+    "平行世界目錄": "au_series",
+    "活動": "au_series",
+    "活動目錄": "au_series",
+    "9週年目錄": "au_series",
+    "聖誕節目錄": "au_series",
 }
 
 _SHORT_QUALIFIER_STOP_CHARS = set("的了嗎呢吧喔啊是在有和跟或與怎啥誰幾哪要會能可給把被去來打用看說")

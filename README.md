@@ -2,7 +2,7 @@
 
 專為 Discord 好友群、社群跑團與日語共學打造的免費自架 AI 機器人！連接 Google AI Studio 的 **Gemini Flash-Lite（免費額度友善＋多代 Flash-Lite 自動輪替保底）**，免信用卡、不用寫程式，就能一次擁有**多模態聊天、語音頻道朗讀、互動桌遊與 80 億分之 1 人生模擬、TRPG 跑團、日語雙頻道與單字卡、遊戲黑話圖鑑，以及長期記憶與定時提醒**！
 
-> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.0.0)](CHANGELOG.md)
+> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.1.0)](CHANGELOG.md)
 
 ---
 
@@ -33,7 +33,7 @@
 
 ### 1. 💬 AI 聊天與多模態看圖／貼圖／語音／短影片／YouTube 3 分鐘短片分析
 * **自然口語聊天**：支援看圖片、Discord 貼圖、GIF 動圖、網址自動摘要，還能直接分析 **Discord 上傳短影片（.mp4/.mov/.webm，上限 20 MB）** 與 **YouTube 影片／Shorts（上限 3 分鐘）**；日語模式下還可直接傳 **Discord 原生語音訊息（30 秒／3 MB 內）** 獲得發音微調回饋！
-* **多代 Flash-Lite 自動輪替保底**：預設全程僅使用免費額度最充沛的 Flash-Lite 輕量系列（`gemini-flash-lite-latest` ➔ `gemini-3.5-flash-lite` ➔ `gemini-3.1-flash-lite` ➔ `gemini-2.5-flash-lite` ➔ 最後回落 `FINAL_FALLBACK_MODEL` 保底重試），遇到尖峰限流（429）會自動冷卻切換，絕不誤觸付費高階模型。
+* **Flash-Lite 優先 ＋ Flash / Hydrogen 高峰備援輪替**：預設以免費額度最充沛的 Flash-Lite 輕量系列優先（`gemini-flash-lite-latest` ➔ `3.5/3.1/2.5-flash-lite`），尖峰限流（429）時自動接續備援標準 Flash（`gemini-flash-latest`、`gemini-3.8-flash`、`gemini-2.5-flash`）與 **`gemini-4-hydrogen`**，最後仍回落 `FINAL_FALLBACK_MODEL` 保底重試；若只需純輕量模型，也可於 `!setup` 一鍵切換回「純 Flash-Lite 鏈」。
 
 ### 2. 🔊 語音頻道原生朗讀（Edge-TTS 免費免顯卡 16 聲線＋選配本地 F5-TTS 與語音克隆）
 * **無須外掛 HornBot，零顯卡免費開聲**：只要輸入 `!join`，機器人就會進入你所在的語音頻道，即時朗讀語音文字區的打字代說，也能自動朗讀日語教學或 AI 回覆！
@@ -56,7 +56,7 @@
 * **三合一匯入＆搶答（`!card import` / `!quiz`）**：支援聊天室貼字、讀取 `data/imports/` 大型 Anki `.apkg` 牌組（支援 N1~N5 分級與高低頻篩選）或拖曳上傳；輸入 `!quiz` 就能展開 Kotoba 風格多人限時搶答！
 
 ### 6. 🧟 《殭屍學園》韓服黑話與圖鑑知識庫（`!wiki`）
-* **專為輕量模型打造的防幻覺檢索**：內建韓服黑話、進擊／進化感染／越獄模式術語與台服角色譯名對照表，文字或圖片提問時會先由 Python 自動預檢索並注入精準事實（圖片支援兩階段 OCR 提取韓文與初聲縮寫如 `ㄷㅋㅈ`、`클모`），徹底避免模型亂猜。
+* **專為輕量模型打造的防幻覺檢索**：內建韓服黑話、Cafe 攻略用語集、9 週年《魔法高中》、聖誕節活動、進擊／進化感染／越獄模式術語與台服角色譯名對照表，支援 `resource_links` 多連結攻略導覽；文字或圖片提問時會先由 Python 自動預檢索並注入精準事實（圖片支援兩階段 OCR 提取韓文與初聲縮寫如 `ㄷㅋㅈ`、`클모`），徹底避免模型亂猜。
 * **互動圖鑑＋群友即時共編**：輸入 `!wiki <關鍵字>` 或 `!wiki 目錄` 即可分頁瀏覽；群友可用 `!wiki add` / `!wiki import`（貼文或傳 `.txt`/`.md`）擴充資料，或用 `!wiki replace` 勘誤熱修補，免重啟立即生效。
 
 ### 7. 🧠 長期記憶、待辦清單、定時提醒（`!memory` / `!todo` / `!remind`）

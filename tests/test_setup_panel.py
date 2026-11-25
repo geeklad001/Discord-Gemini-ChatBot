@@ -23,6 +23,7 @@ from core.config import (
     FLASH_LITE_PRESET_MODELS,
     MAX_AUDIO_ATTACHMENT_BYTES,
     MAX_AUDIO_DURATION_SECONDS,
+    STRICT_FLASH_LITE_FALLBACK_MODELS,
     BotSettings,
     apply_runtime_overrides,
 )
@@ -426,6 +427,12 @@ class TestHealthCheckAndSetupPanel(unittest.IsolatedAsyncioTestCase):
         await reset_btn.callback(owner_inter)
         self.assertEqual(settings.primary_model, DEFAULT_PRIMARY_MODEL)
         self.assertEqual(settings.fallback_models, DEFAULT_FALLBACK_MODELS)
+        self.assertEqual(settings.final_fallback_model, DEFAULT_FINAL_FALLBACK_MODEL)
+
+        strict_btn = [c for c in m_view.children if isinstance(c, discord.ui.Button) and "純 Flash-Lite" in (c.label or "")][0]
+        await strict_btn.callback(owner_inter)
+        self.assertEqual(settings.primary_model, DEFAULT_PRIMARY_MODEL)
+        self.assertEqual(settings.fallback_models, STRICT_FLASH_LITE_FALLBACK_MODELS)
         self.assertEqual(settings.final_fallback_model, DEFAULT_FINAL_FALLBACK_MODEL)
 
         clear_all_btn = [c for c in m_view.children if isinstance(c, discord.ui.Button) and "清除全部" in (c.label or "")][0]

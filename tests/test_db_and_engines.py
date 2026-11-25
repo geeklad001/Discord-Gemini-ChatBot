@@ -312,6 +312,59 @@ class TestDatabaseAndEngines(unittest.TestCase):
             self.assertEqual(len(chars), 1)
             self.assertTrue(chars[0]["is_in_party"])
 
+    def test_game_wiki_resource_link_parsers(self):
+        self.assertEqual(game_wiki_engine._parse_list_field(""), [])
+        self.assertEqual(game_wiki_engine._parse_list_field("[]"), [])
+        self.assertEqual(game_wiki_engine._parse_list_field("[a, b, c]"), ["a", "b", "c"])
+        self.assertEqual(
+            game_wiki_engine._parse_list_field(
+                '["🎬 Title, part 1｜https://youtu.be/abc123", \'☕ Cafe, note｜https://cafe.naver.com/zhs/1\']'
+            ),
+            [
+                "🎬 Title, part 1｜https://youtu.be/abc123",
+                "☕ Cafe, note｜https://cafe.naver.com/zhs/1",
+            ],
+        )
+
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("🎬 Title, part 1｜https://youtu.be/abc123"),
+            ("🎬 Title, part 1", "https://youtu.be/abc123"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("攻略筆記 | https://example.com/guide"),
+            ("攻略筆記", "https://example.com/guide"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://www.youtube.com/watch?v=xyz"),
+            ("🎬 影片攻略", "https://www.youtube.com/watch?v=xyz"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://youtu.be/xyz"),
+            ("🎬 影片攻略", "https://youtu.be/xyz"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://discord.com/channels/111/222/333"),
+            ("💬 站內圖文攻略", "https://discord.com/channels/111/222/333"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://www.facebook.com/groups/123"),
+            ("📘 FB 社團攻略", "https://www.facebook.com/groups/123"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://fb.com/123"),
+            ("📘 FB 社團攻略", "https://fb.com/123"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://cafe.naver.com/zhs/456"),
+            ("☕ Naver Cafe 原文", "https://cafe.naver.com/zhs/456"),
+        )
+        self.assertEqual(
+            game_wiki_engine.parse_resource_link("https://example.com/article"),
+            ("🔗 相關攻略", "https://example.com/article"),
+        )
+        for bad_val in ("", "not-a-url", "ftp://example.com/file", "🎬 標題｜not-a-url", "https://"):
+            self.assertEqual(game_wiki_engine.parse_resource_link(bad_val), ("", ""))
+
     def test_game_wiki_v2_coordinates_disambiguation_and_hotfix_supersede(self):
         c1 = game_wiki_engine._detect_query_coordinates("H1 怎麼打")
         self.assertIn("heroes", c1["series"])
@@ -321,6 +374,11 @@ class TestDatabaseAndEngines(unittest.TestCase):
         self.assertIn("jinjom", c2["series"])
         self.assertIn("reboot", c2["timelines"])
         self.assertIn("ep1", c2["chapters"])
+
+        for q_anniv in ("9週年活動怎麼玩", "9주년 이벤트", "九周年紀念"):
+            self.assertIn("anniv9", game_wiki_engine._detect_query_coordinates(q_anniv)["series"])
+        for q_xmas in ("聖誕節模式攻略", "크리스마스 미니게임"):
+            self.assertIn("christmas", game_wiki_engine._detect_query_coordinates(q_xmas)["series"])
 
         wiki_tmp = Path(self.tmpdir.name) / "game_wiki_tmp"
         wiki_tmp.mkdir(parents=True, exist_ok=True)
@@ -408,6 +466,7 @@ source: Namuwiki / Naver Cafe
 updated_at: 2026-11
 freshness: volatile
 guide_url: https://discord.com/channels/111/222/333
+resource_links: ["🎬 宿主實戰, 含走位｜https://youtu.be/host123", "https://discord.com/channels/111/222/333", "☕ Cafe 討論｜https://cafe.naver.com/zhs/888"]
 keywords: [宿主殭屍, 숙주 좀비, 進化感染]
 related_ids: []
 ---
@@ -426,6 +485,14 @@ related_ids: []
             entries = game_wiki_engine.load_wiki_entries(force_reload=True)
             by_id = {e["id"]: e for e in entries}
             self.assertEqual(by_id["evo_host_sample"]["guide_url"], "https://discord.com/channels/111/222/333")
+            self.assertEqual(
+                by_id["evo_host_sample"]["resource_links"],
+                [
+                    "🎬 宿主實戰, 含走位｜https://youtu.be/host123",
+                    "https://discord.com/channels/111/222/333",
+                    "☕ Cafe 討論｜https://cafe.naver.com/zhs/888",
+                ],
+            )
             self.assertEqual(by_id["char_nam_base"]["guide_url"], "")
 
             # 1. 非遊戲日常提及 EP1 不應誤觸發消歧義
@@ -446,20 +513,50 @@ related_ids: []
             no_guide_rag = game_wiki_engine.build_auto_rag_context("南東進 班級")
             self.assertNotIn("伺服器站內圖文攻略導覽", no_guide_rag)
 
-            # 4.5 guide_url 應於 RAG 與 lookup 輸出正確呈現，且內文已含該 URL 時不重複附加
+            # 4.5 guide_url 與 resource_links 應於 RAG 與 lookup 輸出正確呈現並去重
             rag_before = game_wiki_engine.build_auto_rag_context("宿主殭屍技能")
             self.assertIn("伺服器站內圖文攻略導覽", rag_before)
             self.assertIn("https://discord.com/channels/111/222/333", rag_before)
+            self.assertEqual(rag_before.count("https://discord.com/channels/111/222/333"), 1)
+            self.assertIn("攻略影片與文章導覽", rag_before)
+            self.assertIn("🎬 宿主實戰, 含走位：https://youtu.be/host123", rag_before)
+            self.assertIn("☕ Cafe 討論：https://cafe.naver.com/zhs/888", rag_before)
+
             lookup_before = game_wiki_engine.lookup_game_wiki_tool_impl("宿主殭屍")
             self.assertIn("📍 導覽：https://discord.com/channels/111/222/333", lookup_before)
+            self.assertIn(
+                "🔗 導覽：🎬 宿主實戰, 含走位: https://youtu.be/host123 ; ☕ Cafe 討論: https://cafe.naver.com/zhs/888",
+                lookup_before,
+            )
+            self.assertEqual(lookup_before.count("https://discord.com/channels/111/222/333"), 1)
+
             dedup_rag = game_wiki_engine._format_entry_for_rag({
-                "body": "參考 https://discord.com/channels/111/222/333",
+                "body": "參考 https://discord.com/channels/111/222/333 與 https://youtu.be/inbody",
                 "guide_url": "https://discord.com/channels/111/222/333",
+                "resource_links": [
+                    "https://discord.com/channels/111/222/333",
+                    "🎬 內文已含｜https://youtu.be/inbody",
+                    "☕ 外部補充｜https://cafe.naver.com/zhs/777",
+                ],
                 "freshness": "stable",
             })
             self.assertNotIn("伺服器站內圖文攻略導覽", dedup_rag)
+            self.assertIn("攻略影片與文章導覽", dedup_rag)
+            self.assertNotIn("內文已含", dedup_rag)
+            self.assertIn("☕ 外部補充：https://cafe.naver.com/zhs/777", dedup_rag)
 
-            # 5. Runtime 熱修補軟屏蔽舊條目（並繼承 guide_url），且刪除後可立即還原
+            dedup_only_rag = game_wiki_engine._format_entry_for_rag({
+                "body": "參考 https://discord.com/channels/111/222/333 與 https://youtu.be/inbody",
+                "guide_url": "https://discord.com/channels/111/222/333",
+                "resource_links": [
+                    "https://discord.com/channels/111/222/333",
+                    "🎬 內文已含｜https://youtu.be/inbody",
+                ],
+                "freshness": "stable",
+            })
+            self.assertNotIn("攻略影片與文章導覽", dedup_only_rag)
+
+            # 5. Runtime 熱修補軟屏蔽舊條目（並繼承 guide_url 與 resource_links），且刪除後可立即還原
             rep_res = game_wiki_engine.replace_wiki_entry_with_community_hotfix(
                 "evo_host_sample",
                 "2026-11 改版後宿主殭屍技能冷卻縮短為 5 秒。",
@@ -467,6 +564,14 @@ related_ids: []
             )
             self.assertTrue(rep_res["success"])
             self.assertEqual(rep_res["new_entry"]["guide_url"], "https://discord.com/channels/111/222/333")
+            self.assertEqual(
+                rep_res["new_entry"]["resource_links"],
+                [
+                    "🎬 宿主實戰, 含走位｜https://youtu.be/host123",
+                    "https://discord.com/channels/111/222/333",
+                    "☕ Cafe 討論｜https://cafe.naver.com/zhs/888",
+                ],
+            )
             new_id = rep_res["new_entry"]["id"]
 
             hotfix_hits = game_wiki_engine.search_wiki_entries("宿主殭屍")
@@ -474,16 +579,27 @@ related_ids: []
             self.assertIn(new_id, hit_ids)
             self.assertNotIn("evo_host_sample", hit_ids)
             self.assertEqual(hotfix_hits["lore_hits"][0]["guide_url"], "https://discord.com/channels/111/222/333")
+            self.assertEqual(
+                hotfix_hits["lore_hits"][0]["resource_links"],
+                [
+                    "🎬 宿主實戰, 含走位｜https://youtu.be/host123",
+                    "https://discord.com/channels/111/222/333",
+                    "☕ Cafe 討論｜https://cafe.naver.com/zhs/888",
+                ],
+            )
 
             rag_after = game_wiki_engine.build_auto_rag_context("宿主殭屍技能")
             self.assertIn("群友最新實測與改版熱修補", rag_after)
             self.assertIn("時效提醒", rag_after)
             self.assertIn("伺服器站內圖文攻略導覽", rag_after)
             self.assertIn("https://discord.com/channels/111/222/333", rag_after)
+            self.assertIn("攻略影片與文章導覽", rag_after)
+            self.assertIn("🎬 宿主實戰, 含走位：https://youtu.be/host123", rag_after)
             self.assertIn("5 秒", rag_after)
             self.assertNotIn("冷卻為 8 秒", rag_after)
             lookup_after = game_wiki_engine.lookup_game_wiki_tool_impl("宿主殭屍")
             self.assertIn("📍 導覽：https://discord.com/channels/111/222/333", lookup_after)
+            self.assertIn("🔗 導覽：🎬 宿主實戰, 含走位: https://youtu.be/host123", lookup_after)
 
             # 刪除 hotfix 後，原條目立即恢復生效
             self.assertTrue(game_wiki_engine.delete_community_wiki_entry(new_id))
@@ -508,6 +624,7 @@ related_ids: []
             "category: evolution\n"
             "name_zh: 錯誤示範\n"
             "guide_url: not-a-url\n"
+            'resource_links: ["🎬 無效網址｜not-a-url"]\n'
             "keywords: [攻略, EP1, 進化感染]\n"
             "---\n"
             "南東進남동진 的測試文字。\n" + ("字" * 460) + "\n",
@@ -518,6 +635,7 @@ related_ids: []
         self.assertTrue(any("超過硬性上限" in err for err in bad_res["errors"]))
         self.assertTrue(any("中韓黏連" in err for err in bad_res["errors"]))
         self.assertTrue(any("guide_url" in err for err in bad_res["errors"]))
+        self.assertTrue(any("resource_links" in err for err in bad_res["errors"]))
         self.assertTrue(any("泛用詞" in warn for warn in bad_res["warnings"]))
 
         bad_discord_review = staging_tmp / "bad_discord.review.md"
@@ -527,6 +645,7 @@ related_ids: []
             "category: evolution\n"
             "name_zh: 錯誤 Discord 連結\n"
             "guide_url: https://discord.com/invite/not-a-channel\n"
+            'resource_links: ["💬 錯誤邀請｜https://discord.com/invite/xyz"]\n'
             "keywords: [進化階段]\n"
             "---\n"
             "這是測試 Discord 非頻道跳轉連結的卡片。\n",
@@ -535,6 +654,25 @@ related_ids: []
         bad_discord_res = lint_wiki_file(bad_discord_review)
         self.assertFalse(bad_discord_res["ok"])
         self.assertTrue(any("guide_url" in err for err in bad_discord_res["errors"]))
+        self.assertTrue(any("resource_links" in err for err in bad_discord_res["errors"]))
+
+        bare_link_review = staging_tmp / "bare_link.review.md"
+        bare_link_review.write_text(
+            "---\n"
+            "id: bare_link_card\n"
+            "category: evolution\n"
+            "name_zh: 缺前綴標籤連結\n"
+            "resource_links: [https://youtu.be/bare123]\n"
+            "keywords: [進化階段]\n"
+            "---\n"
+            "這是缺少前綴標籤的 resource_links 警告測試。\n",
+            encoding="utf-8",
+        )
+        bare_res = lint_wiki_file(bare_link_review)
+        self.assertTrue(bare_res["ok"])
+        self.assertTrue(
+            any("resource_links" in warn and "建議加上用途標籤" in warn for warn in bare_res["warnings"])
+        )
 
         good_review = staging_tmp / "good.review.md"
         good_review.write_text(
@@ -549,6 +687,7 @@ related_ids: []
             "updated_at: 2026-11\n"
             "freshness: volatile\n"
             "guide_url: https://discord.com/channels/111/222/333\n"
+            'resource_links: ["🎬 進化實戰, 分段教學｜https://youtu.be/good123", "☕ 原文出處｜https://cafe.naver.com/zhs/100"]\n'
             "status: pending_review\n"
             "keywords: [進化階段, 進化點數, 에볼루션]\n"
             "related_ids: []\n"
@@ -561,6 +700,8 @@ related_ids: []
         )
         good_res = lint_wiki_file(good_review)
         self.assertTrue(good_res["ok"])
+        self.assertEqual(good_res["errors"], [])
+        self.assertEqual(good_res["warnings"], [])
         self.assertEqual(good_res["unresolved_reviews"], 1)
 
         target_md = staging_tmp / "evolution_mode.md"
@@ -578,6 +719,13 @@ related_ids: []
         self.assertEqual(len(parsed), 1)
         self.assertEqual(parsed[0]["id"], "evo_sample_rule")
         self.assertEqual(parsed[0]["guide_url"], "https://discord.com/channels/111/222/333")
+        self.assertEqual(
+            parsed[0]["resource_links"],
+            [
+                "🎬 進化實戰, 分段教學｜https://youtu.be/good123",
+                "☕ 原文出處｜https://cafe.naver.com/zhs/100",
+            ],
+        )
 
     def test_game_wiki_ranking_excerpts_and_interactive_modes(self):
         game_wiki_engine.load_wiki_entries(force_reload=True)

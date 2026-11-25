@@ -411,6 +411,26 @@ def _clean_yaml_list_tokens(items) -> list[str]:
     return cleaned
 
 
+def _clean_resource_links(items) -> list[str]:
+    """清理 YAML resource_links 陣列元素（移除換行、方括號與雙引號，保留 `#` 與網址完整性），並去重保留順序。"""
+    if isinstance(items, str):
+        items = [items]
+    cleaned: list[str] = []
+    for item in items or []:
+        s = (
+            str(item)
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .replace("[", "")
+            .replace("]", "")
+            .replace('"', "")
+        )
+        s = _WHITESPACE_RE.sub(" ", s).strip()
+        if s and s not in cleaned:
+            cleaned.append(s)
+    return cleaned
+
+
 def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = "") -> list[dict]:
     """
     將解析後的群友補充條目寫入 data/game_wiki/community_contributions.md，
@@ -482,6 +502,7 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
             clean_supersedes = _clean_yaml_list_tokens(item.get("supersedes") or [])
             clean_aspects = _clean_yaml_list_tokens(item.get("aspects") or [])
             clean_related = _clean_yaml_list_tokens(item.get("related_ids") or [])
+            clean_res_links = _clean_resource_links(item.get("resource_links") or [])
 
             yaml_lines = [
                 "---",
@@ -495,6 +516,9 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
                     yaml_lines.append(f"{opt_key}: {opt_val}")
             if guide_url:
                 yaml_lines.append(f"guide_url: {guide_url}")
+            if clean_res_links:
+                res_formatted = ", ".join(f'"{x}"' for x in clean_res_links)
+                yaml_lines.append(f"resource_links: [{res_formatted}]")
             if clean_aspects:
                 yaml_lines.append(f"aspects: [{', '.join(clean_aspects)}]")
 
@@ -523,6 +547,7 @@ def add_community_wiki_entries(entries_to_add: list[dict], author_name: str = ""
                 "supersedes": clean_supersedes,
                 "updated_at": updated_at,
                 "guide_url": guide_url,
+                "resource_links": clean_res_links,
             })
 
         updated_content = existing_text + "\n" + "".join(new_blocks)
@@ -618,6 +643,7 @@ def replace_wiki_entry_with_community_hotfix(
                         "source": hotfix_source,
                         "freshness": "volatile",
                         "guide_url": target_entry.get("guide_url") or "",
+                        "resource_links": list(target_entry.get("resource_links") or []),
                     }
                 ],
                 author_name=safe_author,

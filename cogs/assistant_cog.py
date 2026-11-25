@@ -290,7 +290,7 @@ class AssistantCog(commands.Cog):
             else "無（全部模型皆處於就緒狀態）"
         )
         embed = discord.Embed(
-            title="🤖 Gemini Flash-Lite 模型輪替狀態",
+            title="🤖 Gemini 模型輪替與可用狀態",
             color=0x38BDF8,
         )
         embed.add_field(
@@ -318,7 +318,7 @@ class AssistantCog(commands.Cog):
                     low = short_name.lower()
                     if "flash-lite" in low:
                         lite_models.append(short_name)
-                    elif "flash" in low or "gemma" in low:
+                    elif "flash" in low or "hydrogen" in low or "gemma" in low:
                         other_flash.append(short_name)
                     if len(lite_models) + len(other_flash) >= 35:
                         break
@@ -326,7 +326,7 @@ class AssistantCog(commands.Cog):
                 if lite_models:
                     api_lines.append("**Flash-Lite 系列**：\n" + "\n".join(f"• `{m}`" for m in lite_models[:12]))
                 if other_flash:
-                    api_lines.append("**其他 Flash / Gemma**：\n" + "\n".join(f"• `{m}`" for m in other_flash[:10]))
+                    api_lines.append("**Flash / Hydrogen / Gemma 備援系列**：\n" + "\n".join(f"• `{m}`" for m in other_flash[:12]))
                 embed.add_field(
                     name="🌐 AI Studio 即時可用模型（節錄）",
                     value=truncate_embed_text("\n".join(api_lines) if api_lines else "查無支援文字生成的模型", 950),

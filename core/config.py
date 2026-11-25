@@ -10,7 +10,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
 
 MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 圖片上限 10 MB
 MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024    # 文字設定檔上限 2 MB
@@ -19,10 +19,19 @@ MAX_AUDIO_ATTACHMENT_BYTES = 3 * 1024 * 1024   # 語音附件上限 3 MB
 MAX_AUDIO_DURATION_SECONDS = 30                # 語音訊息時長上限 30 秒
 
 DEFAULT_PRIMARY_MODEL = "gemini-flash-lite-latest"
+STRICT_FLASH_LITE_FALLBACK_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+]
 DEFAULT_FALLBACK_MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+    "gemini-4-hydrogen",
+    "gemini-2.5-flash",
 ]
 DEFAULT_FINAL_FALLBACK_MODEL = "gemini-flash-lite-latest"
 FLASH_LITE_PRESET_MODELS = (
@@ -30,6 +39,10 @@ FLASH_LITE_PRESET_MODELS = (
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+    "gemini-4-hydrogen",
+    "gemini-2.5-flash",
 )
 
 _RUNTIME_OVERRIDE_BOOL_KEYS: frozenset[str] = frozenset({

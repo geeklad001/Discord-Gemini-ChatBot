@@ -6,6 +6,7 @@ import csv
 import re
 import sys
 import threading
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,7 @@ _CSV_URL_PAREN_RE = re.compile(r"\(https?://[^\)]+\)")
 _CSV_PART_SPLIT_RE = re.compile(r"[/（）()、,，]")
 _BODY_TERM_SPLIT_RE = re.compile(r"[/（）()、,，&]")
 _YAML_COMMENT_SPLIT_RE = re.compile(r"\s+#")
+_RESOURCE_LINK_URL_RE = re.compile(r"(https?://\S+)$")
 
 
 def _resolve_paths() -> tuple[Path, Path, Path]:
@@ -50,17 +52,73 @@ def _resolve_paths() -> tuple[Path, Path, Path]:
     return wiki_dir, char_csv, comm_path
 
 
+def _strip_outer_quotes(part: str) -> str:
+    cleaned = part.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in ("'", '"'):
+        return cleaned[1:-1].strip()
+    return cleaned.strip("'\"")
+
+
 def _parse_list_field(raw_val: str) -> list[str]:
-    """解析 YAML 中的簡易陣列欄位，例如 [a, b, c]"""
+    """解析 YAML 中的簡易陣列欄位，例如 [a, b, c]（支援引號內保留逗號）"""
     val = raw_val.strip()
     if val.startswith("[") and val.endswith("]"):
         val = val[1:-1]
-    items = []
-    for part in val.split(","):
-        cleaned = part.strip().strip("'\"")
-        if cleaned:
-            items.append(cleaned)
+    if not val.strip():
+        return []
+    items: list[str] = []
+    buf: list[str] = []
+    quote_char: Optional[str] = None
+    for ch in val:
+        if quote_char is not None:
+            if ch == quote_char:
+                quote_char = None
+            buf.append(ch)
+        else:
+            if ch in ("'", '"') and not "".join(buf).strip():
+                quote_char = ch
+                buf.append(ch)
+            elif ch == ",":
+                cleaned = _strip_outer_quotes("".join(buf))
+                if cleaned:
+                    items.append(cleaned)
+                buf = []
+            else:
+                buf.append(ch)
+    cleaned = _strip_outer_quotes("".join(buf))
+    if cleaned:
+        items.append(cleaned)
     return items
+
+
+def parse_resource_link(raw_item: str) -> tuple[str, str]:
+    """解析 resource_links 單筆字串（格式：'<標籤> | https://...' 或純 URL），回傳 (label, url)。"""
+    text = _WHITESPACE_RE.sub(" ", str(raw_item or "")).strip()
+    if not text:
+        return ("", "")
+    m = _RESOURCE_LINK_URL_RE.search(text)
+    if not m:
+        return ("", "")
+    url = m.group(1).strip()
+    if not url or any(ch.isspace() for ch in url):
+        return ("", "")
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+        return ("", "")
+    label = text[: m.start()].strip().rstrip("|｜:：- ").strip()
+    if not label:
+        host = parsed.netloc.lower()
+        if "youtube.com" in host or "youtu.be" in host:
+            label = "🎬 影片攻略"
+        elif "discord.com" in host:
+            label = "💬 站內圖文攻略"
+        elif "facebook.com" in host or host == "fb.com" or host.endswith(".fb.com"):
+            label = "📘 FB 社團攻略"
+        elif "cafe.naver.com" in host:
+            label = "☕ Naver Cafe 原文"
+        else:
+            label = "🔗 相關攻略"
+    return (label, url)
 
 
 def _build_entry_search_index(entry: dict) -> dict:
@@ -171,6 +229,7 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             "updated_at": "",
             "freshness": "stable",
             "guide_url": "",
+            "resource_links": [],
             "supersedes": [],
             "keywords": [],
             "related_ids": [],
@@ -185,7 +244,7 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             v = v.strip()
             if "#" in v and "http" not in v.lower():
                 v = _YAML_COMMENT_SPLIT_RE.split(v, maxsplit=1)[0].strip()
-            if k in ("keywords", "related_ids", "aspects", "supersedes"):
+            if k in ("keywords", "related_ids", "aspects", "supersedes", "resource_links"):
                 meta[k] = _parse_list_field(v)
             elif k in (
                 "id", "category", "name_zh", "name_kr",
@@ -280,6 +339,7 @@ def _parse_markdown_wiki_file(file_path: Path) -> list[dict]:
             "updated_at": updated_at,
             "freshness": freshness,
             "guide_url": guide_url,
+            "resource_links": list(meta["resource_links"]) if isinstance(meta["resource_links"], list) else [],
             "supersedes": supersedes,
             "superseded_by": [],
             "keywords": dedup_kws,
@@ -356,6 +416,7 @@ def _load_character_csv_entries(csv_path: Path) -> list[dict]:
                     "updated_at": "",
                     "freshness": "stable",
                     "guide_url": "",
+                    "resource_links": [],
                     "supersedes": [],
                     "superseded_by": [],
                     "keywords": dedup_kws,

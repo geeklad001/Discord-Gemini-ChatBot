@@ -10,26 +10,28 @@
    * **離線整理模型（Gemini 4 Hydrogen / 高階模型）**：僅作為「閉卷萃取與對齊翻譯器」。**嚴禁使用模型預訓練記憶編造任何設定**；所有產出必須 100% 來自輸入的 Namuwiki 或 Naver Cafe 韓文原文。
    * **線上回答模型（`gemini-flash-lite-latest`）**：在「100% 閉卷考模式」下運行，僅讀取 Python 預檢索之 `Top-3 ~ Top-4` 微卡片並套用群友口吻回答。
 2. **為 `gemini-flash-lite-latest` 量身打造的微卡片規格**：
-   * **單卡字數上限**：每張正式卡片內文（含標頭、不含 YAML）控制在 **150 ～ 380 字**（Linter 上限 450 字），貫徹「一卡一概念」，防止小模型中間遺失（Lost-in-the-Middle）與張冠李戴。
+   * **雙卡型設計（Dual Card Archetypes）**：
+     * **導航索引微卡（`120 ～ 260` 字）**：適用於以影片／Discord 串／外部攻略貼文導引為主的活動或副本（如 9 週年、聖誕節活動），強調關卡定位、核心流程與 `resource_links` 多連結導覽。
+     * **Cafe 翻譯深度微卡（`150 ～ 380` 字）**：適用於純文字韓服攻略、用語對照與數值機制（Linter 硬性上限 `450` 字），貫徹「一卡一概念」，防止小模型中間遺失（Lost-in-the-Middle）與張冠李戴。
    * **強制脈絡標頭（Contextual Header）**：開頭必帶 `【《殭屍學園》[分類] — 標題｜...】`，確保小模型知道主詞、所屬模式與版本。
    * **內建防呆警語（Negative Guardrails）**：易混淆卡片結尾必附 `⚠️ 防誤判提醒`（例如不可混同職業與怪物、不可將民間刷分法當成標準通關規則）。
    * **白話搜尋鉤子（Search Hooks）**：`keywords` 除韓文原名、初聲縮寫、台服官譯外，應預先補齊 3~5 個「台灣玩家常見白話問法詞組」。
 3. **有界權威與時效透明（Bounded Provenance）**：
-   * 100% 採用純文字來源（Namuwiki 條目、Naver Cafe 貼文、群友實測文字），不進行高 Token 消耗的影片內容解析。
+   * 採純文字來源（Namuwiki 條目、Naver Cafe 貼文、FB 社團／Discord 實測文字）為知識骨幹；影片類攻略**不進行高 Token 消耗的逐幀或全文轉錄解析**，改由 oEmbed 標題／描述摘要與 `resource_links` 建立導覽索引。
    * 每張卡片標記 `source`（資料來源）與 `updated_at`（整理基準年月，如 `2026-11`），以及 `freshness`（`stable` 固定設定 / `volatile` 隨版本變動之戰術）。
 
 ---
 
-## 二、 YAML Schema V2 規範（[engines/game_wiki_engine.py](../engines/game_wiki_engine.py)）
+## 二、 YAML Schema V2.1 規範（[engines/game_wiki_engine.py](../engines/game_wiki_engine.py) Facade / [engines/game_wiki/](../engines/game_wiki/)）
 
-所有新增與升級的 `data/game_wiki/*.md` 卡片支援以下完整 YAML Frontmatter 欄位（皆向後相容舊版 V1 卡片）：
+本模組已拆分為 `engines/game_wiki/` 子套件（`engines/game_wiki_engine.py` 作為相容 Facade，搭配 `cogs/wiki_cog.py` 與 `cogs/wiki_views.py` 提供互動檢視與導覽）。所有新增與升級的 `data/game_wiki/*.md` 卡片支援以下完整 YAML Frontmatter V2.1 欄位（皆向後相容舊版 V1／V2 卡片）：
 
 ```yaml
 ---
 id: evo_zombie_example
 category: evolution              # slang | evolution | cafe_meta | character | story_arc | game_mode | au_series | community_contrib
 timeline: common                 # classic (經典舊版) | reboot (重製版) | common (共通) | au (平行世界)
-series: evolution                # evolution | jinjom | heroes | apo | division | prison | ladder | au
+series: evolution                # evolution | jinjom | heroes | apo | division | prison | ladder | anniv9 | christmas | au
 chapter: all                     # ep0 | ep1 | ep2 | ep3 | ep4 | all
 subject: 宿主殭屍名稱             # 主詞實體（供「主詞 + 子面向」雙層加權）
 aspects: [技能, 破點, 進化條件]   # 子面向關鍵字清單
@@ -39,15 +41,20 @@ source: Namuwiki / Naver Cafe    # 資料來源標記
 updated_at: 2026-11              # 整理或最後驗證年月 (YYYY-MM 或 YYYY-MM-DD)
 freshness: volatile              # stable (固定設定) | volatile (隨改版變動之戰術/數值)
 supersedes: []                   # 欲軟屏蔽取代的舊條目 ID 清單（多用於 Runtime 熱修補）
+guide_url: https://...           # 單一主要攻略來源跳轉連結（選填）
+resource_links: ["🎬 攻略標題｜https://...", "📝 討論串｜https://discord.com/channels/..."] # V2.1 多連結導覽清單（選填）
 keywords: [韓文原詞, 台服官譯, 白話問法詞]
 related_ids: [關聯條目id]
 ---
 ```
 
+> [!NOTE]
+> **9 週年與聖誕節活動座標規範**：`9 週年（anniv9）` 與 `聖誕節活動（christmas）` 歸類於 `category: au_series`、`timeline: au`（或視條目性質標為 `common`），並分別以 `series: anniv9` 與 `series: christmas` 進行精準座標鎖定與壓制消歧義。
+
 ### 檢索與防誤判核心機制
 1. **防 `EP1` 跨系列撞車與 `Classic vs. Reboot` 消歧義**：
    * 單純章節修飾詞（`EP0~EP4`、`第一章~第四章`、`第一關~第四關`、`1부~3부`）列入 `_MODIFIER_CHAPTER_TOKENS`，單獨命中不計入有效專有分數。
-   * 當提問同時包含系列詞（如 `H1`、`進擊`、`Division`、`進化感染`）或版本詞（`經典`、`Reboot`）時，由 `_detect_query_coordinates()` 鎖定 `(series, chapter, timeline)` 座標給予高加成並壓制其他系列同章節卡片。
+   * 當提問同時包含系列詞（如 `H1`、`進擊`、`Division`、`進化感染`、`9週年`、`聖誕節`）或版本詞（`經典`、`Reboot`）時，由 `_detect_query_coordinates()` 鎖定 `(series, chapter, timeline)` 座標給予高加成並壓制其他系列同章節卡片。
    * 當提問僅出現模糊章節詞（如「EP1 劇情是什麼？」）且未指明系列與版本時，自動注入「跨系列與新舊版消歧義導覽提示」，引導 AI 先反問確認或分項簡述，禁止自行猜測混拼。
 2. **`subject` + `aspects` 雙層加權**：
    * 解決單一角色或單一模式拆成多張微卡片後，因主詞同名而搶佔 Top-4 的排擠問題。
@@ -55,6 +62,8 @@ related_ids: [關聯條目id]
    * 使用者可在 Discord 透過 `!wiki replace <舊條目ID或關鍵字> | <新內容>` 寫入 `community_contributions.md`（自動附帶 `supersedes: [old_id]` 與當日日期）。
    * 引擎於載入時執行「軟屏蔽（Soft-Masking）」，自動隱藏被 `supersedes` 的舊卡；若該筆補充遭 `!wiki del contrib_N` 刪除，舊卡即刻恢復生效，零資料遺失風險。
    * 任何命中之 `community_contrib` 條目於 Prompt 組裝時強制置頂於 `⚡【群友最新實測與改版熱修補（最高優先）】` 區塊。
+4. **`resource_links` 多連結導覽整合（V2.1）**：
+   * 支援單張卡片並陳多個「`用途標籤｜URL`」連結（YouTube 影片、Discord 攻略串、FB 社團、Naver Cafe 原文），搭配 [scripts/wiki_linter.py](../scripts/wiki_linter.py) 驗證網址與 Discord 跳轉格式，並由 [cogs/wiki_views.py](../cogs/wiki_views.py) 與回答上下文同步提供導覽出口。
 
 ---
 
@@ -78,18 +87,27 @@ related_ids: [關聯條目id]
 
 ## 四、 資料主題分階段建置路線圖
 
-### 🔥 Priority 1：伺服器核心主題 ——《進化感染 (감염모드 에볼루션)》
-目標檔案：`data/game_wiki/evolution_mode.md`（結合 Namuwiki 與 Naver Cafe 玩家實戰資料）
-* **Batch 1-1：核心規則與進化機制**（回合流程、進化點數/階段切換、分數獎勵、與舊版感染模式差異）
-* **Batch 1-2：殭屍方圖鑑與實戰對策**（母體／各特殊進化殭屍韓文原名、俗稱、技能與連招、人類應對法）
-* **Batch 1-3：人類方武器／職業生態與民間主流配置**（擊退/緩速/跑酷/破盾/輔助定位、Naver Cafe 主流評價與套路）
-* **Batch 1-4：地圖點位（명당 守點）、跑酷路線與專屬黑話**（各圖名稱對照、人類守點與殭屍破點技巧、韓服開房與溝通縮寫）
+### ✅ Phase 3（Priority 1 —— 已完成）：《進化感染 (감염모드 에볼루션)》
+目標檔案：[evolution_mode.md](../data/game_wiki/evolution_mode.md)（共 `64` 張微知識卡入庫，結合 Namuwiki、Naver Cafe 與 Discord 攻略實測）
+* **Batch 1-1 ~ 1-6**：核心規則、殭屍圖鑑（警衛／燒瓶／阿修羅）、人類武器生態、地圖守點與報位黑話、伺服器進階觀念、Naver Cafe 改版歷程與野房禮儀（已全部清零並 `promote` 完畢）。
 
-### 📚 Priority 2 ~ 5：A ~ E 後續擴充順序
-* **Priority 2（分類 D）**：第一季（53把）＆第二季（14把）武器技能機制與實戰定位（`data/game_wiki/weapons_detail.md`）
-* **Priority 3（分類 C）**：PVE 副本機制與 Naver Cafe 民間打法（Division D1~D3、英雄模式 H2~H4、進擊的殭屍 EP1~3 Classic & Reboot、APO）
-* **Priority 4（分類 A & B）**：世界觀核心勢力、主線劇情（Classic vs. Reboot 對照、Heroes、APO、Division）與核心角色深度設定
-* **Priority 5（分類 E）**：平行世界（精靈高/銀河高/魔法高/像素高）、其他 PVP 與韓服生態 Q&A
+### ✅ Phase 4（Priority 2 —— 已完成）：Cafe 攻略用語集補完 ＋ 9 週年 ＋ 聖誕節活動
+* **Phase 4.0（基礎設施升級，已完成）**：Schema V2.1 多連結導覽（`resource_links`）、`anniv9` / `christmas` 座標鎖定、YAML 引號逗號清單解析、Linter 驗證規則與單元測試升級。
+* **Phase 4.1（已完成並入庫，含成就譯名對齊）**：Naver Cafe 攻略用語集（含 `16904226` 等 5 篇字典）＋ Namuwiki（`좀비고등학교/용어`）＋ Discord 攻略頻道 `1141581400307400795`（322 張 Division 強化能力圖鑑）＋ Notion APO 失物招領翻譯（63 件失物招領）＋ Notion 成就資料庫／巴哈舊台服圖鑑對照，共 `26` 張微知識卡已完成人工核對並正式 `promote` 入庫至 [cafe_namu_glossary.md](../data/game_wiki/cafe_namu_glossary.md)。
+* **Phase 4.2（已完成並入庫）**：9 週年專區（`category: au_series`, `series: anniv9`）—— 彙整 Discord 攻略頻道 `1142064309673939016` / `1142064409733255178`、討論區 `1136916863020974162`、FB 社團 `1755166524775722`、Naver Cafe 韓文攻略與 Notion 成就譯名對照；共 `15` 張微知識卡已完成人工核對並正式 `promote` 入庫至 [anniv9_magic_high.md](../data/game_wiki/anniv9_magic_high.md)。
+* **Phase 4.3（已完成並入庫）**：聖誕節活動專區（`category: au_series`, `series: christmas`）—— 彙整 Discord 討論區 `1435932399186870282`（`萬聖or聖誕節聊天區`）＋ FB 社團 `1755166524775722` ＋ Naver Cafe 韓文攻略 ＋ Notion 成就譯名對照；共 `10` 張微知識卡已完成人工核對並正式 `promote` 入庫至 [christmas_events.md](../data/game_wiki/christmas_events.md)。
+* **已歸檔外部參考來源（Provenance & 勘誤規範）**：
+  * **Notion 成就／徽章雙語資料庫**：已完整擷取並去重歸檔至 [emblems_notion_ref.txt](../data/wiki_staging/01_raw/emblems_notion_ref.txt)（`2171322382528044bd90d628960fcc35` 頁面與連動資料庫 `2121322382528009a5b4e5e78119c77d`，合計 `757` 筆唯一成就、完整 10 欄位＋頁面備註／80 項目錄）。
+    * ⚠️ **排序與編號規範**：`特殊成就（沒有數字編號的成就）` 之自訂 `編號`（如 `N009_*`、`X2025_*`）係資料庫作者自行編排，**不可靠且嚴禁引用於知識卡正文或摘要**；時間排序與實裝日期一律以 **`加入日期`（`新增日期`）** 欄位為準。
+    * ⚠️ **上游來源規範**：Notion 成就資料庫原始資料來自 **Namuwiki**，後續若需更新或勘誤成就資料，**必須回頭交叉比對 Namuwiki**。
+  * **巴哈姆特舊台服成就系統圖鑑**：已完整歸檔至 [tw_legacy_bahamut_ref.txt](../data/wiki_staging/01_raw/tw_legacy_bahamut_ref.txt)（`bsn=30876&snA=54`，含 001–105 編號成就、無編號專區、站內影片連結、編者註記與 B1 回覆，保存「劇情模式」＝進擊的殭屍 2 等早期台服譯名）。
+
+### 📚 Phase 5 ~ 9（Priority 3 ~ 7 後續擴充順序）
+* **Phase 5（Priority 3）**：🧭 世界觀與主線劇情（經典總覽、核心勢力、經典進擊與人物關係骨架）
+* **Phase 6（Priority 4）**：🔁 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與攻略導覽）
+* **Phase 7（Priority 5）**：⚔️ 《Division》系列（D1～D3 副本攻略、劇情與既有黑話串聯）
+* **Phase 8（Priority 6）**：🛡️ 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本攻略（Heroes / JinJom Classic / APO）
+* **Phase 9（Priority 7）**：🌌 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服生態 Q&A
 
 ---
 
@@ -117,8 +135,8 @@ related_ids: [關聯條目id]
 - [x] **Phase 0：實作計畫建檔**
   - [x] 建立 `docs/WIKI_IMPLEMENTATION_PLAN.md` 並納入雙模型 SOP 與進度追蹤表
 - [x] **Phase 1：底層檢索與 Runtime 熱修補引擎升級**
-  - [x] 升級 [engines/game_wiki_engine.py](../engines/game_wiki_engine.py)（YAML V2 座標、防 `EP1` 撞車、模糊提問消歧義、`subject+aspects` 加權、`supersedes` 軟屏蔽、熱修補置頂區塊、來源與基準時間顯示）
-  - [x] 升級 [cogs/wiki_cog.py](../cogs/wiki_cog.py)（新增 `!wiki replace` / `hotfix` 指令與即時回復機制）
+  - [x] 升級 [engines/game_wiki_engine.py](../engines/game_wiki_engine.py) Facade / [engines/game_wiki/](../engines/game_wiki/)（YAML V2 座標、防 `EP1` 撞車、模糊提問消歧義、`subject+aspects` 加權、`supersedes` 軟屏蔽、熱修補置頂區塊、來源與基準時間顯示）
+  - [x] 升級 [cogs/wiki_cog.py](../cogs/wiki_cog.py) 與 [cogs/wiki_views.py](../cogs/wiki_views.py)（新增 `!wiki replace` / `hotfix` 指令、互動檢視面板與即時回復機制）
   - [x] 同步更新 [README.md](../README.md)、[docs/COMMANDS.md](../docs/COMMANDS.md)（保持 `< 2000` 字元）與 [cogs/assistant_cog.py](../cogs/assistant_cog.py)（`!help` 面板與 `!help wiki`）
 - [x] **Phase 2：離線整理隔離區與防幻覺 Linter 建置**
   - [x] 建立 `data/wiki_staging/01_raw/`、`data/wiki_staging/02_review/` 與審核範本
@@ -136,7 +154,14 @@ related_ids: [關聯條目id]
     - [x] **Batch 1-6** (`evolution_b6_cafe_meta.review.md`)：Naver Cafe 改版歷程、2025 主流 Meta、韓服縮寫報位、教室機台機率圖與野房禮儀（`7` 卡 / `0` 待確認 / `errors=0, warnings=0` ➔ 已正式 `promote` 入庫 [evolution_mode.md](../data/game_wiki/evolution_mode.md)）
   - [x] **韓文攻略短句翻譯輔助模式（隨 Phase 3 同步推出）**：配合 [engines/game_wiki_engine.py](../engines/game_wiki_engine.py) 與 [prompts/general_prompt_community.txt](../prompts/general_prompt_community.txt) 納入韓文攻略短句翻譯輔助模式，支援韓文攻略／報位短句與術語對照解析
   - [x] **《進化感染》黃金回歸測試套件（隨 Phase 3 同步推出）**：納入 `tests/test_evolution_wiki_regression.py` 作為 Phase 3 上線同步推出的《進化感染》知識庫回歸驗證套件
-- [ ] **Phase 4：Priority 2 —— S1 & S2 武器技能與實戰定位（`weapons_detail.md`）**
-- [ ] **Phase 5：Priority 3 —— PVE 副本攻略與 Naver Cafe 民間打法（Division / Heroes / JinJom / APO）**
-- [ ] **Phase 6：Priority 4 —— 世界觀、主線劇情（Classic vs. Reboot 對照）與核心角色深度檔案**
-- [ ] **Phase 7：Priority 5 —— 平行世界（AU 系列）與韓服實用生態 Q&A**
+- [x] **Phase 4：Priority 2 —— Cafe 攻略用語集補完 ＋ 9 週年（`anniv9`）＋ 聖誕節活動（`christmas`）**
+  - [x] **Phase 4.0**：Schema V2.1 多連結導覽（`resource_links`）、座標鎖定、Linter 驗證與單元測試升級
+  - [x] **Phase 4.1**：Cafe 攻略用語集補完 —— 共 `26` 張微知識卡（`glossary_p41_general_events.review.md` 9 卡 ＋ `glossary_p41_pve.review.md` 9 卡 ＋ `glossary_p41_pvp.review.md` 8 卡）已完成人工確認，並對齊 Discord `1141581400307400795`（322 張 Division 強化能力圖鑑）、Notion APO 失物招領翻譯（63 件失物招領，歸檔於 `data/wiki_staging/01_raw/apo_notion_ref.txt`）、Notion 成就資料庫（`emblems_notion_ref.txt`）與巴哈舊台服圖鑑（`tw_legacy_bahamut_ref.txt`），正式透過 `scripts/wiki_linter.py promote`（未使用 `--force`）入庫至 [cafe_namu_glossary.md](../data/game_wiki/cafe_namu_glossary.md)（`entries=26, unresolved_reviews=0, errors=0, warnings=0`）
+  - [x] **Phase 4.2**：9 週年專區 —— 共 `15` 張微知識卡（`anniv9_b1_overview_versions.review.md` 7 卡 ＋ `anniv9_b2_quests_bosses_nav.review.md` 8 卡）已完成人工核對並對齊 Notion 成就譯名，正式透過 `scripts/wiki_linter.py promote`（未使用 `--force`）入庫至 [anniv9_magic_high.md](../data/game_wiki/anniv9_magic_high.md)（`entries=15, unresolved_reviews=0, errors=0, warnings=0`）
+  - [x] **Phase 4.3**：聖誕節活動專區 —— 共 `10` 張微知識卡（`christmas_b1_recent_2024_2026.review.md` 5 卡 ＋ `christmas_b2_classic_2014_2023.review.md` 5 卡）已完成人工核對並對齊 Notion 成就譯名，正式透過 `scripts/wiki_linter.py promote`（未使用 `--force`）入庫至 [christmas_events.md](../data/game_wiki/christmas_events.md)（`entries=10, unresolved_reviews=0, errors=0, warnings=0`）
+  - [x] **外部參考來源歸檔與溯源規範**：Notion 成就／徽章參考頁（`2171322382528044bd90d628960fcc35` / `2121322382528009a5b4e5e78119c77d`，757 筆唯一成就）已歸檔於 [emblems_notion_ref.txt](../data/wiki_staging/01_raw/emblems_notion_ref.txt)（特殊成就自訂 `編號` 不可靠，一律改採 `加入日期`/`新增日期`，且上游來自 Namuwiki 須交叉比對）；巴哈姆特舊台服圖鑑（`bsn=30876&snA=54`）已歸檔於 [tw_legacy_bahamut_ref.txt](../data/wiki_staging/01_raw/tw_legacy_bahamut_ref.txt)
+- [ ] **Phase 5：Priority 3 —— 世界觀與主線劇情（經典總覽、核心勢力、經典進擊與人物關係骨架）**
+- [ ] **Phase 6：Priority 4 —— 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與攻略導覽）**
+- [ ] **Phase 7：Priority 5 —— 《Division》系列（D1～D3 副本攻略、劇情與既有黑話串聯）**
+- [ ] **Phase 8：Priority 6 —— 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本攻略（Heroes / JinJom Classic / APO）**
+- [ ] **Phase 9：Priority 7 —— 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服生態 Q&A**

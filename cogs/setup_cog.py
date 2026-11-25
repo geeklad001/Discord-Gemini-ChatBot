@@ -20,6 +20,7 @@ from core.config import (
     DEFAULT_FINAL_FALLBACK_MODEL,
     DEFAULT_PRIMARY_MODEL,
     FLASH_LITE_PRESET_MODELS,
+    STRICT_FLASH_LITE_FALLBACK_MODELS,
     BotSettings,
     apply_runtime_overrides,
     init_runtime_env,
@@ -608,7 +609,7 @@ class SetupPanelView(discord.ui.View):
             for model_name in FLASH_LITE_PRESET_MODELS
         ]
         model_select = discord.ui.Select(
-            placeholder="🤖 選擇首選 Gemini Flash-Lite 模型...",
+            placeholder="🤖 選擇首選 Gemini 模型 (Flash-Lite / Flash / Hydrogen)...",
             options=options,
             min_values=1,
             max_values=1,
@@ -618,15 +619,23 @@ class SetupPanelView(discord.ui.View):
         self.add_item(model_select)
 
         reset_chain_btn = discord.ui.Button(
-            label="♻️ 重置預設 Flash-Lite 鏈",
+            label="♻️ 重置預設鏈 (Lite+Flash/H)",
             style=discord.ButtonStyle.primary,
             row=2,
         )
         reset_chain_btn.callback = self._on_reset_model_chain
         self.add_item(reset_chain_btn)
 
+        strict_lite_btn = discord.ui.Button(
+            label="🪶 切換純 Flash-Lite 鏈",
+            style=discord.ButtonStyle.secondary,
+            row=2,
+        )
+        strict_lite_btn.callback = self._on_strict_lite_chain
+        self.add_item(strict_lite_btn)
+
         clear_cd_btn = discord.ui.Button(
-            label="❄️ 清除 429 冷卻",
+            label="❄️ 清除冷卻",
             style=discord.ButtonStyle.secondary,
             row=2,
         )
@@ -634,7 +643,7 @@ class SetupPanelView(discord.ui.View):
         self.add_item(clear_cd_btn)
 
         clear_all_btn = discord.ui.Button(
-            label="🧹 清除全部 SQLite 覆寫 (回歸 .env)",
+            label="🧹 清除全部 SQLite 覆寫",
             style=discord.ButtonStyle.danger,
             row=2,
         )
@@ -773,7 +782,29 @@ class SetupPanelView(discord.ui.View):
             },
         )
         self.health_results = None
-        self.status_note = f"♻️ 已重置為預設 Flash-Lite 輪替鏈（首選：`{DEFAULT_PRIMARY_MODEL}`）"
+        self.status_note = f"♻️ 已重置為預設混合輪替鏈（首選：`{DEFAULT_PRIMARY_MODEL}`，含 Flash / Hydrogen 高峰備援）"
+        self._rebuild_items()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _on_strict_lite_chain(self, interaction: discord.Interaction) -> None:
+        fallback_csv = ",".join(STRICT_FLASH_LITE_FALLBACK_MODELS)
+        await asyncio.to_thread(assistant_db.set_runtime_config_override, "primary_model", DEFAULT_PRIMARY_MODEL)
+        await asyncio.to_thread(assistant_db.set_runtime_config_override, "fallback_models", fallback_csv)
+        await asyncio.to_thread(
+            assistant_db.set_runtime_config_override,
+            "final_fallback_model",
+            DEFAULT_FINAL_FALLBACK_MODEL,
+        )
+        apply_runtime_overrides(
+            self.cog.settings,
+            {
+                "primary_model": DEFAULT_PRIMARY_MODEL,
+                "fallback_models": fallback_csv,
+                "final_fallback_model": DEFAULT_FINAL_FALLBACK_MODEL,
+            },
+        )
+        self.health_results = None
+        self.status_note = f"🪶 已切換為純 Flash-Lite 輪替鏈（首選：`{DEFAULT_PRIMARY_MODEL}`）"
         self._rebuild_items()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
@@ -943,7 +974,7 @@ class SetupPanelView(discord.ui.View):
             embed = discord.Embed(
                 title=f"⚙️ {s.bot_instance_name} — 互動設定面板｜🤖 模型策略",
                 description=truncate_embed_text(
-                    f"{banner}目前全程採用 **Gemini Flash-Lite** 免費額度友善輪替鏈，可在下方切換首選模型或重設覆寫。"
+                    f"{banner}預設以 **Gemini Flash-Lite** 為首選與最終保底，高峰限流時自動備援切換至 **Flash / Gemini 4 Hydrogen**；亦可一鍵切回純 Flash-Lite 鏈。"
                 ),
                 color=0xA855F7,
             )

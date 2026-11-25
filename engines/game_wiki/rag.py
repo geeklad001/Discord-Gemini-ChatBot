@@ -14,7 +14,7 @@ from engines.game_wiki.constants import (
     _HANGUL_TOKEN_RE,
     logger,
 )
-from engines.game_wiki.loader import _resolve_paths
+from engines.game_wiki.loader import _resolve_paths, parse_resource_link
 from engines.game_wiki.nlp import (
     _detect_unmatched_chinese_tokens,
     _detect_unmatched_korean_tokens,
@@ -67,6 +67,20 @@ def _format_entry_for_rag(e: dict, query_text: str = "") -> str:
             f"\n- 📍 **伺服器站內圖文攻略導覽**：{guide_url}"
             "（若群友想看地圖標點／完整圖文，請直接附上此真實連結導覽；嚴禁自行捏造未記載的 Discord 連結！）"
         )
+    parsed_links: list[tuple[str, str]] = []
+    seen_urls: set[str] = {guide_url} if guide_url else set()
+    for raw_link in e.get("resource_links") or []:
+        lbl, u = parse_resource_link(raw_link)
+        if not u or u in seen_urls or u in body:
+            continue
+        seen_urls.add(u)
+        parsed_links.append((lbl, u))
+    if parsed_links:
+        links_block = "\n".join(f"  * {lbl}：{u}" for lbl, u in parsed_links[:8])
+        body += (
+            f"\n- 🔗 **攻略影片與文章導覽**：\n{links_block}"
+            "\n  （影片與圖文攻略請直接附上上方真實連結導覽，嚴禁自行捏造或改寫未記載的網址！）"
+        )
     return body
 
 
@@ -79,7 +93,20 @@ def _format_entry_for_lookup(e: dict) -> str:
     sup_note = f" ｜ 🔄 取代：{', '.join(sup)}" if sup else ""
     guide_url = str(e.get("guide_url") or "").strip()
     guide_note = f" ｜ 📍 導覽：{guide_url}" if guide_url else ""
-    footer = f"\n└ `ID: {e['id']}` ｜ 📂 來源：{src} ｜ 📅 基準：{upd}{fresh_note}{sup_note}{guide_note}"
+    extra_links: list[tuple[str, str]] = []
+    seen_urls: set[str] = {guide_url} if guide_url else set()
+    for raw_link in e.get("resource_links") or []:
+        lbl, u = parse_resource_link(raw_link)
+        if not u or u in seen_urls:
+            continue
+        seen_urls.add(u)
+        extra_links.append((lbl, u))
+    res_note = (
+        " ｜ 🔗 導覽：" + " ; ".join(f"{lbl}: {u}" for lbl, u in extra_links[:4])
+        if extra_links
+        else ""
+    )
+    footer = f"\n└ `ID: {e['id']}` ｜ 📂 來源：{src} ｜ 📅 基準：{upd}{fresh_note}{sup_note}{guide_note}{res_note}"
     return f"{e['body']}{footer}"
 
 

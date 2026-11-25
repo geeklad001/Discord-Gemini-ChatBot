@@ -4,6 +4,27 @@
 
 ---
 
+## [v2.1.0] - 2026-11-26
+
+本次更新涵蓋 **Flash / Gemini 4 Hydrogen 高峰備援模型輪替與 404 冷卻避讓**，以及 **《殭屍學園》知識庫 Phase 4 擴充（Schema V2.1 多連結導覽、Cafe 用語集、9 週年《魔法高中》、聖誕節活動）**。
+
+### 🌟 重點新功能與升級
+
+* **⚡ Flash / Gemini 4 Hydrogen 高峰備援輪替與 404 冷卻避讓**
+  * **預設模型輪替鏈升級**（[core/config.py](core/config.py)、`.env*.example`）：維持 `gemini-flash-lite-latest` 與多代 Flash-Lite 優先，遇尖峰限流（429）時自動接續備援 `gemini-flash-latest`、`gemini-3.8-flash`、`gemini-4-hydrogen`、`gemini-2.5-flash`，並於全鏈限流後回落 `FINAL_FALLBACK_MODEL` 保底。
+  * **404 自動冷卻避讓**（[core/llm_client.py](core/llm_client.py)）：新增 `_is_not_found_error()` 與 `not_found_cooldown_seconds=600`（10 分鐘）冷卻機制，避免部分帳號尚未開通的模型每回合重複撞 `404 NOT_FOUND` 延遲。
+  * **互動面板與診斷強化**（[cogs/setup_cog.py](cogs/setup_cog.py)、[cogs/assistant_cog.py](cogs/assistant_cog.py)）：`!setup` 模型分頁新增完整備援模型選單與 **`🪶 切換純 Flash-Lite 鏈`** 一鍵切換按鈕；`!models` 新增 `hydrogen` 與標準 Flash 可用模型及冷卻狀態檢視。
+* **🧟 《殭屍學園》Wiki Phase 4 擴充與 Schema V2.1 多連結導覽**
+  * **三大知識庫正式入庫（新增 `51` 張微知識卡，全庫達 `142` 張）**：
+    * [data/game_wiki/cafe_namu_glossary.md](data/game_wiki/cafe_namu_glossary.md)（`26` 卡）：Cafe 攻略用語集補完（帳號／加倍／PVE／PVP 術語，對齊 Division 強化能力、APO 失物招領、Notion 成就與舊台服圖鑑）。
+    * [data/game_wiki/anniv9_magic_high.md](data/game_wiki/anniv9_magic_high.md)（`15` 卡）：9 週年《魔法高中》歷年改版演進、9 大元素與魔杖 +-4 機制、副本與 Boss 攻略導覽。
+    * [data/game_wiki/christmas_events.md](data/game_wiki/christmas_events.md)（`10` 卡）：2014～2026 聖誕節活動總覽、2025《聖誕工坊》與 2026 前夜祭復刻機制與刷幣效率。
+  * **Schema V2.1 `resource_links` 多連結導覽與檢索強化**：升級 [engines/game_wiki/](engines/game_wiki/)（`loader.py`、`rag.py`、`community.py`、`nlp.py`、`constants.py`）、[cogs/wiki_views.py](cogs/wiki_views.py) Embed 多連結呈現、[prompts/general_prompt_community.txt](prompts/general_prompt_community.txt) 攻略導覽原則與 [scripts/wiki_linter.py](scripts/wiki_linter.py) 驗證規則；新增 `anniv9`／`christmas` 查詢座標鎖定與 `平行世界`／`活動` 目錄別名。
+* **✅ 測試與驗證**
+  * 全套件實測通過 **136 項單元與回歸測試**，並通過 `wiki_linter` 結構／連結檢查。
+
+---
+
 ## [v2.0.0] - 2026-11-25
 
 本次為全面升級大版本，涵蓋原生語音頻道 TTS 系統、F5-TTS 快取直讀與顯存策略、新手互動設定面板、四大娛樂／學習模組深度強化、資安防呆加固與模組化架構重構。

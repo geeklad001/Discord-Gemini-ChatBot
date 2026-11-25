@@ -94,6 +94,20 @@ def _build_wiki_entry_embed(
     if guide_url and guide_url not in body_text:
         desc_parts.append(f"📍 **站內圖文攻略導覽**：{guide_url}")
 
+    res_lines: list[str] = []
+    seen_urls: set[str] = {guide_url} if guide_url else set()
+    for raw_link in entry.get("resource_links") or []:
+        lbl, u = game_wiki_engine.parse_resource_link(raw_link)
+        if not u or u in seen_urls or u in body_text:
+            continue
+        seen_urls.add(u)
+        safe_label = lbl.replace("[", "［").replace("]", "］")
+        res_lines.append(f"• [{safe_label}]({u})")
+        if len(res_lines) >= 8:
+            break
+    if res_lines:
+        desc_parts.append("🔗 **攻略影片與文章導覽**：\n" + "\n".join(res_lines))
+
     if is_suggestion_mode:
         prefix = "💡 相似推薦"
         color = 0xF39C12

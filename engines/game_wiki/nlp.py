@@ -179,6 +179,10 @@ def _detect_query_coordinates(query_text: str) -> dict[str, set[str]]:
         series.add("ladder")
     if any(k in t for k in ("精靈高", "엘프고", "銀河高", "은하고", "魔法高", "마법고", "像素高", "픽셀고")):
         series.add("au")
+    if any(k in t for k in ("9週年", "九週年", "9周年", "九周年", "9주년")):
+        series.add("anniv9")
+    if any(k in t for k in ("聖誕節", "聖誕活動", "聖誕模式", "크리스마스")):
+        series.add("christmas")
 
     if any(
         k in t

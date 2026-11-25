@@ -35,7 +35,7 @@ DEFAULT_STAGING_REVIEW_DIR = REPO_ROOT / "data" / "wiki_staging" / "02_review"
 DEFAULT_MAX_BODY_CHARS = 450
 WARN_BODY_CHARS = 380
 REQUIRED_YAML_FIELDS = ("id", "category", "name_zh", "keywords")
-LIST_YAML_FIELDS = {"keywords", "related_ids", "aspects", "supersedes"}
+LIST_YAML_FIELDS = {"keywords", "related_ids", "aspects", "supersedes", "resource_links"}
 KNOWN_YAML_KEYS = {
     "id",
     "category",
@@ -52,6 +52,7 @@ KNOWN_YAML_KEYS = {
     "supersedes",
     "status",
     "guide_url",
+    "resource_links",
     "keywords",
     "related_ids",
 }
@@ -167,6 +168,11 @@ def parse_review_entries(content: str) -> list[dict[str, Any]]:
                 ),
                 "status": str(meta.get("status", "")).strip(),
                 "guide_url": str(meta.get("guide_url", "")).strip(),
+                "resource_links": (
+                    list(meta.get("resource_links", []))
+                    if isinstance(meta.get("resource_links"), list)
+                    else []
+                ),
                 "keywords": (
                     list(meta.get("keywords", []))
                     if isinstance(meta.get("keywords"), list)
@@ -453,6 +459,36 @@ def lint_wiki_file(
                 errors.append(
                     f"[{label}] `guide_url` 若為 Discord 連結，須為標準訊息/討論串跳轉連結（`https://discord.com/channels/...`）：`{guide_url}`"
                 )
+
+        # 8. resource_links 多連結導覽驗證
+        for item in entry.get("resource_links", []):
+            item_str = str(item).strip()
+            m = re.search(r"(https?://\S+)$", item_str)
+            url = m.group(1) if m else ""
+            if (
+                not m
+                or not url.startswith(("http://", "https://"))
+                or any(ch.isspace() for ch in url)
+            ):
+                errors.append(
+                    f"[{label}] `resource_links` 包含無效網址（須為 `標籤｜https://...` 或有效 http(s) 網址）：`{item}`"
+                )
+            else:
+                prefix = item_str[: m.start()].strip().rstrip("|｜:：- ").strip()
+                if "discord.com" in url.lower() and not url.startswith(
+                    (
+                        "https://discord.com/channels/",
+                        "https://ptb.discord.com/channels/",
+                        "https://canary.discord.com/channels/",
+                    )
+                ):
+                    errors.append(
+                        f"[{label}] `resource_links` 若為 Discord 連結，須為標準訊息/討論串跳轉連結（`https://discord.com/channels/...`）：`{item}`"
+                    )
+                if not prefix:
+                    warnings.append(
+                        f"[{label}] `resource_links` 建議加上用途標籤（如 `🎬 標題｜https://...`）：`{item}`"
+                    )
 
     return {
         "file": str(path),

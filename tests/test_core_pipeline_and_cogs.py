@@ -574,6 +574,41 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
         await browse_view.on_timeout()
         fake_msg.edit.assert_not_awaited()
 
+        # Verify resource_links rendering, clickable Markdown links, guide_url deduplication, and Discord Embed limits
+        rich_entry = {
+            "id": "wiki_rich_links_sample",
+            "category": "evolution",
+            "category_label": "進化感染",
+            "name_zh": "進階資源導覽測試條目",
+            "source": "Namuwiki",
+            "updated_at": "2026-11",
+            "freshness": "volatile",
+            "guide_url": "https://discord.com/channels/111/222/333",
+            "resource_links": [
+                "https://discord.com/channels/111/222/333",
+                "🎬 實戰示範, Part 1｜https://youtu.be/demo1",
+                "☕ 原文攻略｜https://cafe.naver.com/zhs/42",
+                "📖 內文已收錄｜https://example.com/in-body",
+            ],
+            "body": "這是條目測試內文，詳細文字請見 https://example.com/in-body。",
+        }
+        rich_view = WikiSearchView(
+            query="資源導覽",
+            entries=[rich_entry],
+            focused_snippets={rich_entry["id"]: (rich_entry["body"], False)},
+        )
+        rich_embed = rich_view.build_embed()
+        self.assertLessEqual(len(rich_embed.description or ""), 4096)
+        for fld in rich_embed.fields:
+            self.assertLessEqual(len(fld.value), 1024)
+        self.assertIn("📍 **站內圖文攻略導覽**：https://discord.com/channels/111/222/333", rich_embed.description)
+        self.assertIn("🔗 **攻略影片與文章導覽**：", rich_embed.description)
+        self.assertIn("• [🎬 實戰示範, Part 1](https://youtu.be/demo1)", rich_embed.description)
+        self.assertIn("• [☕ 原文攻略](https://cafe.naver.com/zhs/42)", rich_embed.description)
+        self.assertEqual(rich_embed.description.count("https://discord.com/channels/111/222/333"), 1)
+        self.assertNotIn("[💬 站內圖文攻略]", rich_embed.description)
+        self.assertNotIn("[📖 內文已收錄]", rich_embed.description)
+
     async def test_generate_with_fallback_retries_on_whitespace_or_invisible_text(self):
         blank_newline_resp = SimpleNamespace(
             text="\n" * 2000,
@@ -851,6 +886,7 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
         async def _fake_model_pager():
             yield SimpleNamespace(name="models/gemini-flash-lite-latest", supported_actions=["generateContent"])
             yield SimpleNamespace(name="models/gemini-3.5-flash-lite", supported_actions=["generateContent"])
+            yield SimpleNamespace(name="models/gemini-4-hydrogen", supported_actions=["generateContent"])
 
         fake_client = SimpleNamespace(
             aio=SimpleNamespace(models=SimpleNamespace(list=AsyncMock(return_value=_fake_model_pager())))
@@ -876,6 +912,7 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
         fields_text = " ".join(f"{f.name} {f.value}" for f in emb.fields)
         self.assertIn(settings.primary_model, fields_text)
         self.assertIn("gemini-3.5-flash-lite", fields_text)
+        self.assertIn("gemini-4-hydrogen", fields_text)
 
         # 2. !models rejected for non-owner in target channel, silent in non-target channel
         non_owner_ctx = _make_ctx(123, 1001)
@@ -1019,6 +1056,60 @@ class TestMediaAndPipeline(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(bot.get_command("lore"))
         finally:
             await bot.close()
+
+    async def test_generate_with_fallback_404_cooldown_and_hydrogen_config(self):
+        base_cfg = types.GenerateContentConfig(
+            temperature=0.0,
+            thinking_config=types.ThinkingConfig(thinking_level="low"),
+        )
+        adapted_h = _adapt_config_for_model("gemini-4-hydrogen", base_cfg)
+        self.assertIsNotNone(adapted_h.thinking_config)
+        self.assertIsNotNone(adapted_h.thinking_config.thinking_level)
+        self.assertEqual(adapted_h.temperature, 0.1)
+
+        reset_model_cooldowns()
+        try:
+            call_log: list[str] = []
+
+            async def _fake_gen(*, model, contents, config):
+                call_log.append(model)
+                if model == "gemini-4-hydrogen":
+                    raise RuntimeError("404 NOT_FOUND: model not enabled")
+                return SimpleNamespace(text=f"ok:{model}")
+
+            fake_client = SimpleNamespace(
+                aio=SimpleNamespace(models=SimpleNamespace(generate_content=AsyncMock(side_effect=_fake_gen)))
+            )
+            contents = [types.Content(role="user", parts=[types.Part.from_text(text="hi")])]
+
+            resp1, used1 = await generate_with_fallback(
+                client=fake_client,
+                models_to_try=["gemini-4-hydrogen", "gemini-flash-latest"],
+                contents=contents,
+                config=base_cfg,
+                use_cooldown=True,
+                not_found_cooldown_seconds=120.0,
+            )
+            self.assertEqual(used1, "gemini-flash-latest")
+            self.assertEqual(resp1.text, "ok:gemini-flash-latest")
+            self.assertEqual(call_log, ["gemini-4-hydrogen", "gemini-flash-latest"])
+            self.assertIn("gemini-4-hydrogen", get_active_model_cooldowns())
+
+            # Second call skips the 404 model until cooldown reset
+            call_log.clear()
+            resp2, used2 = await generate_with_fallback(
+                client=fake_client,
+                models_to_try=["gemini-4-hydrogen", "gemini-flash-latest"],
+                contents=contents,
+                config=base_cfg,
+                use_cooldown=True,
+                not_found_cooldown_seconds=120.0,
+            )
+            self.assertEqual(used2, "gemini-flash-latest")
+            self.assertEqual(resp2.text, "ok:gemini-flash-latest")
+            self.assertEqual(call_log, ["gemini-flash-latest"])
+        finally:
+            reset_model_cooldowns()
 
 
 if __name__ == "__main__":

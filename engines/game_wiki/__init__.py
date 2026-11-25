@@ -46,6 +46,7 @@ from engines.game_wiki.loader import (
     get_wiki_stats,
     list_wiki_entries_by_category,
     load_wiki_entries,
+    parse_resource_link,
 )
 from engines.game_wiki.nlp import (
     _analyze_dynamic_room_patterns,
@@ -132,6 +133,7 @@ __all__ = [
     "logger",
     "lookup_game_wiki_tool_impl",
     "parse_community_wiki_blocks",
+    "parse_resource_link",
     "replace_wiki_entry_with_community_hotfix",
     "search_wiki_entries",
     "search_wiki_interactive",

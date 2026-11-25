@@ -35,6 +35,14 @@ def _is_rate_limit_error(err: Exception) -> bool:
     return "429" in msg or "RESOURCE_EXHAUSTED" in msg or "RATE_LIMIT" in msg or "QUOTA" in msg
 
 
+def _is_not_found_error(err: Exception) -> bool:
+    code = getattr(err, "code", None) or getattr(err, "status_code", None)
+    if code == 404:
+        return True
+    msg = str(err).upper()
+    return "404" in msg or "NOT_FOUND" in msg
+
+
 def _is_permanent_model_error(err: Exception) -> bool:
     code = getattr(err, "code", None) or getattr(err, "status_code", None)
     if code in (400, 401, 403, 404):
@@ -149,6 +157,7 @@ async def generate_with_fallback(
     final_fallback_delay: float = 1.5,
     use_cooldown: bool = True,
     cooldown_seconds: float = 45.0,
+    not_found_cooldown_seconds: float = 600.0,
 ) -> tuple[types.GenerateContentResponse, str]:
     """Call Gemini asynchronously with timeout protection, 429 cooldown, and final Flash-Lite fallback."""
     prepared_contents = sanitize_contents_for_gemini(
@@ -212,6 +221,8 @@ async def generate_with_fallback(
             last_error = err
             if _is_permanent_model_error(err):
                 permanent_failed.add(model_name)
+                if use_cooldown and _is_not_found_error(err):
+                    _MODEL_COOLDOWN_UNTIL[model_name] = time.monotonic() + not_found_cooldown_seconds
             elif use_cooldown and _is_rate_limit_error(err):
                 _MODEL_COOLDOWN_UNTIL[model_name] = time.monotonic() + cooldown_seconds
             if logger and not is_final_pass:

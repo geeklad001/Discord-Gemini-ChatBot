@@ -76,15 +76,15 @@
 
 為確保在使用免費/高頻額度的輕量模型系列時仍具備高穩定性、高準確度與零幻覺表現，必須維持以下五大機制：
 
-1. **全 Flash-Lite 預設輪替鏈與 `core/llm_client.py` 容錯機制**：
-   - `core/config.py` 與所有 `.env*.example` 範本預設皆採 **Flash-Lite 專用鏈**：
+1. **Flash-Lite 優先 ＋ Flash / Hydrogen 高峰備援輪替與 `core/llm_client.py` 容錯機制**：
+   - `core/config.py` 與所有 `.env*.example` 範本預設採 **Flash-Lite 優先、Flash / Gemini 4 Hydrogen 高峰備援**（並提供 `STRICT_FLASH_LITE_FALLBACK_MODELS` 供 `!setup` 一鍵切換）：
      - `PRIMARY_MODEL=gemini-flash-lite-latest`
-     - `FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash-lite`
+     - `FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash-lite,gemini-flash-latest,gemini-3.8-flash,gemini-4-hydrogen,gemini-2.5-flash`
      - `FINAL_FALLBACK_MODEL=gemini-flash-lite-latest`
-   - **429 限流冷卻避讓（`_MODEL_COOLDOWN_UNTIL`）**：單一模型遇 `429 / RESOURCE_EXHAUSTED` 時自動進入冷卻（預設 45 秒），優先嘗試其他未冷卻模型；若全鏈遇暫態限流失敗，延遲後再以 `FINAL_FALLBACK_MODEL` 進行最終保底重試（遇到 `400/401/403/404` 永久性錯誤則不重試該模型）。擁有者可透過 `!models` 即時檢視輪替順序、429 冷卻剩餘秒數與 AI Studio 可用模型，`!reload` 會同步模型設定並清除冷卻狀態。
+   - **429 / 404 冷卻避讓（`_MODEL_COOLDOWN_UNTIL`）**：單一模型遇 `429 / RESOURCE_EXHAUSTED` 時自動進入冷卻（預設 45 秒），遇 `404 NOT_FOUND`（如部分帳號尚未開通模型）時進入冷卻（預設 600 秒）避免每次回合重複撞 404 延遲，優先嘗試其他未冷卻模型；若全鏈遇暫態限流失敗，延遲後再以 `FINAL_FALLBACK_MODEL` 進行最終保底重試（遇到 `400/401/403/404` 永久性錯誤則不於終局重試該模型）。擁有者可透過 `!models` 即時檢視輪替順序、冷卻剩餘秒數與 AI Studio 可用模型，`!reload` 會同步模型設定並清除冷卻狀態。
    - **跨世代參數自適應（`_adapt_config_for_model`）**：呼叫各模型前先深拷貝調整 `GenerateContentConfig`——針對 `gemini-2.5` / `gemini-2.0` / `gemma` 自動移除不相容的 Gemini 3+ `thinking_level`（防範 `400 INVALID_ARGUMENT`）；針對 `gemini-3` / `gemini-4` / `-latest` 將嚴格的 `temperature=0.0` 微調為 `0.1`。
 2. **Contextual-LightRAG 自動預檢索 (`engines/game_wiki_engine.py` Facade / `engines/game_wiki/`)**：
-   - 本地知識庫位於 `data/game_wiki/`，實際檔案包含 `evolution_mode.md`、`general_slang_and_weapons.md`、`ep2_terms.md`、`h1_terms.md`、`prison_ladder_terms.md`、`slang.md`、`character_translations_tw.csv`（以及群友透過 `!wiki add/import/replace` 擴充或勘誤時生成的 `community_contributions.md`），支援依檔案 `mtime` 自動熱重載。
+   - 本地知識庫位於 `data/game_wiki/`，實際檔案包含 `evolution_mode.md`、`general_slang_and_weapons.md`、`ep2_terms.md`、`h1_terms.md`、`prison_ladder_terms.md`、`slang.md`、`cafe_namu_glossary.md`、`anniv9_magic_high.md`、`christmas_events.md`、`character_translations_tw.csv`（以及群友透過 `!wiki add/import/replace` 擴充或勘誤時生成的 `community_contributions.md`），支援依檔案 `mtime` 自動熱重載。
    - 每個條目皆包含全知脈絡標頭（Contextual Header）、雙語與初聲縮寫 `keywords`、以及 1-Hop 實體關聯 `related_ids`（LightRAG）。
    - 文字或圖片訊息進入時，由 Python 先行精準檢索並自動注入 System Prompt（韓服黑話最多 8~10 筆、長篇設定嚴格限制 `Top-K <= 3` 以避免小模型分心效應 Distraction Effect）。
 3. **兩階段視覺微流水線 (`game_wiki_engine.extract_image_text_pass1`)**：

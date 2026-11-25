@@ -20,6 +20,7 @@ from core.config import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_FINAL_FALLBACK_MODEL,
     DEFAULT_PRIMARY_MODEL,
+    STRICT_FLASH_LITE_FALLBACK_MODELS,
     BotSettings,
     init_runtime_env,
     is_bot_owner,
@@ -209,8 +210,20 @@ class TestConfigAndFlags(unittest.TestCase):
     def test_flash_lite_only_defaults_and_final_fallback_parsing(self):
         self.assertEqual(DEFAULT_PRIMARY_MODEL, "gemini-flash-lite-latest")
         self.assertEqual(
-            DEFAULT_FALLBACK_MODELS,
+            STRICT_FLASH_LITE_FALLBACK_MODELS,
             ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"],
+        )
+        self.assertEqual(
+            DEFAULT_FALLBACK_MODELS,
+            [
+                "gemini-3.5-flash-lite",
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash-lite",
+                "gemini-flash-latest",
+                "gemini-3.8-flash",
+                "gemini-4-hydrogen",
+                "gemini-2.5-flash",
+            ],
         )
         self.assertEqual(DEFAULT_FINAL_FALLBACK_MODEL, "gemini-flash-lite-latest")
 
@@ -225,7 +238,15 @@ class TestConfigAndFlags(unittest.TestCase):
             self.assertEqual(s_def.primary_model, "gemini-flash-lite-latest")
             self.assertEqual(
                 s_def.fallback_models,
-                ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"],
+                [
+                    "gemini-3.5-flash-lite",
+                    "gemini-3.1-flash-lite",
+                    "gemini-2.5-flash-lite",
+                    "gemini-flash-latest",
+                    "gemini-3.8-flash",
+                    "gemini-4-hydrogen",
+                    "gemini-2.5-flash",
+                ],
             )
             self.assertEqual(s_def.final_fallback_model, "gemini-flash-lite-latest")
             self.assertEqual(
@@ -235,6 +256,10 @@ class TestConfigAndFlags(unittest.TestCase):
                     "gemini-3.5-flash-lite",
                     "gemini-3.1-flash-lite",
                     "gemini-2.5-flash-lite",
+                    "gemini-flash-latest",
+                    "gemini-3.8-flash",
+                    "gemini-4-hydrogen",
+                    "gemini-2.5-flash",
                 ],
             )
 

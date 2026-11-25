@@ -22,7 +22,7 @@
 - SQLite 建表 (`init_*_tables()`) 應在啟動時執行一次，**禁止**在每個高頻率查詢函式內重複執行 `CREATE TABLE` 或 `ALTER TABLE`。
 
 ### 4. 修改後強制驗證 (Mandatory Post-Edit Verification)
-- 每次修改完 Python 檔案後，Agent **必須**執行語法與單元測試檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py core/*.py cogs/*.py engines/*.py` 與 `.venv\Scripts\python.exe -m unittest discover -s tests -v`），確認零語法錯誤與全數測試通過後才算完成。
+- 每次修改完 Python 檔案後，Agent **必須**執行語法與單元測試檢查（例如 `.venv\Scripts\python.exe -m py_compile bot.py core/*.py cogs/*.py cogs/tts/*.py engines/*.py engines/boardgames/*.py engines/game_wiki/*.py engines/tts/*.py` 與 `.venv\Scripts\python.exe -m unittest discover -s tests -v`），確認零語法錯誤與全數測試通過後才算完成。
 
 ---
 
@@ -41,9 +41,12 @@
 - **嚴禁硬編碼特定身分詞彙**：在共用的 `assistant_db.py`、`assistant_tools.py`（包含 Tool Docstrings！）與 `rpg_engine.py` 中，**不得將「情侶」寫死在共用提示詞或工具描述中**（應根據環境變數或使用中性詞彙如「長期記憶庫」、「共同待辦清單」），否則社群版 AI 會在讀取 Tool Schema 時產生「你們是情侶」的嚴重幻覺。
 
 ### 3. 工具掛載與 System Prompt 一致性 (Tool-Prompt Alignment)
-- 本專案主程式已模組化拆分至 `core/`（`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`、`rendering.py`）、`engines/`（含 `engines/boardgames/` 子模組）與 `cogs/`（`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`lifesim_cog.py`、`flashcard_cog.py`、`wiki_cog.py`），由 `bot.py` 統一載入。
-- 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道或該實例未啟用的工具（例如停用 `ENABLE_FLASHCARD_MODE` 時的 `add_flashcard_card`、停用 `ENABLE_GAME_WIKI` 時的 `lookup_game_wiki` 與 Pass-1 OCR、停用 `ENABLE_BOARD_GAMES` 時的 `boardgame_*`），應從 `tools` 清單中移除並停用對應 Cog，避免模型亂呼叫做白工。
-- **HornBot 語音頻道防護 (`TTS_CHANNEL_ID`)**：在日語雙頻道模式下，必須確保只有純日語區段 (`[JP]`) 會送往 `TTS_CHANNEL_ID`。若模型因呼叫工具而未輸出 `[ZH]` 分隔標籤，必須有防呆機制避免將整段中文工具回報直接丟進 TTS 頻道朗讀。
+- 本專案主程式已模組化拆分並由 `bot.py` 統一載入：
+  - `core/`：`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`、`rendering.py`、`help_embeds.py`（動態 `!help` 與主題說明 Embed 建構器）
+  - `engines/`：`assistant_db.py`、`assistant_tools.py`、`rpg_engine.py`、`flashcard_engine.py`、`lifesim_engine.py`、`safety_guardrail.py`、`video_engine.py`，以及分拆子套件與 Facade：`boardgame_engine.py`（+ `engines/boardgames/`）、`game_wiki_engine.py`（+ `engines/game_wiki/`）、`tts_engine.py`（+ `engines/tts/`）
+  - `cogs/`：`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`lifesim_cog.py`、`flashcard_cog.py`、`wiki_cog.py`、`tts_cog.py`（+ `cogs/tts/`），以及獨立 Discord UI 互動視圖模組 `cogs/*_views.py`（`boardgame_views.py`、`flashcard_views.py`、`wiki_views.py`）
+- 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道或該實例未啟用的工具或功能（例如停用 `ENABLE_FLASHCARD_MODE` 時的 `add_flashcard_card`、停用 `ENABLE_GAME_WIKI` 時的 `lookup_game_wiki` 與 Pass-1 OCR、停用 `ENABLE_BOARD_GAMES` 時的 `boardgame_*` / `lifesim_*`、停用 `ENABLE_VOICE_TTS` 時的 `TtsCog`），應從 `tools` 清單中移除並停用對應 Cog，避免模型亂呼叫做白工。
+- **語音頻道與 `TTS_CHANNEL_ID` 防護**：在日語雙頻道模式下，必須確保只有純日語區段 (`[JP]`) 會送往語音頻道與 `TTS_CHANNEL_ID`。若模型因呼叫工具而未輸出 `[ZH]` 分隔標籤，必須有防呆機制避免將整段中文工具回報直接丟進 TTS 頻道朗讀。
 
 ### 4. 歷史上下文建構過濾 (Context History Hygiene)
 - 在 `build_gemini_contents` 與 `build_general_contents` 抓取 Discord 歷史訊息時，**必須嚴格區分「雙頻道鏡像轉發小卡」與「Bot 系統指令回覆 Embed（如 `!help`、`!rpg`、`!card`）」**。
@@ -69,20 +72,27 @@
 
 ---
 
-## ⚡ 三之二、 輕量模型 (`gemini-flash-lite`) 強化架構規範 (`game_wiki_engine.py`)
+## ⚡ 三之二、 輕量模型 (`gemini-flash-lite`) 強化與輪替架構規範 (`core/llm_client.py` & `engines/game_wiki/`)
 
-為確保在使用免費/高頻額度的輕量模型（如 `gemini-flash-lite-latest`）時仍具備高準確度與零幻覺表現，必須維持以下四大機制：
+為確保在使用免費/高頻額度的輕量模型系列時仍具備高穩定性、高準確度與零幻覺表現，必須維持以下五大機制：
 
-1. **Contextual-LightRAG 自動預檢索 (`game_wiki_engine.build_auto_rag_context`)**：
-   - 本地知識庫位於 `data/game_wiki/*.md`（`slang.md`、`characters.md`、`story.md`、`modes.md`、`au_events.md`），支援依檔案 `mtime` 自動熱重載。
+1. **全 Flash-Lite 預設輪替鏈與 `core/llm_client.py` 容錯機制**：
+   - `core/config.py` 與所有 `.env*.example` 範本預設皆採 **Flash-Lite 專用鏈**：
+     - `PRIMARY_MODEL=gemini-flash-lite-latest`
+     - `FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash-lite`
+     - `FINAL_FALLBACK_MODEL=gemini-flash-lite-latest`
+   - **429 限流冷卻避讓（`_MODEL_COOLDOWN_UNTIL`）**：單一模型遇 `429 / RESOURCE_EXHAUSTED` 時自動進入冷卻（預設 45 秒），優先嘗試其他未冷卻模型；若全鏈遇暫態限流失敗，延遲後再以 `FINAL_FALLBACK_MODEL` 進行最終保底重試（遇到 `400/401/403/404` 永久性錯誤則不重試該模型）。擁有者可透過 `!models` 即時檢視輪替順序、429 冷卻剩餘秒數與 AI Studio 可用模型，`!reload` 會同步模型設定並清除冷卻狀態。
+   - **跨世代參數自適應（`_adapt_config_for_model`）**：呼叫各模型前先深拷貝調整 `GenerateContentConfig`——針對 `gemini-2.5` / `gemini-2.0` / `gemma` 自動移除不相容的 Gemini 3+ `thinking_level`（防範 `400 INVALID_ARGUMENT`）；針對 `gemini-3` / `gemini-4` / `-latest` 將嚴格的 `temperature=0.0` 微調為 `0.1`。
+2. **Contextual-LightRAG 自動預檢索 (`engines/game_wiki_engine.py` Facade / `engines/game_wiki/`)**：
+   - 本地知識庫位於 `data/game_wiki/`，實際檔案包含 `evolution_mode.md`、`general_slang_and_weapons.md`、`ep2_terms.md`、`h1_terms.md`、`prison_ladder_terms.md`、`slang.md`、`character_translations_tw.csv`（以及群友透過 `!wiki add/import/replace` 擴充或勘誤時生成的 `community_contributions.md`），支援依檔案 `mtime` 自動熱重載。
    - 每個條目皆包含全知脈絡標頭（Contextual Header）、雙語與初聲縮寫 `keywords`、以及 1-Hop 實體關聯 `related_ids`（LightRAG）。
    - 文字或圖片訊息進入時，由 Python 先行精準檢索並自動注入 System Prompt（韓服黑話最多 8~10 筆、長篇設定嚴格限制 `Top-K <= 3` 以避免小模型分心效應 Distraction Effect）。
-2. **兩階段視覺微流水線 (`game_wiki_engine.extract_image_text_pass1`)**：
-   - 當訊息包含圖片附件時，先執行無工具、無人設、`temperature=0.0` 的 **Pass-1 純視覺 OCR 預提取**，將圖上的韓文、初聲縮寫（如 `ㄷㅋㅈ`、`클모`、`34퀸`）與數字抄錄下來，再交由 Python 查表注入 **Pass-2 最終回覆**，解決小模型「邊看圖邊忘記查工具」的硬傷。
-3. **CRAG (Corrective RAG) 防幻覺煞車**：
+3. **兩階段視覺微流水線 (`game_wiki_engine.extract_image_text_pass1`)**：
+   - 當訊息包含圖片附件時，先執行無工具、無人設、低溫的 **Pass-1 純視覺 OCR 預提取**，將圖上的韓文、初聲縮寫（如 `ㄷㅋㅈ`、`클모`、`34퀸`）與數字抄錄下來，再交由 Python 查表注入 **Pass-2 最終回覆**，解決小模型「邊看圖邊忘記查工具」的硬傷。
+4. **CRAG (Corrective RAG) 防幻覺煞車**：
    - 當偵測到《殭屍學園》或韓文專有名詞提問，強制要求模型遵循「**先列事實、後套人設**」的輸出結構；若遇到知識庫未收錄之縮寫，嚴禁以英文諧音（如把 `클모` 猜成 Clan Mode）自行腦補。
-4. **動態工具瘦身 (`assistant_tools.get_scoped_tools`)**：
-   - 在非 TRPG 冒險情境（`is_rpg_context == False`）下，自動卸載 6 個 RPG 專用工具，僅保留常態核心工具（含 `lookup_game_wiki`），避免過多 Tool Schema 稀釋小模型注意力。
+5. **動態工具瘦身 (`assistant_tools.get_scoped_tools`)**：
+   - 在非 TRPG 冒險情境（`is_rpg_context == False`）下，自動卸載 6 個 RPG 專用工具，僅保留當前實例已啟用的常態工具，避免過多 Tool Schema 稀釋小模型注意力。
 
 ---
 
@@ -92,7 +102,7 @@
 
 | 變更類型 | 必須同步更新的文件清單 |
 | :--- | :--- |
-| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `docs/COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `cogs/assistant_cog.py` 中的 `build_help_overview_embed`（依啟用開關動態呈現的 `!help` Embed 面板） |
+| **新增 / 修改 / 刪除 `!` 指令或別名** | 1. `README.md`（指令大全表格）<br>2. `docs/COMMANDS.md`（全功能無表格指令手冊，注意總字數須保持 < 2000 字以便貼入 Discord）<br>3. `core/help_embeds.py` 中的 `build_help_overview_embed` 與主題說明 Embed（由 `cogs/assistant_cog.py` 匯入並動態呈現 `!help` 面板） |
 | **新增 / 修改 RPG 機制、角色卡欄位、存讀檔或擲骰規則** | 1. `docs/RPG_GUIDE.md`（RPG 專屬指南與速查表）<br>2. `docs/COMMANDS.md` & `README.md`<br>3. `prompts/general_prompt.txt`、`prompts/general_prompt_community.txt`、`prompts/general_prompt_starter.txt` |
 | **新增 / 修改 Gemini Function Calling 工具 (`engines/assistant_tools.py` / `engines/rpg_engine.py`)** | 1. 對應的函數 Docstring（Gemini 直接讀取 Docstring 作為 Tool Schema）<br>2. `prompts/general_prompt.txt`、`prompts/general_prompt_community.txt`、`prompts/general_prompt_starter.txt`、`prompts/system_prompt.txt`<br>3. `engines/assistant_tools.py` 的 `get_scoped_tools()` / `get_assistant_tools()` 註冊清單 |
 | **新增 / 修改環境變數 (`.env` 開關或設定)** | 1. `.env.example`（雙語共學版範本）<br>2. `.env.community.example`（社群版範本）<br>3. `.env.starter.example`（新手一鍵分享版範本）<br>4. `core/config.py` & `README.md` |

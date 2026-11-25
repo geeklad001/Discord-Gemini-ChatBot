@@ -4,9 +4,12 @@ DiscordGeminiBot - 影片與多模態影音處理引擎 (video_engine.py)
 具備時長安全過濾（長度上限控管）、檔案容量防護、Live 直播識別與零下載串流傳輸。
 """
 
+import html
+import json
 import os
 import re
 import logging
+import urllib.parse
 from typing import Optional
 import httpx
 
@@ -18,23 +21,29 @@ logger = logging.getLogger("DiscordGeminiBot.video")
 # YouTube 影片分析長度上限（預設 180 秒 / 3 分鐘，涵蓋全規格 Shorts 與精華短片，防止 Token 爆量）
 def get_max_youtube_duration_seconds() -> int:
     try:
-        return int(os.getenv("MAX_YOUTUBE_DURATION_SECONDS", "180"))
+        val = int(os.getenv("MAX_YOUTUBE_DURATION_SECONDS", "180"))
     except ValueError:
-        return 180
+        val = 180
+    return max(10, min(3600, val))
+
 
 # Discord 直接上傳影片容量上限（預設 20 MB）
 def get_max_video_attachment_bytes() -> int:
     try:
-        return int(os.getenv("MAX_VIDEO_ATTACHMENT_BYTES", str(20 * 1024 * 1024)))
+        val = int(os.getenv("MAX_VIDEO_ATTACHMENT_BYTES", str(20 * 1024 * 1024)))
     except ValueError:
-        return 20 * 1024 * 1024
+        val = 20 * 1024 * 1024
+    return max(1024 * 1024, min(50 * 1024 * 1024, val))
+
 
 SUPPORTED_VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv")
 SUPPORTED_VIDEO_MIME_PREFIXES = ("video/mp4", "video/webm", "video/quicktime", "video/x-matroska")
 
-# 支援 YouTube 各種網址形式（一般 watch、Shorts、短網址 youtu.be、嵌入 embed 等）
+_YOUTUBE_ID_RE = re.compile(r"[a-zA-Z0-9_-]{11}")
+
+# 支援 YouTube 各種網址形式（一般 watch、Shorts、短網址 youtu.be、嵌入 embed、直播 live 等）
 YOUTUBE_URL_REGEX = re.compile(
-    r'(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^ \n\r\t]*&)?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+    r'(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^ \n\r\t]*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?![a-zA-Z0-9_-])',
     re.IGNORECASE
 )
 
@@ -83,6 +92,40 @@ def format_duration(seconds: Optional[int]) -> str:
     return f"{s} 秒"
 
 
+def _is_youtube_host(url: str) -> bool:
+    """Ensure YouTube metadata fetch & redirects stay strictly on YouTube domains."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower().rstrip(".")
+        return (
+            host == "youtube.com"
+            or host.endswith(".youtube.com")
+            or host == "youtu.be"
+            or host.endswith(".youtu.be")
+        )
+    except Exception:
+        return False
+
+
+def _extract_yt_initial_player_response(html_text: str) -> Optional[dict]:
+    """Extract and parse the embedded ytInitialPlayerResponse JSON object safely."""
+    marker_match = re.search(
+        r'(?:ytInitialPlayerResponse|window\["ytInitialPlayerResponse"\])\s*=\s*\{',
+        html_text,
+    )
+    if not marker_match:
+        return None
+    start_idx = marker_match.end() - 1
+    try:
+        decoder = json.JSONDecoder()
+        obj, _ = decoder.raw_decode(html_text, start_idx)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
 async def fetch_youtube_video_info(url_or_id: str) -> dict:
     """
     非同步抓取公開 YouTube 影片的後設資料（標題、時長秒數、是否為直播）。
@@ -98,7 +141,22 @@ async def fetch_youtube_video_info(url_or_id: str) -> dict:
         "error": Optional[str]
     }
     """
-    vid = extract_youtube_video_id(url_or_id) or url_or_id
+    raw_input = (url_or_id or "").strip()
+    vid = extract_youtube_video_id(raw_input)
+    if vid is None:
+        if _YOUTUBE_ID_RE.fullmatch(raw_input):
+            vid = raw_input
+        else:
+            return {
+                "success": False,
+                "video_id": "",
+                "canonical_url": "",
+                "title": "未知影片",
+                "duration_sec": None,
+                "is_live": False,
+                "error": "無效的 YouTube 影片 ID",
+            }
+
     canonical_url = f"https://www.youtube.com/watch?v={vid}"
 
     headers = {
@@ -106,10 +164,69 @@ async def fetch_youtube_video_info(url_or_id: str) -> dict:
         "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
     }
 
+    # Lazy import to prevent circular dependency with core.media
+    from core.media import is_safe_public_url_async
+
+    max_html_bytes = 2 * 1024 * 1024
+    max_redirects = 5
+    current_url = canonical_url
+    html_text = ""
+
     try:
-        async with httpx.AsyncClient(timeout=6.0, headers=headers, follow_redirects=True) as client:
-            resp = await client.get(canonical_url)
-            if resp.status_code != 200:
+        async with httpx.AsyncClient(timeout=6.0, headers=headers, follow_redirects=False) as client:
+            for _ in range(max_redirects + 1):
+                if not _is_youtube_host(current_url) or not await is_safe_public_url_async(current_url):
+                    return {
+                        "success": False,
+                        "video_id": vid,
+                        "canonical_url": canonical_url,
+                        "title": "未知影片",
+                        "duration_sec": None,
+                        "is_live": False,
+                        "error": "連線逾時或無法存取 YouTube 頁面",
+                    }
+                async with client.stream("GET", current_url, follow_redirects=False) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("location")
+                        if not location:
+                            return {
+                                "success": False,
+                                "video_id": vid,
+                                "canonical_url": canonical_url,
+                                "title": "未知影片",
+                                "duration_sec": None,
+                                "is_live": False,
+                                "error": "連線逾時或無法存取 YouTube 頁面",
+                            }
+                        current_url = urllib.parse.urljoin(current_url, location)
+                        continue
+                    if resp.status_code != 200:
+                        return {
+                            "success": False,
+                            "video_id": vid,
+                            "canonical_url": canonical_url,
+                            "title": "未知影片",
+                            "duration_sec": None,
+                            "is_live": False,
+                            "error": f"YouTube 回應狀態碼：{resp.status_code}",
+                        }
+                    chunks: list[bytes] = []
+                    total_bytes = 0
+                    async for chunk in resp.aiter_bytes():
+                        if not chunk:
+                            continue
+                        remaining = max_html_bytes - total_bytes
+                        if remaining <= 0:
+                            break
+                        if len(chunk) > remaining:
+                            chunks.append(chunk[:remaining])
+                            total_bytes += remaining
+                            break
+                        chunks.append(chunk)
+                        total_bytes += len(chunk)
+                    html_text = b"".join(chunks).decode("utf-8", errors="ignore")
+                    break
+            else:
                 return {
                     "success": False,
                     "video_id": vid,
@@ -117,43 +234,68 @@ async def fetch_youtube_video_info(url_or_id: str) -> dict:
                     "title": "未知影片",
                     "duration_sec": None,
                     "is_live": False,
-                    "error": f"YouTube 回應狀態碼：{resp.status_code}"
+                    "error": "連線逾時或無法存取 YouTube 頁面",
                 }
-            html = resp.text
 
-        # 1. 抓取標題
+        player_resp = _extract_yt_initial_player_response(html_text)
+        video_details = player_resp.get("videoDetails") if isinstance(player_resp, dict) else None
+        if not isinstance(video_details, dict):
+            video_details = None
+
+        # 1. 抓取標題 / 直播 / 時長（優先使用 ytInitialPlayerResponse.videoDetails 避免側邊欄推薦直播污染）
         title = "未知標題"
-        m_title = (
-            re.search(r'<meta property="og:title"\s+content="([^"]+)"', html) or
-            re.search(r'<title>([^<]+)</title>', html)
-        )
-        if m_title:
-            title = m_title.group(1).replace(" - YouTube", "").strip()
-
-        # 2. 判斷是否為直播 (Live Stream)
         is_live = False
-        if '"isLive":true' in html or '"isLiveBroadcast":true' in html or '"liveStreamability":' in html:
-            is_live = True
+        duration_sec: Optional[int] = None
 
-        # 3. 抓取時長秒數 (lengthSeconds 或 itemprop="duration")
-        duration_sec = None
-        m_len = re.search(r'"lengthSeconds":"(\d+)"', html)
-        if m_len:
-            duration_sec = int(m_len.group(1))
-        else:
-            m_itemprop = re.search(r'itemprop="duration"\s+content="PT([^"]+)"', html)
-            if m_itemprop:
-                dur_str = m_itemprop.group(1)
-                hours = re.search(r'(\d+)H', dur_str)
-                mins = re.search(r'(\d+)M', dur_str)
-                secs = re.search(r'(\d+)S', dur_str)
-                duration_sec = (
-                    (int(hours.group(1)) * 3600 if hours else 0) +
-                    (int(mins.group(1)) * 60 if mins else 0) +
-                    (int(secs.group(1)) if secs else 0)
-                )
+        if video_details is not None:
+            raw_title = video_details.get("title")
+            if isinstance(raw_title, str) and raw_title.strip():
+                title = raw_title.strip()
+
+            raw_len = video_details.get("lengthSeconds")
+            if raw_len is not None and str(raw_len).strip().isdigit():
+                duration_sec = int(str(raw_len).strip())
+
+            if "isLive" in video_details:
+                is_live = bool(video_details.get("isLive"))
             else:
-                m_approx = re.search(r'"approxDurationMs":"(\d+)"', html)
+                is_live = bool(video_details.get("isLiveContent")) and (duration_sec is None or duration_sec == 0)
+
+        if title == "未知標題":
+            m_title = (
+                re.search(r'<meta property="og:title"\s+content="([^"]+)"', html_text)
+                or re.search(r'<title>([^<]+)</title>', html_text)
+            )
+            if m_title:
+                parsed_title = m_title.group(1).replace(" - YouTube", "").strip()
+                if parsed_title:
+                    title = parsed_title
+
+        title = html.unescape(title)
+
+        if video_details is None:
+            if '"isLive":true' in html_text or '"isLiveBroadcast":true' in html_text or '"liveStreamability":' in html_text:
+                is_live = True
+
+        if duration_sec is None:
+            if video_details is None:
+                m_len = re.search(r'"lengthSeconds":"(\d+)"', html_text)
+                if m_len:
+                    duration_sec = int(m_len.group(1))
+            if duration_sec is None:
+                m_itemprop = re.search(r'itemprop="duration"\s+content="PT([^"]+)"', html_text)
+                if m_itemprop:
+                    dur_str = m_itemprop.group(1)
+                    hours = re.search(r'(\d+)H', dur_str)
+                    mins = re.search(r'(\d+)M', dur_str)
+                    secs = re.search(r'(\d+)S', dur_str)
+                    duration_sec = (
+                        (int(hours.group(1)) * 3600 if hours else 0)
+                        + (int(mins.group(1)) * 60 if mins else 0)
+                        + (int(secs.group(1)) if secs else 0)
+                    )
+            if duration_sec is None and video_details is None:
+                m_approx = re.search(r'"approxDurationMs":"(\d+)"', html_text)
                 if m_approx:
                     duration_sec = int(m_approx.group(1)) // 1000
 
@@ -180,7 +322,7 @@ async def fetch_youtube_video_info(url_or_id: str) -> dict:
             "title": "未知影片",
             "duration_sec": None,
             "is_live": False,
-            "error": str(e)
+            "error": "連線逾時或無法存取 YouTube 頁面"
         }
 
 

@@ -1,0 +1,26 @@
+{
+  "voices": {
+    "preset_warm_female": {
+      "name": "溫柔女聲 (F5預設)",
+      "description": "自然中文女聲（所有社群成員皆可選用）",
+      "prompt_audio": "preset_female.wav",
+      "prompt_text": "請填入對應參考音檔中實際唸出的文字。",
+      "speed": 1.0,
+      "seed": 10001,
+      "public": true,
+      "allowed_users": []
+    },
+    "owner_private_clone": {
+      "name": "主機私人聲線",
+      "description": "僅限主機擁有者於 data/tts_voices/voices.json 授權的特定 User ID 使用",
+      "prompt_audio": "you.wav",
+      "prompt_text": "請填入參考音檔中實際唸出的文字。",
+      "speed": 1.0,
+      "seed": 10002,
+      "public": false,
+      "allowed_users": [
+        "123456789012345678"
+      ]
+    }
+  }
+}

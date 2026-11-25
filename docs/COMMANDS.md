@@ -1,52 +1,43 @@
 # 🌸 GeminiBot 全功能指令手冊
 
-本手冊無表格、排版清爽，可直接貼進 Discord 聊天室（< 2000 字元）。
-平時直接口語聊天即可！支援看圖、貼圖、網址摘要、短影片/YT 分析（3分鐘內），亦可吩咐：「記住喜好」、「15分鐘後提醒」、「加待辦」。
+本手冊無表格，可直接貼入 Discord（< 2000 字元）。
+平時直接口語聊天即可！支援看圖、貼圖、網址摘要、短影片/YT 分析（3分鐘內）、日語頻道直接發語音訊息聊日文，亦可吩咐：「記住喜好」、「15分鐘後提醒」、「加待辦」。
 
 ---
 
-📋 **共同待辦事項 (!todo)**
-• `!todo`：查看所有未完成事項
-• `!todo add <內容>`：新增待辦（或直接 `!todo 買牛奶`）
-• `!todo done <編號/關鍵字>`：標記完成
-• `!todo del <編號>`：刪除待辦 ｜ `!todo all`：查看歷史紀錄
+📋 **待辦與提醒 (!todo / !remind)**
+• `!todo` / `!todo add <事項>` / `!todo done <編號>` / `!todo del <編號>` / `!todo all`
+• `!remind 10m 關火` / `!remind 18:30 倒垃圾` / `!reminds` / `!remind del <編號>`
 
-⏰ **定時提醒 (!remind)**
-• `!remind 10m 關火`：相對時間提醒（支援 30s、10m、2h、1d）
-• `!remind 18:30 倒垃圾`：指定時間提醒
-• `!reminds`：查看預約清單 ｜ `!remind del <編號>`：取消提醒
+🧠 **長期記憶 (!memory)**
+• `!memory`：查看記憶 ｜ `!remember <事實>`：新增 ｜ `!forget <編號>`：刪除
 
-🧠 **長期記憶庫 (!memory)**
-• `!memory`：查看已記錄的事實與設定
-• `!remember <事實>`：新增記憶 ｜ `!forget <編號>`：刪除記憶
+🗡️ **RPG 跑團與組隊 (!rpg / !party / !sheet / !roll)**
+• `!rpg start [主題]`：建討論串開局（AI 會附 **🎲 互動檢定按鈕**，點擊即擲骰並自動續寫劇情！）
+• `!rpg join` / `leave` / `!party kick @隊友`：入退隊 ｜ `!party`：小隊視覺儀表板
+• `!sheet [文字/檔名]`：視覺化角色卡（修仙/賽博/CoC/奇幻自動換色）｜ `!rpg`：個人狀態
+• `!roll [骰子]`：手動擲骰（如 `!roll 2d6`） ｜ `!rpg reset`：重置本局
 
-🗡️ **RPG 文字冒險與組隊 (!rpg / !party / !sheet / !roll)**
-• `!rpg start [主題]`：建立討論串開局 ｜ `!rpg join` / `leave`：主動入隊或單獨退隊
-• `!party` / `!party kick @隊友`：查看小隊全員面板或請離成員
-• `!sheet [文字/檔名]`：查看或匯入角色卡（匯入即入隊） ｜ `!rpg`：查看個人狀態
-• `!rpg name <名>` / `!rpg class <職業>`：修改名稱或職業
-• `!roll [表達式]`：D20 或自訂擲骰（如 `!roll 2d6`） ｜ `!rpg reset`：重置本局冒險
+💾 **存讀檔與設定集 (!save / !load / !note / !lore)**
+• `!save <名>` / `!load <名>` / `!saves` / `!rpg delsave <名>`：全隊進度快照
+• `!note <線索>` / `!journal` / `!rpg delnote <編號>`：冒險手記
+• `!lore` / `!lore add 詞 | 內容` / `!lore import` / `!lore del <編號>` / `!lore clear`
 
-💾 **冒險存讀檔與手記 (!save / !load / !note / !lore)**
-• `!save <名>` / `!load <名>`：保存或載入全隊進度與手記快照
-• `!saves`：查看存檔清單 ｜ `!rpg delsave <名>`：刪除存檔
-• `!note <線索>`：記錄情報 ｜ `!journal`：查看冒險手記（`!rpg delnote <編號>` 刪除）
-• `!lore`：查看世界觀設定 ｜ `!lore add 關鍵字 | 內容`：新增單筆設定
-• `!lore import [文字/檔名]`：批次匯入世界觀（`!lore clear` 清空、`!lore del <編號>` 刪除）
+🌸 **日語單字、跟讀與搶答 (!card / !shadow / !quiz)**
+• `!card [牌組]`：互動字卡（原音/TTS、圖卡、AI 解說、`🎙️ 跟讀練習`、SRS）
+• `!shadow [日文句]`：口說跟讀發音評測（亦可直接在日語頻道傳語音訊息練習！）
+• `!card add <詞>` / `import` / `generate` ｜ `!decks` / `!quiz [牌組] [數]`
 
-🌸 **日語單字卡與搶答 (!card / !decks / !quiz)**
-• `!card [牌組名]`：開啟互動翻面單字卡（原音朗讀、圖卡、AI 家教解說、SRS 熟練度）
-• `!card add <單字> [讀音] [意思]`：新增單字（AI 自動補完假名與例句）
-• `!card import [檔名/等級/all]`：支援貼文字、讀取 `data/imports/`（`all` 自動拆為 N1~N5 牌組）或附檔匯入
-• `!card decks`（`!decks`）：查看牌組清單 ｜ `!card deck <名>`：切換預設牌組
-• `!card newdeck <名>` / `!card deldeck <名>`：建立或刪除牌組
-• `!card generate <主題> [數量]`：AI 生成主題單字庫
-• `!quiz [牌組名] [題數]`（`!搶答` / `!kotoba`）：多人限時 20 秒搶答測驗
+🔊 **語音朗讀與聲線 (!join / !voice / !botvoice / !tts)**
+• `!join` / `!leave` (`!dc`) / `!say <文字>` / `!skip`：進出語音房、代說與跳過
+• `!voice`：個人選聲線 ｜ `!voice bot [jp]` (`!botvoice`)：機器人聲線 ｜ `!voiceclone`：克隆說明
+• `!tts status` / `channels` ｜ **管理員**：`channel`、`bind`、`ai`、`proxy`、`vconly`
+• **擁有者**：`!tts preload`（預載）、`keepalive [on|off|秒]`（常駐切換）、`unload`、`reloadvoices`
 
-🎮 **遊戲大廳：棋盤桌遊 ＆ 80億分之1 (!play ＋ 按鈕/口語)**
-• `!play`：開啟大廳（黑白棋/西洋棋/四子棋/五子棋，支援 PvE/🧠LLM/PvP；以及 🌍 **80億分之1** 197國投胎模擬，支援 ⚡極速/🧠LLM 劇情 ＆ `!play 圖鑑`）
-• 落子、悔棋、投降、A/B/C 抉擇與圖鑑皆可點按鈕或口語操作（輔助：`!m <座標>`）
+🎮 **桌遊大廳與 80 億分之 1 (!play / !life)**
+• `!play`：黑白棋/西洋棋/四子棋/五子棋（`!m <座標>`）、`!life [top|atlas]`：80億分之1 深度版（特質/檢定/副行動/移居）
 
-🧟 **知識庫與系統管理 (!wiki / !reload / !reset / !help)**
-• `!wiki [關鍵字]`（`!圖鑑`/`!좀고`）：互動分頁查設定黑話，`目錄` 瀏覽分類（支援 `add/import/replace/list/del`）
-• `!reload` / `!reset` / `!help`：熱重載人設與知識庫、封存對話上下文、調出功能速查表
+🧟 **知識庫與擁有者管理 (!wiki / !setup / !reload / !models / !reset / !help)**
+• `!wiki [詞]`（`!圖鑑`）：查黑話設定，支援 `目錄`/`add`/`import`/`replace`/`list`/`del`
+• `!setup` / `!setup check`（擁有者）：免改 `.env` 互動設定、頻道挑選與環境健檢
+• `!reload`（管理員）：熱重載 ｜ `!models`（擁有者）：看模型與冷卻 ｜ `!reset` / `!help [主題]`

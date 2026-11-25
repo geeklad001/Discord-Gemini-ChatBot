@@ -5,9 +5,11 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 import discord
+from discord.ext import commands
 from google import genai
 from google.genai import types
 
@@ -22,11 +24,28 @@ from engines import (
     video_engine,
 )
 from core.config import BASE_DIR, BotSettings, resolve_prompt_path, truncate_embed_text
-from core.llm_client import generate_with_fallback, get_safety_settings
-from core.media import build_current_message_media_parts, fetch_url_preview, is_gif_or_media_share_url
+from core.llm_client import generate_with_fallback, get_safety_settings, has_visible_text
+from core.media import (
+    build_current_message_media_parts,
+    fetch_url_preview,
+    is_audio_attachment,
+    is_gif_or_media_share_url,
+)
 
 # In-memory cache of channel reset timestamps, backed by SQLite in assistant_db
 channel_reset_timestamps: dict[int, datetime] = {}
+
+
+def _get_tts_cog(bot: discord.Client, settings: BotSettings):
+    if not settings.enable_voice_tts:
+        return None
+    get_cog = getattr(bot, "get_cog", None)
+    if not callable(get_cog):
+        return None
+    cog = get_cog("TtsCog")
+    if isinstance(cog, commands.Cog):
+        return cog
+    return None
 
 
 def get_effective_reset_timestamp(channel_id: Optional[int]) -> Optional[datetime]:
@@ -119,7 +138,10 @@ def build_dynamic_system_instruction(
         mem_info = f"\n\n{mem_info}"
 
     guardrail_info = (
-        safety_guardrail.get_safety_guardrail_prompt(enable_japanese_mode=settings.enable_japanese_mode)
+        safety_guardrail.get_safety_guardrail_prompt(
+            enable_japanese_mode=settings.enable_japanese_mode,
+            enable_game_wiki=settings.enable_game_wiki,
+        )
         if settings.enable_safety_guardrail
         else ""
     )
@@ -209,6 +231,7 @@ async def _build_user_message_parts(
     msg: discord.Message,
     *,
     include_current_media: bool,
+    enable_audio: bool = False,
     context_label: str,
     logger: Optional[logging.Logger] = None,
 ) -> list[types.Part]:
@@ -222,9 +245,12 @@ async def _build_user_message_parts(
         raw_text = f"(傳送了貼圖【{st_names}】，請直接觀看貼圖畫面並自然回應)"
     elif not clean_content and getattr(msg, "attachments", None):
         has_vid = any(video_engine.is_video_attachment(a) for a in msg.attachments)
+        has_audio = any(is_audio_attachment(a) for a in msg.attachments)
         has_gif = any((a.filename or "").lower().endswith(".gif") or (a.content_type or "").lower() == "image/gif" for a in msg.attachments)
         if has_vid:
             raw_text = "(傳送了一段短影片，請直接觀看並回應)"
+        elif has_audio:
+            raw_text = "(傳送了一段日語/雙語語音訊息，請聆聽發音與內容並回應)"
         elif has_gif:
             raw_text = "(傳送了一張 GIF 動圖，請直接觀看畫面並自然回應)"
         else:
@@ -243,7 +269,12 @@ async def _build_user_message_parts(
     parts.append(types.Part.from_text(text=text))
 
     if include_current_media:
-        media_parts = await build_current_message_media_parts(msg, context_label=context_label, logger=logger)
+        media_parts = await build_current_message_media_parts(
+            msg,
+            context_label=context_label,
+            logger=logger,
+            enable_audio=enable_audio,
+        )
         parts.extend(media_parts)
 
     return parts
@@ -264,7 +295,7 @@ async def build_chat_history_contents(
     else:
         source_channel = channel
 
-    reset_after = get_effective_reset_timestamp(getattr(source_channel, "id", None))
+    reset_after = await asyncio.to_thread(get_effective_reset_timestamp, getattr(source_channel, "id", None))
     raw_messages: list[discord.Message] = []
     history_limit = settings.thread_window_limit if isinstance(source_channel, discord.Thread) else settings.sliding_window_limit
 
@@ -346,7 +377,10 @@ async def build_chat_history_contents(
                                 mirror_text += f"\n\n{url_summary}"
                         parts.append(types.Part.from_text(text=mirror_text))
                         media_parts = await build_current_message_media_parts(
-                            current_message, context_label=context_label, logger=logger
+                            current_message,
+                            context_label=context_label,
+                            logger=logger,
+                            enable_audio=is_japanese_dual_mode,
                         )
                         parts.extend(media_parts)
                     else:
@@ -372,6 +406,7 @@ async def build_chat_history_contents(
             parts = await _build_user_message_parts(
                 msg,
                 include_current_media=is_current,
+                enable_audio=is_japanese_dual_mode,
                 context_label=context_label,
                 logger=logger,
             )
@@ -409,6 +444,7 @@ async def build_chat_history_contents(
                 fallback_parts = await _build_user_message_parts(
                     current_message,
                     include_current_media=True,
+                    enable_audio=is_japanese_dual_mode,
                     context_label=context_label,
                     logger=logger,
                 )
@@ -425,29 +461,50 @@ async def build_chat_history_contents(
     return turns
 
 
-async def send_split_messages(destination: discord.abc.Messageable, text: str) -> None:
-    """防止超過 Discord 單則訊息 2000 字元限制，自動切分段落送出。"""
-    max_len = 1900
-    if len(text) <= max_len:
-        await destination.send(text)
-        return
+async def send_split_messages(
+    destination: discord.abc.Messageable,
+    text: str,
+    *,
+    timeout: float = 30.0,
+) -> int:
+    """防止超過 Discord 單則訊息 2000 字元限制，自動切分段落並濾除空白區塊送出。"""
+    cleaned = (text or "").strip()
+    if not has_visible_text(cleaned):
+        raise ValueError("回覆內容為空白，無法發送至 Discord。")
 
-    lines = text.split("\n")
+    max_len = 1900
+    if len(cleaned) <= max_len:
+        await asyncio.wait_for(destination.send(cleaned), timeout=timeout)
+        return 1
+
+    lines = cleaned.split("\n")
     chunk = ""
+    sent_count = 0
     for line in lines:
         if len(chunk) + len(line) + 1 > max_len:
-            if chunk:
-                await destination.send(chunk)
-                chunk = ""
+            piece = chunk.strip()
+            if has_visible_text(piece):
+                await asyncio.wait_for(destination.send(piece), timeout=timeout)
+                sent_count += 1
+            chunk = ""
             while len(line) > max_len:
-                await destination.send(line[:max_len])
+                sub_piece = line[:max_len].strip()
+                if has_visible_text(sub_piece):
+                    await asyncio.wait_for(destination.send(sub_piece), timeout=timeout)
+                    sent_count += 1
                 line = line[max_len:]
             chunk = line
         else:
             chunk = f"{chunk}\n{line}" if chunk else line
 
-    if chunk.strip():
-        await destination.send(chunk)
+    tail = chunk.strip()
+    if has_visible_text(tail):
+        await asyncio.wait_for(destination.send(tail), timeout=timeout)
+        sent_count += 1
+
+    if sent_count == 0:
+        raise ValueError("切分後無可發送的非空白訊息內容。")
+    return sent_count
 
 
 async def send_synchronized_response(
@@ -473,12 +530,15 @@ async def send_synchronized_response(
             zh_part = None
 
     embed = None
-    if zh_part:
+    if has_visible_text(zh_part):
         embed = discord.Embed(
             description=truncate_embed_text(zh_part),
             color=0xFFB6C1,
         )
         embed.set_footer(text="🌸 繁體中文對照與單字註記")
+
+    if not has_visible_text(jp_part) and not embed:
+        raise ValueError("日語共學回覆內容為空白，無法發送至 Discord。")
 
     main_channel = bot.get_channel(settings.target_channel_id)
     tts_channel = bot.get_channel(settings.tts_channel_id) if settings.tts_channel_id else None
@@ -490,8 +550,16 @@ async def send_synchronized_response(
             await send_split_messages(origin_channel, jp_part)
             if embed:
                 await origin_channel.send(embed=embed)
-        if jp_part and tts_channel and tts_channel.id != origin_channel.id:
-            await tts_channel.send(content=jp_part)
+        if has_visible_text(jp_part) and tts_channel and tts_channel.id != origin_channel.id:
+            if len(jp_part) <= 1900:
+                await tts_channel.send(content=jp_part)
+            else:
+                await send_split_messages(tts_channel, jp_part)
+        if has_visible_text(jp_part):
+            tts_cog = _get_tts_cog(bot, settings)
+            guild = getattr(origin_channel, "guild", None)
+            if tts_cog and guild:
+                await tts_cog.enqueue_ai_speech(guild, jp_part, is_japanese=True, channel=origin_channel)
         return
 
     target_main = main_channel or origin_channel
@@ -502,13 +570,18 @@ async def send_synchronized_response(
         if embed:
             await target_main.send(embed=embed)
 
-    if jp_part and tts_channel and tts_channel.id != target_main.id:
+    if has_visible_text(jp_part) and tts_channel and tts_channel.id != target_main.id:
         if len(jp_part) <= 1900:
             await tts_channel.send(content=jp_part)
         else:
             await send_split_messages(tts_channel, jp_part)
         if logger:
             logger.info(f"📻 已同步推播純日語至朗讀頻道 (ID: {settings.tts_channel_id})")
+    if has_visible_text(jp_part):
+        tts_cog = _get_tts_cog(bot, settings)
+        guild = getattr(target_main, "guild", None) or getattr(origin_channel, "guild", None)
+        if tts_cog and guild:
+            await tts_cog.enqueue_ai_speech(guild, jp_part, is_japanese=True, channel=target_main)
 
 
 def _extract_current_image_parts(message: discord.Message, contents: list[types.Content]) -> list[types.Part]:
@@ -564,14 +637,16 @@ async def prepare_and_generate_chat_response(
                 gemini_client=gemini_client,
                 models_to_try=models_to_try,
                 image_parts=image_parts,
+                disable_safety_settings=settings.disable_safety_settings,
+                final_fallback_model=settings.final_fallback_model,
             )
 
     recent_text = _extract_recent_context_text(contents)
-    in_rpg = is_rpg_context(message.channel, message.clean_content)
-    bg_cid = _resolve_boardgame_channel_id(settings, message.channel)
+    in_rpg = await asyncio.to_thread(is_rpg_context, message.channel, message.clean_content)
     in_boardgame = False
     in_lifesim = False
     if settings.enable_board_games:
+        bg_cid = await asyncio.to_thread(_resolve_boardgame_channel_id, settings, message.channel)
         recent_bg = await asyncio.to_thread(
             boardgame_engine.get_latest_game_in_channel, bg_cid, include_finished_hours=4
         )
@@ -604,14 +679,17 @@ async def prepare_and_generate_chat_response(
             or game_wiki_engine.is_game_or_korean_context(recent_text)
         )
     )
+    thinking_lvl = "medium" if (in_rpg or is_factual_game_query) else "low"
+    system_instruction = await asyncio.to_thread(
+        system_prompt_fn,
+        settings,
+        message,
+        ocr_text=ocr_text,
+        recent_context_text=recent_text,
+    )
     config = types.GenerateContentConfig(
-        system_instruction=system_prompt_fn(
-            settings,
-            message,
-            ocr_text=ocr_text,
-            recent_context_text=recent_text,
-        ),
-        thinking_config=types.ThinkingConfig(thinking_level="medium"),
+        system_instruction=system_instruction,
+        thinking_config=types.ThinkingConfig(thinking_level=thinking_lvl),
         temperature=0.15 if is_factual_game_query else base_temperature,
         tools=scoped_tools,
         safety_settings=get_safety_settings(settings.disable_safety_settings),
@@ -627,20 +705,26 @@ async def prepare_and_generate_chat_response(
             timeout=45.0,
             context_label=context_label,
             logger=logger,
+            final_fallback_model=settings.final_fallback_model,
         )
     finally:
         assistant_tools.current_discord_msg.reset(token)
 
-    if response and response.text:
+    if response and has_visible_text(response.text):
         thoughts_count = getattr(response.usage_metadata, "thoughts_token_count", 0) if response.usage_metadata else 0
-        if thoughts_count and logger:
-            logger.info(f"💭 {used_model} 深度思考完成，思考消耗了 {thoughts_count} 個 tokens！")
-        reply = response.text
+        reply = response.text.strip()
         if settings.enable_safety_guardrail:
             reply = safety_guardrail.sanitize_model_output(
                 reply,
                 enable_japanese_mode=settings.enable_japanese_mode,
-            )
+            ).strip()
+        if not has_visible_text(reply):
+            raise RuntimeError(f"({context_label}) 輸出經安全護欄處理後為空白。")
+        if logger:
+            if thoughts_count:
+                logger.info(f"💭 {used_model} 深度思考完成（思考 {thoughts_count} tokens｜輸出 {len(reply)} 字）")
+            else:
+                logger.info(f"💬 {used_model} 回覆生成完成（輸出 {len(reply)} 字）")
         return reply, (used_model or settings.primary_model)
 
     raise RuntimeError(f"({context_label}) 無法回應訊息。")
@@ -699,7 +783,7 @@ async def _flush_pending_board_cards(
 
     for idx, (gid, info) in enumerate(items_list):
         try:
-            game = boardgame_engine.get_game_by_id(gid)
+            game = await asyncio.to_thread(boardgame_engine.get_game_by_id, gid)
             if not game:
                 continue
             card_note = info["note"]
@@ -761,19 +845,20 @@ async def _flush_pending_lifesim_cards(
 
     for idx, (rid, info) in enumerate(items_list):
         try:
-            run = lifesim_engine.get_life_run_by_id(rid)
+            run = await asyncio.to_thread(lifesim_engine.get_life_run_by_id, rid)
             if not run:
                 continue
             note = info["note"]
             if info["custom_decision"] and run["status"] == "active":
                 outcome, deltas = await life_cog.evaluate_llm_custom_choice(run, info["custom_decision"])
-                run, note = lifesim_engine.resolve_life_step(
+                run, note = await asyncio.to_thread(
+                    lifesim_engine.resolve_life_step,
                     rid,
                     run["user_id"],
                     custom_deltas=deltas,
                     custom_outcome_text=outcome,
                 )
-            if info["needs_llm_next"] and run["status"] == "active" and run["story_mode"] == "llm":
+            if info["needs_llm_next"] and lifesim_engine.should_use_llm_for_stage(run):
                 run = await life_cog.populate_llm_next_event(run)
 
             merged_content = cleaned_reply if (idx == 0 and cleaned_reply) else ""
@@ -796,6 +881,33 @@ async def _flush_pending_lifesim_cards(
     return sent_reply_with_card
 
 
+async def _flush_pending_rpg_checks(
+    bot: discord.Client,
+    channel: discord.abc.Messageable,
+    pending_checks: Optional[list],
+    reply_text: str = "",
+    logger: Optional[logging.Logger] = None,
+) -> bool:
+    """將 AI DM 透過 `rpg_request_check` 排程的互動擲骰檢定按鈕與敘事文字合併送出。"""
+    if not pending_checks:
+        return False
+    rpg_cog = bot.get_cog("RpgCog") if hasattr(bot, "get_cog") else None
+    if not rpg_cog or not hasattr(rpg_cog, "send_check_prompt_view"):
+        return False
+    cleaned_reply = _strip_hallucinated_board_card_echo(reply_text)
+    try:
+        sent = await rpg_cog.send_check_prompt_view(
+            channel,
+            list(pending_checks)[:3],
+            content_text=cleaned_reply,
+        )
+        return sent is not None
+    except Exception as e:
+        if logger:
+            logger.error(f"❌ 發送 TRPG 互動擲骰檢定按鈕失敗: {e}", exc_info=True)
+        return False
+
+
 async def _flush_all_pending_cards(
     bot: discord.Client,
     channel: discord.abc.Messageable,
@@ -803,8 +915,9 @@ async def _flush_all_pending_cards(
     pending_life: list,
     reply_text: str,
     logger: Optional[logging.Logger] = None,
+    pending_rpg_checks: Optional[list] = None,
 ) -> bool:
-    """統一派送排程中的棋盤卡與《80億分之1》人生卡片，避免重複發送回覆文字。"""
+    """統一派送排程中的棋盤卡、《80億分之1》人生卡與 TRPG 互動檢定按鈕，避免重複發送回覆文字。"""
     sent_with_card = await _flush_pending_board_cards(
         bot, channel, pending_cards, reply_text=reply_text, logger=logger
     )
@@ -815,7 +928,14 @@ async def _flush_all_pending_cards(
         reply_text="" if sent_with_card else reply_text,
         logger=logger,
     )
-    return sent_with_card or sent_with_life
+    sent_with_rpg = await _flush_pending_rpg_checks(
+        bot,
+        channel,
+        pending_rpg_checks,
+        reply_text="" if (sent_with_card or sent_with_life) else reply_text,
+        logger=logger,
+    )
+    return sent_with_card or sent_with_life or sent_with_rpg
 
 
 async def handle_general_chat(
@@ -833,8 +953,10 @@ async def handle_general_chat(
     async with message.channel.typing():
         pending_cards: list = []
         pending_life: list = []
+        pending_rpg_checks: list = []
         bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
         ls_token = lifesim_engine.pending_lifesim_card_updates.set(pending_life)
+        rpg_token = rpg_engine.pending_rpg_check_requests.set(pending_rpg_checks)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -858,18 +980,46 @@ async def handle_general_chat(
                 logger=logger,
             )
             sent_with_any = await _flush_all_pending_cards(
-                bot, message.channel, pending_cards, pending_life, reply_text=reply_text, logger=logger
+                bot,
+                message.channel,
+                pending_cards,
+                pending_life,
+                reply_text=reply_text,
+                logger=logger,
+                pending_rpg_checks=pending_rpg_checks,
             )
             if not sent_with_any:
-                await send_split_messages(message.channel, _strip_hallucinated_board_card_echo(reply_text) or reply_text)
+                stripped_reply = _strip_hallucinated_board_card_echo(reply_text).strip()
+                final_reply = stripped_reply if has_visible_text(stripped_reply) else reply_text.strip()
+                await send_split_messages(message.channel, final_reply)
+                if logger:
+                    logger.info(f"✅ (日常群聊) 已送出回覆 ({len(final_reply)} 字)")
+            elif logger:
+                logger.info("✅ (日常群聊) 已隨互動卡片一併送出回覆")
+
+            tts_cog = _get_tts_cog(bot, settings)
+            if tts_cog and message.guild:
+                spoken_text = _strip_hallucinated_board_card_echo(reply_text).strip() or reply_text.strip()
+                if has_visible_text(spoken_text):
+                    await tts_cog.enqueue_ai_speech(
+                        message.guild,
+                        spoken_text,
+                        is_japanese=False,
+                        channel=message.channel,
+                    )
 
         except Exception as e:
             if logger:
-                logger.error(f"❌ 日常群聊呼叫 Gemini 失敗: {e}", exc_info=True)
-            await message.channel.send("抱歉，我剛才斷線了一下，請再說一次。")
+                logger.error(f"❌ 日常群聊呼叫或送出回覆失敗: {e}", exc_info=True)
+            try:
+                await message.channel.send("抱歉，我剛才斷線了一下，請再說一次。")
+            except Exception as send_err:
+                if logger:
+                    logger.error(f"❌ 日常群聊錯誤提示發送失敗: {send_err}", exc_info=True)
         finally:
             boardgame_engine.pending_board_card_updates.reset(bg_token)
             lifesim_engine.pending_lifesim_card_updates.reset(ls_token)
+            rpg_engine.pending_rpg_check_requests.reset(rpg_token)
 
 
 async def handle_japanese_learning_chat(
@@ -892,7 +1042,13 @@ async def handle_japanese_learning_chat(
         author_avatar = message.author.display_avatar.url if message.author.display_avatar else None
         if not message.clean_content.strip() and message.attachments:
             has_vid = any(video_engine.is_video_attachment(a) for a in message.attachments)
-            embed_desc = "🎬 [分享了一段短影片]" if has_vid else "🖼️ [分享了一張圖片]"
+            has_audio = any(is_audio_attachment(a) for a in message.attachments)
+            if has_vid:
+                embed_desc = "🎬 [分享了一段短影片]"
+            elif has_audio:
+                embed_desc = "🎙️ [傳送了一段語音訊息]"
+            else:
+                embed_desc = "🖼️ [分享了一張圖片]"
         else:
             embed_desc = message.clean_content.strip() or "🖼️ [分享了一張圖片]"
 
@@ -921,8 +1077,10 @@ async def handle_japanese_learning_chat(
     async with message.channel.typing():
         pending_cards: list = []
         pending_life: list = []
+        pending_rpg_checks: list = []
         bg_token = boardgame_engine.pending_board_card_updates.set(pending_cards)
         ls_token = lifesim_engine.pending_lifesim_card_updates.set(pending_life)
+        rpg_token = rpg_engine.pending_rpg_check_requests.set(pending_rpg_checks)
         try:
             contents = await build_chat_history_contents(
                 bot=bot,
@@ -946,7 +1104,7 @@ async def handle_japanese_learning_chat(
                 context_label="日語共學",
                 logger=logger,
             )
-            if pending_cards or pending_life:
+            if pending_cards or pending_life or pending_rpg_checks:
                 if "[ZH]" in reply_text:
                     jp_raw, zh_raw = reply_text.split("[ZH]", 1)
                     jp_clean = _strip_hallucinated_board_card_echo(jp_raw.replace("[JP]", "").strip())
@@ -956,21 +1114,187 @@ async def handle_japanese_learning_chat(
                             await tts_channel.send(content=jp_clean)
                         except discord.HTTPException:
                             pass
+                    if jp_clean:
+                        tts_cog = _get_tts_cog(bot, settings)
+                        if tts_cog and message.guild:
+                            await tts_cog.enqueue_ai_speech(
+                                message.guild,
+                                jp_clean,
+                                is_japanese=True,
+                                channel=message.channel,
+                            )
                     merged_reply = "\n".join(p for p in (jp_clean, zh_clean) if p)
                 else:
                     merged_reply = _strip_hallucinated_board_card_echo(reply_text.replace("[JP]", "").strip())
                 sent_with_any = await _flush_all_pending_cards(
-                    bot, message.channel, pending_cards, pending_life, reply_text=merged_reply, logger=logger
+                    bot,
+                    message.channel,
+                    pending_cards,
+                    pending_life,
+                    reply_text=merged_reply,
+                    logger=logger,
+                    pending_rpg_checks=pending_rpg_checks,
                 )
                 if not sent_with_any:
                     await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
             else:
                 await send_synchronized_response(bot, settings, message.channel, reply_text, logger=logger)
+            if logger:
+                logger.info(f"✅ (日語共學) 已送出回覆 ({len(reply_text.strip())} 字)")
 
         except Exception as e:
             if logger:
-                logger.error(f"❌ 日語共學呼叫 Gemini 失敗: {e}", exc_info=True)
-            await message.channel.send("すみません、剛才稍微斷線了一下，請再傳一次試試看。")
+                logger.error(f"❌ 日語共學呼叫或送出回覆失敗: {e}", exc_info=True)
+            try:
+                await message.channel.send("すみません、剛才稍微斷線了一下，請再傳一次試試看。")
+            except Exception as send_err:
+                if logger:
+                    logger.error(f"❌ 日語共學錯誤提示發送失敗: {send_err}", exc_info=True)
         finally:
             boardgame_engine.pending_board_card_updates.reset(bg_token)
             lifesim_engine.pending_lifesim_card_updates.reset(ls_token)
+            rpg_engine.pending_rpg_check_requests.reset(rpg_token)
+
+
+async def continue_rpg_after_dice_roll(
+    bot: discord.Client,
+    gemini_client: genai.Client,
+    settings: BotSettings,
+    channel: discord.abc.Messageable,
+    user: discord.abc.User,
+    result_dict: dict,
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """Option A：玩家點擊 TRPG 擲骰檢定按鈕完成本地真隨機判定後，自動喚醒 DM 續寫後續劇情。"""
+    if gemini_client is None or channel is None:
+        return
+
+    channel_id = getattr(channel, "id", 0)
+    is_general_ch = bool(
+        settings.general_channel_id
+        and (
+            channel_id == settings.general_channel_id
+            or getattr(channel, "parent_id", None) == settings.general_channel_id
+        )
+    )
+    is_jp_channel = bool(settings.enable_japanese_mode and not is_general_ch)
+    prompt_fn = get_current_system_prompt if is_jp_channel else get_current_general_prompt
+
+    user_name = getattr(user, "display_name", None) or result_dict.get("user_name") or "冒險者"
+    summary_text = str(result_dict.get("summary_text") or "").strip()
+    if not summary_text:
+        passed_txt = "成功" if result_dict.get("passed") else "失敗"
+        summary_text = f"{user_name} 進行「{result_dict.get('check_name', '檢定')}」擲出 {result_dict.get('total', '?')}（{passed_txt}）"
+
+    synth_text = (
+        f"[{user_name}]: ⚡【玩家已完成本地真實擲骰檢定，請以此權威結果直接接續劇情演出與世界變化，嚴禁重骰】：\n"
+        f"{summary_text}"
+    )
+    pseudo_msg = SimpleNamespace(
+        channel=channel,
+        author=user,
+        clean_content=synth_text,
+        content=synth_text,
+        attachments=[],
+        stickers=[],
+    )
+
+    reset_after = await asyncio.to_thread(get_effective_reset_timestamp, channel_id)
+    raw_messages: list[discord.Message] = []
+    history_fn = getattr(channel, "history", None)
+    if callable(history_fn):
+        try:
+            async for msg in history_fn(limit=12, oldest_first=False):
+                if reset_after and msg.created_at <= reset_after:
+                    break
+                if (msg.content or "").strip().startswith("!"):
+                    continue
+                if msg.author == bot.user and not (msg.clean_content or "").strip():
+                    continue
+                if msg.author != bot.user and not (msg.clean_content or "").strip():
+                    continue
+                raw_messages.append(msg)
+        except Exception as e:
+            if logger:
+                logger.debug(f"⚠️ 抓取 TRPG 擲骰前歷史紀錄略過: {e}")
+
+    raw_messages.reverse()
+    contents: list[types.Content] = []
+    bot_user = getattr(bot, "user", None)
+    for msg in raw_messages:
+        txt = (getattr(msg, "clean_content", "") or "").strip()
+        if not txt:
+            continue
+        if bot_user is not None and msg.author == bot_user:
+            contents.append(types.Content(role="model", parts=[types.Part.from_text(text=txt)]))
+        else:
+            author_lbl = getattr(msg.author, "display_name", "冒險者")
+            contents.append(types.Content(role="user", parts=[types.Part.from_text(text=f"[{author_lbl}]: {txt}")]))
+    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=synth_text)]))
+
+    pending_rpg_checks: list = []
+    rpg_token = rpg_engine.pending_rpg_check_requests.set(pending_rpg_checks)
+    try:
+        typing_fn = getattr(channel, "typing", None)
+        typing_cm = typing_fn() if callable(typing_fn) else None
+        if typing_cm is not None and hasattr(typing_cm, "__aenter__"):
+            async with typing_cm:
+                reply_text, _ = await prepare_and_generate_chat_response(
+                    gemini_client=gemini_client,
+                    settings=settings,
+                    message=pseudo_msg,
+                    contents=contents,
+                    system_prompt_fn=prompt_fn,
+                    base_temperature=0.75,
+                    context_label="TRPG擲骰後DM續寫",
+                    logger=logger,
+                )
+        else:
+            reply_text, _ = await prepare_and_generate_chat_response(
+                gemini_client=gemini_client,
+                settings=settings,
+                message=pseudo_msg,
+                contents=contents,
+                system_prompt_fn=prompt_fn,
+                base_temperature=0.75,
+                context_label="TRPG擲骰後DM續寫",
+                logger=logger,
+            )
+
+        if pending_rpg_checks:
+            if is_jp_channel and "[ZH]" in reply_text:
+                jp_raw, zh_raw = reply_text.split("[ZH]", 1)
+                jp_clean = _strip_hallucinated_board_card_echo(jp_raw.replace("[JP]", "").strip())
+                zh_clean = _strip_hallucinated_board_card_echo(zh_raw.strip())
+                tts_channel = bot.get_channel(settings.tts_channel_id) if settings.tts_channel_id else None
+                if jp_clean and tts_channel and tts_channel.id != channel_id:
+                    try:
+                        await tts_channel.send(content=jp_clean)
+                    except discord.HTTPException:
+                        pass
+                if jp_clean:
+                    tts_cog = _get_tts_cog(bot, settings)
+                    guild = getattr(channel, "guild", None)
+                    if tts_cog and guild:
+                        await tts_cog.enqueue_ai_speech(guild, jp_clean, is_japanese=True, channel=channel)
+                merged_reply = "\n".join(p for p in (jp_clean, zh_clean) if p)
+            else:
+                merged_reply = _strip_hallucinated_board_card_echo(reply_text.replace("[JP]", "").strip()) if is_jp_channel else reply_text
+            sent_check = await _flush_pending_rpg_checks(
+                bot, channel, pending_rpg_checks, reply_text=merged_reply, logger=logger
+            )
+            if sent_check:
+                return
+
+        if is_jp_channel:
+            await send_synchronized_response(bot, settings, channel, reply_text, logger=logger)
+        else:
+            stripped_reply = _strip_hallucinated_board_card_echo(reply_text).strip()
+            final_reply = stripped_reply if has_visible_text(stripped_reply) else reply_text.strip()
+            await send_split_messages(channel, final_reply)
+            tts_cog = _get_tts_cog(bot, settings)
+            guild = getattr(channel, "guild", None)
+            if tts_cog and guild and has_visible_text(final_reply):
+                await tts_cog.enqueue_ai_speech(guild, final_reply, is_japanese=False, channel=channel)
+    finally:
+        rpg_engine.pending_rpg_check_requests.reset(rpg_token)

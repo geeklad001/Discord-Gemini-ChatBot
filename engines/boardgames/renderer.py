@@ -9,7 +9,7 @@ from core.rendering import draw_centered_text as _draw_centered_text
 from core.rendering import load_font as _load_font
 from engines.boardgames.othello import _coord_label, get_othello_legal_moves
 from engines.boardgames.connect4_gomoku import C4_COLS, C4_ROWS, GOMOKU_SIZE, get_connect4_legal_cols
-from engines.boardgames.chess_rules import _chess_parse_sq, _chess_sq_name, get_chess_legal_moves
+from engines.boardgames.chess_rules import _chess_find_king, _chess_parse_sq, _chess_sq_name, get_chess_legal_moves
 
 def _draw_chess_vector_piece(draw: ImageDraw.ImageDraw, cx: float, cy: float, cell: int, piece: str) -> None:
     """用向量幾何繪製西洋棋棋子，確保跨系統零缺字且極高辨識度。"""

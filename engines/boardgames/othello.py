@@ -162,7 +162,7 @@ def _pick_othello_ai_move(board: list[list[int]], player: int, difficulty: str) 
     best_moves: list[tuple[int, int]] = []
     for r, c in moves:
         nb = _othello_apply_on_board(board, r, c, player)
-        val = _othello_alphabeta(nb, 3 - player, player, depth - 1, -math.inf, math.inf)
+        val = _othello_alphabeta(nb, 3 - player, player, depth - 1, best_val, math.inf)
         if val > best_val + 1e-6:
             best_val = val
             best_moves = [(r, c)]

@@ -1,6 +1,5 @@
 """FIDE Chess rules (castling, en passant, promotion, check/stalemate, 3-fold) and alpha-beta AI."""
 
-import copy
 import math
 import random
 import re
@@ -474,7 +473,7 @@ def _parse_chess_move(move_str: str, state: dict, white_turn: bool) -> Optional[
                 continue
         matches.append(mv)
 
-    return matches[0] if len(matches) == 1 else (matches[0] if matches else None)
+    return matches[0] if len(matches) == 1 else None
 
 
 def _chess_eval_board(board: list[list[str]]) -> float:
@@ -554,7 +553,9 @@ def _pick_chess_ai_move(state: dict, white_turn: bool, difficulty: str) -> Optio
     best_moves: list[tuple[int, int, int, int, str]] = []
     for mv in ordered:
         nxt = _chess_apply_move_raw(state, mv, white_turn)
-        val = _chess_alphabeta(nxt, not white_turn, depth, -math.inf, math.inf)
+        alpha = best_val if white_turn else -math.inf
+        beta = math.inf if white_turn else best_val
+        val = _chess_alphabeta(nxt, not white_turn, depth - 1, alpha, beta)
         if white_turn:
             if val > best_val + 1e-6:
                 best_val = val

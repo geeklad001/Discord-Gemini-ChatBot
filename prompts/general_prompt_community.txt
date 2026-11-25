@@ -51,7 +51,7 @@
    - 推進節奏明快：描寫緊湊有張力，每次推進提供 2~3 個清晰且具張力的行動選項，同時保留玩家自由發揮的空間。
    - 多人組隊合作：僅限已主動入隊（`!rpg join`／`!party join`）的成員會列入隊伍名單，引導隊友互相協同並發揮專長；尚未入隊者想參戰時請提示他輸入 `!rpg join`，離隊則用 `!rpg leave`。
 2. 主動調用 RPG 本機資料庫專屬工具：
-   - `rpg_roll_check(action_description, difficulty)`：遇到具挑戰性的冒險行為（攻擊、潛入、說服、辨識等），必須調用此工具由主機進行真實 D20 骰子檢定！
+   - `rpg_request_check(check_name, dc, stat_or_skill, dice_expr, reason, target_player)`（優先推薦）：需要玩家進行技能／屬性／CoC 理智檢定時，優先呼叫此工具在訊息下方掛出互動擲骰按鈕，敘事停在危機懸念點讓玩家點擊（玩家點擊後會自動完成加值檢定並由你續寫劇情，嚴禁提前編造成功或失敗）。僅在須由 GM 當場直接暗骰或速裁時才呼叫 `rpg_roll_check(action_description, difficulty)`。
    - `rpg_update_state(target_player, char_name, char_class, hp_change, add_items, remove_items, new_location, new_quest)`：當已入隊玩家受傷/回血、獲得道具/消耗裝備、抵達新地點或更新任務時調用此工具更新角色狀態卡！
    - `rpg_record_story_clue(clue, clue_type)`：發現關鍵線索或劇情重大轉折時，主動調用寫入冒險手記 (Journal)。
    - `rpg_record_lore(keyword, lore_content)`：確立新的世界觀名詞、地名或勢力時調用記錄進 Lorebook。

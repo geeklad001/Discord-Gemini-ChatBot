@@ -5,30 +5,66 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+APP_VERSION = "2.0.0"
 
 MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 圖片上限 10 MB
 MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024    # 文字設定檔上限 2 MB
 MAX_APKG_ATTACHMENT_BYTES = 25 * 1024 * 1024   # Anki 牌組上限 25 MB
+MAX_AUDIO_ATTACHMENT_BYTES = 3 * 1024 * 1024   # 語音附件上限 3 MB
+MAX_AUDIO_DURATION_SECONDS = 30                # 語音訊息時長上限 30 秒
 
+DEFAULT_PRIMARY_MODEL = "gemini-flash-lite-latest"
 DEFAULT_FALLBACK_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+]
+DEFAULT_FINAL_FALLBACK_MODEL = "gemini-flash-lite-latest"
+FLASH_LITE_PRESET_MODELS = (
     "gemini-flash-lite-latest",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-]
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+)
+
+_RUNTIME_OVERRIDE_BOOL_KEYS: frozenset[str] = frozenset({
+    "enable_japanese_mode",
+    "enable_flashcard_mode",
+    "enable_game_wiki",
+    "enable_board_games",
+    "enable_voice_tts",
+    "enable_safety_guardrail",
+    "tts_ai_auto_read_jp",
+    "tts_ai_auto_read_general",
+})
+_RUNTIME_OVERRIDE_SAFE_KEYS: frozenset[str] = _RUNTIME_OVERRIDE_BOOL_KEYS | frozenset({
+    "target_channel_id",
+    "tts_channel_id",
+    "general_channel_id",
+    "primary_model",
+    "fallback_models",
+    "final_fallback_model",
+})
+
+
+def _strip_inline_comment(raw: Optional[str]) -> str:
+    if raw is None:
+        return ""
+    return raw.split("#", 1)[0].strip()
 
 
 def _parse_bool(raw: Optional[str], default: bool) -> bool:
-    if raw is None or not raw.strip():
+    clean = _strip_inline_comment(raw).lower()
+    if not clean:
         return default
-    val = raw.strip().lower()
-    if val in ("true", "1", "yes", "on"):
+    if clean in ("true", "1", "yes", "on"):
         return True
-    if val in ("false", "0", "no", "off"):
+    if clean in ("false", "0", "no", "off"):
         return False
     return default
 
@@ -40,6 +76,32 @@ def _parse_int(raw: Optional[str], default: int) -> int:
         return int(raw.strip())
     except ValueError:
         return default
+
+
+def _parse_float(raw: Optional[str], default: float) -> float:
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return float(raw.strip())
+    except ValueError:
+        return default
+
+
+def _parse_int_tuple(raw: Optional[str]) -> tuple[int, ...]:
+    if not raw or not raw.strip():
+        return ()
+    result: list[int] = []
+    for token in raw.replace(";", ",").replace(" ", ",").split(","):
+        tok = token.strip()
+        if not tok:
+            continue
+        try:
+            val = int(tok)
+            if val not in result:
+                result.append(val)
+        except ValueError:
+            continue
+    return tuple(result)
 
 
 def _parse_optional_channel_id(raw: Optional[str], env_name: str, logger: Optional[logging.Logger]) -> Optional[int]:
@@ -85,7 +147,8 @@ def init_runtime_env(argv: Optional[list[str]] = None, override: bool = False) -
     """Configure console encoding and load the selected .env file before reading settings."""
     configure_windows_utf8()
     env_file = resolve_env_file(argv)
-    load_dotenv(dotenv_path=BASE_DIR / env_file, override=override)
+    env_path = BASE_DIR / env_file
+    load_dotenv(dotenv_path=env_path, override=override)
     return env_file
 
 
@@ -104,14 +167,31 @@ class BotSettings:
     enable_flashcard_mode: bool = True
     enable_game_wiki: bool = True
     enable_board_games: bool = True
+    enable_voice_tts: bool = True
     enable_safety_guardrail: bool = True
     disable_safety_settings: bool = True
-    primary_model: str = "gemini-3.8-flash"
+    enable_user_voice_clone: bool = False
+    primary_model: str = DEFAULT_PRIMARY_MODEL
     fallback_models: list[str] = field(default_factory=lambda: list(DEFAULT_FALLBACK_MODELS))
+    final_fallback_model: str = DEFAULT_FINAL_FALLBACK_MODEL
     sliding_window_limit: int = 50
     thread_window_limit: int = 80
     system_prompt_file: str = "system_prompt.txt"
     general_prompt_file: str = "general_prompt.txt"
+    tts_api_url: str = "http://127.0.0.1:9880"
+    tts_api_token: str = ""
+    tts_default_voice: str = "edge:zh-TW-HsiaoChenNeural"
+    tts_jp_voice: str = "edge:ja-JP-NanamiNeural"
+    tts_volume_boost: float = 1.25
+    tts_max_chars: int = 500
+    tts_f5_max_chars: int = 200
+    tts_ai_auto_read_jp: bool = True
+    tts_ai_auto_read_general: bool = False
+    tts_clone_max_per_user: int = 2
+    tts_clone_max_total: int = 40
+    tts_clone_cooldown_seconds: int = 600
+    tts_clone_approval_mode: str = "auto"
+    bot_owner_ids: tuple[int, ...] = ()
 
     @property
     def models_to_try(self) -> list[str]:
@@ -138,6 +218,18 @@ def load_settings(env_file: str = ".env", logger: Optional[logging.Logger] = Non
         if fb_raw
         else list(DEFAULT_FALLBACK_MODELS)
     )
+    primary_model = (os.getenv("PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL) or DEFAULT_PRIMARY_MODEL).strip()
+    final_fb_raw = _strip_inline_comment(os.getenv("FINAL_FALLBACK_MODEL"))
+    if final_fb_raw.lower() in ("none", "off", "false", "disable"):
+        final_fallback_model = ""
+    elif final_fb_raw:
+        final_fallback_model = final_fb_raw
+    else:
+        final_fallback_model = primary_model if "flash-lite" in primary_model.lower() else DEFAULT_FINAL_FALLBACK_MODEL
+    tts_api_raw = os.getenv("TTS_API_URL")
+    tts_api_url = "http://127.0.0.1:9880" if tts_api_raw is None else tts_api_raw.strip()
+    raw_clone_mode = (os.getenv("TTS_CLONE_APPROVAL_MODE", "auto") or "auto").strip().lower()
+    clone_approval_mode = raw_clone_mode if raw_clone_mode in ("auto", "manual") else "auto"
 
     return BotSettings(
         env_file=env_file,
@@ -151,15 +243,106 @@ def load_settings(env_file: str = ".env", logger: Optional[logging.Logger] = Non
         enable_flashcard_mode=_parse_bool(os.getenv("ENABLE_FLASHCARD_MODE"), default=True),
         enable_game_wiki=_parse_bool(os.getenv("ENABLE_GAME_WIKI"), default=True),
         enable_board_games=_parse_bool(os.getenv("ENABLE_BOARD_GAMES"), default=True),
+        enable_voice_tts=_parse_bool(os.getenv("ENABLE_VOICE_TTS"), default=True),
         enable_safety_guardrail=_parse_bool(os.getenv("ENABLE_SAFETY_GUARDRAIL"), default=True),
         disable_safety_settings=_parse_bool(os.getenv("DISABLE_SAFETY_SETTINGS"), default=True),
-        primary_model=(os.getenv("PRIMARY_MODEL", "gemini-3.8-flash") or "gemini-3.8-flash").strip(),
+        enable_user_voice_clone=_parse_bool(
+            os.getenv("ENABLE_USER_VOICE_CLONE")
+            or os.getenv("ALLOW_USER_VOICE_CLONE")
+            or os.getenv("ALLOW_VOICE_CLONE")
+            or os.getenv("ENABLE_VOICE_CLONE"),
+            default=False,
+        ),
+        primary_model=primary_model,
         fallback_models=fallback_models,
+        final_fallback_model=final_fallback_model,
         sliding_window_limit=_parse_int(os.getenv("SLIDING_WINDOW_LIMIT"), default=50),
         thread_window_limit=_parse_int(os.getenv("THREAD_WINDOW_LIMIT"), default=80),
         system_prompt_file=(os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt") or "system_prompt.txt").strip(),
         general_prompt_file=(os.getenv("GENERAL_PROMPT_FILE", "general_prompt.txt") or "general_prompt.txt").strip(),
+        tts_api_url=tts_api_url,
+        tts_api_token=(os.getenv("TTS_API_TOKEN") or "").strip(),
+        tts_default_voice=(os.getenv("TTS_DEFAULT_VOICE", "edge:zh-TW-HsiaoChenNeural") or "edge:zh-TW-HsiaoChenNeural").strip(),
+        tts_jp_voice=(os.getenv("TTS_JP_VOICE", "edge:ja-JP-NanamiNeural") or "edge:ja-JP-NanamiNeural").strip(),
+        tts_volume_boost=max(0.2, min(3.0, _parse_float(os.getenv("TTS_VOLUME_BOOST"), default=1.25))),
+        tts_max_chars=max(30, min(2000, _parse_int(os.getenv("TTS_MAX_CHARS"), default=500))),
+        tts_f5_max_chars=max(20, min(1000, _parse_int(os.getenv("TTS_F5_MAX_CHARS"), default=200))),
+        tts_ai_auto_read_jp=_parse_bool(os.getenv("TTS_AI_AUTO_READ_JP"), default=True),
+        tts_ai_auto_read_general=_parse_bool(os.getenv("TTS_AI_AUTO_READ_GENERAL"), default=False),
+        tts_clone_max_per_user=max(1, min(5, _parse_int(os.getenv("TTS_CLONE_MAX_PER_USER"), default=2))),
+        tts_clone_max_total=max(1, min(200, _parse_int(os.getenv("TTS_CLONE_MAX_TOTAL"), default=40))),
+        tts_clone_cooldown_seconds=max(0, min(86400, _parse_int(os.getenv("TTS_CLONE_COOLDOWN_SECONDS"), default=600))),
+        tts_clone_approval_mode=clone_approval_mode,
+        bot_owner_ids=_parse_int_tuple(os.getenv("BOT_OWNER_IDS")),
     )
+
+
+def apply_runtime_overrides(settings: BotSettings, overrides: dict[str, str]) -> list[str]:
+    """Apply safe, non-secret runtime overrides onto BotSettings and return applied keys."""
+    if not overrides:
+        return []
+
+    applied: list[str] = []
+    for key, raw_val in overrides.items():
+        if key not in _RUNTIME_OVERRIDE_SAFE_KEYS:
+            continue
+
+        raw_str = "" if raw_val is None else str(raw_val)
+
+        if key in _RUNTIME_OVERRIDE_BOOL_KEYS:
+            clean = _strip_inline_comment(raw_str).lower()
+            if clean in ("true", "1", "yes", "on", "false", "0", "no", "off"):
+                current = bool(getattr(settings, key))
+                setattr(settings, key, _parse_bool(raw_str, current))
+                applied.append(key)
+            continue
+
+        if key == "target_channel_id":
+            try:
+                parsed_id = int(raw_str.strip())
+            except ValueError:
+                parsed_id = 0
+            if parsed_id > 0:
+                settings.target_channel_id = parsed_id
+                applied.append(key)
+            continue
+
+        if key in ("tts_channel_id", "general_channel_id"):
+            stripped = raw_str.strip()
+            if stripped == "":
+                setattr(settings, key, None)
+                applied.append(key)
+            else:
+                parsed_id = _parse_optional_channel_id(stripped, key.upper(), None)
+                if parsed_id is not None and parsed_id > 0:
+                    setattr(settings, key, parsed_id)
+                    applied.append(key)
+            continue
+
+        if key == "primary_model":
+            stripped = _strip_inline_comment(raw_str)
+            if stripped:
+                settings.primary_model = stripped
+                applied.append(key)
+            continue
+
+        if key == "final_fallback_model":
+            stripped = _strip_inline_comment(raw_str)
+            if stripped.lower() in ("none", "off", "false", "disable"):
+                settings.final_fallback_model = ""
+                applied.append(key)
+            elif stripped:
+                settings.final_fallback_model = stripped
+                applied.append(key)
+            continue
+
+        if key == "fallback_models":
+            models = [m.strip() for m in raw_str.split(",") if m.strip()]
+            if models:
+                settings.fallback_models = models
+                applied.append(key)
+
+    return applied
 
 
 def truncate_embed_text(text: str, max_len: int = 3800) -> str:
@@ -181,3 +364,28 @@ def resolve_prompt_path(prompt_filename: str) -> Path:
     if legacy_candidate.is_file():
         return legacy_candidate
     return prompts_candidate
+
+
+def is_configured_owner(settings: BotSettings, user_id: Optional[int]) -> bool:
+    """Return True if user_id is explicitly listed in BOT_OWNER_IDS."""
+    if user_id is None:
+        return False
+    try:
+        return int(user_id) in settings.bot_owner_ids
+    except (TypeError, ValueError):
+        return False
+
+
+async def is_bot_owner(bot: Any, settings: BotSettings, user: Any) -> bool:
+    """Check cross-server Bot Owner authority via BOT_OWNER_IDS or Discord application owner."""
+    if user is None:
+        return False
+    if is_configured_owner(settings, getattr(user, "id", None)):
+        return True
+    try:
+        owner_fn = getattr(bot, "is_owner", None)
+        if callable(owner_fn):
+            return bool(await owner_fn(user))
+    except Exception:
+        return False
+    return False

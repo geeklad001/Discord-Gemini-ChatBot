@@ -1,6 +1,7 @@
 """RPG Cog: !roll, !rpg, !sheet, !party, !adventure, !save, !load, !saves, !note, !journal, !lore."""
 
 import asyncio
+import io
 import logging
 import re
 from pathlib import Path
@@ -9,18 +10,92 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from engines import assistant_db, rpg_engine
+from cogs.rpg_views import RpgRollCheckView
+from engines import assistant_db, rpg_engine, rpg_renderer, safety_guardrail
 from core.chat_pipeline import is_target_channel
-from core.config import MAX_TEXT_ATTACHMENT_BYTES, BotSettings, truncate_embed_text
+from core.config import MAX_TEXT_ATTACHMENT_BYTES, BotSettings, is_bot_owner, truncate_embed_text
+
+
+def _embed_char_count(embed: discord.Embed) -> int:
+    total = len(embed.title or "") + len(embed.description or "")
+    if embed.footer and embed.footer.text:
+        total += len(embed.footer.text)
+    if embed.author and embed.author.name:
+        total += len(embed.author.name)
+    for f in embed.fields:
+        total += len(f.name or "") + len(f.value or "")
+    return total
+
+
+def _add_bounded_field(
+    embed: discord.Embed,
+    name: str,
+    value: str,
+    *,
+    inline: bool = False,
+    max_val_len: int = 950,
+    max_total_chars: int = 5800,
+) -> bool:
+    if len(embed.fields) >= 25:
+        return False
+    safe_name = str(name or "-")[:256] or "-"
+    safe_val = truncate_embed_text(str(value or "-"), max_len=max_val_len)
+    remaining = max_total_chars - _embed_char_count(embed) - len(safe_name)
+    if remaining <= 40:
+        return False
+    if len(safe_val) > remaining:
+        cut_limit = max(20, remaining - 30)
+        safe_val = truncate_embed_text(safe_val, max_len=cut_limit)
+        if len(safe_val) > remaining:
+            safe_val = safe_val[:remaining]
+    embed.add_field(name=safe_name, value=safe_val, inline=inline)
+    return True
+
+
+def _read_local_text_bounded(path: Path, *, max_bytes: int, errors: str = "ignore") -> Optional[str]:
+    if not path.is_file():
+        return None
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise ValueError(f"檔案大小超過 {max_bytes // (1024 * 1024)} MB 上限")
+    return path.read_text(encoding="utf-8", errors=errors).strip()
 
 
 class RpgCog(commands.Cog):
     """TRPG 跑團、角色卡、小隊管理、存讀檔與動態世界觀設定集指令。"""
 
-    def __init__(self, bot: commands.Bot, settings: BotSettings, logger: logging.Logger):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        settings: BotSettings,
+        logger: logging.Logger,
+        gemini_client=None,
+    ):
         self.bot = bot
         self.settings = settings
         self.logger = logger
+        self.gemini_client = gemini_client
+        self._dm_roll_locks: dict[int, asyncio.Lock] = {}
+
+    def _get_dm_roll_lock(self, channel_id: int) -> asyncio.Lock:
+        lock = self._dm_roll_locks.get(channel_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._dm_roll_locks[channel_id] = lock
+        return lock
+
+    async def _has_community_mod_or_owner(self, ctx: commands.Context) -> bool:
+        if await is_bot_owner(self.bot, self.settings, ctx.author):
+            return True
+        perms = getattr(ctx.author, "guild_permissions", None)
+        return bool(
+            perms
+            and (
+                getattr(perms, "administrator", False)
+                or getattr(perms, "manage_guild", False)
+                or getattr(perms, "manage_messages", False)
+            )
+        )
 
     @commands.command(name="roll", aliases=["r", "dice", "擲骰"])
     async def roll_command(self, ctx: commands.Context, dice_expr: str = "1d20"):
@@ -29,18 +104,19 @@ class RpgCog(commands.Cog):
             return
 
         try:
-            total, _rolls, desc = rpg_engine.roll_dice(dice_expr)
+            clean_expr = (dice_expr or "1d20").strip()
+            _total, rolls, desc = rpg_engine.roll_dice(clean_expr)
             user_name = ctx.author.display_name
             embed = discord.Embed(
                 title="🎲 擲骰結果",
-                description=f"**{user_name}** 擲出 `{dice_expr}`\n\n🎯 點數：**{desc}**",
+                description=truncate_embed_text(f"**{user_name}** 擲出 `{clean_expr[:100]}`\n\n🎯 點數：**{desc}**"),
                 color=0x9B5DE5,
             )
-            if "1d20" in dice_expr.lower():
-                if total == 20:
-                    embed.set_footer(text="🌟 滿分 20！大成功 (Critical Success)！")
-                elif total == 1:
-                    embed.set_footer(text="💀 擲出 1 點！大失敗 (Critical Fumble)！")
+            if re.fullmatch(r"1d20(?:[+-]\d+)?", clean_expr.lower()) and len(rolls) == 1:
+                if rolls[0] == 20:
+                    embed.set_footer(text="🌟 擲出原生 20！大成功 (Critical Success)！")
+                elif rolls[0] == 1:
+                    embed.set_footer(text="💀 擲出原生 1 點！大失敗 (Critical Fumble)！")
             await ctx.send(embed=embed)
         except Exception as e:
             await ctx.send(f"❌ 擲骰失敗：{e}（請嘗試 `!roll`、`!roll 2d6` 或 `!roll 1d20+3`）")
@@ -69,8 +145,8 @@ class RpgCog(commands.Cog):
         char, _ = await asyncio.to_thread(rpg_engine.join_rpg_party, thread.id, ctx.author.id, uname)
 
         opening_embed = discord.Embed(
-            title=f"🗡️ 【{adventure_topic}】冒險篇章正式展開！",
-            description=(
+            title=f"🗡️ 【{adventure_topic}】冒險篇章正式展開！"[:256],
+            description=truncate_embed_text(
                 f"歡迎來到全新的冒險世界，**{uname}**！\n\n"
                 f"🏰 **冒險起點**：`{char['location']}`\n"
                 f"🎯 **當前使命**：`{char['current_quest']}`\n\n"
@@ -93,27 +169,27 @@ class RpgCog(commands.Cog):
         """保存當前冒險進度：!save <存檔名稱>"""
         if not is_target_channel(ctx.channel, self.settings):
             return
-        if not save_name:
+        if not save_name or not save_name.strip():
             await ctx.send("❓ 請提供存檔名稱，例如：`!save 森林遺跡` 或 `!save 第一章通關`")
             return
         if not await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id):
             await ctx.send("🏕️ 目前隊伍中尚無任何已入隊的冒險者，無法存檔！請先輸入 `!rpg join` 或 `!rpg start [主題]`。")
             return
         res = await asyncio.to_thread(
-            rpg_engine.save_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name
+            rpg_engine.save_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name.strip()[:100]
         )
         embed = discord.Embed(
             title="💾 冒險進度已保存！",
-            description=f"存檔名稱：**【{res['save_name']}】**",
+            description=truncate_embed_text(f"存檔名稱：**【{res['save_name']}】**", max_len=500),
             color=0x06D6A0,
         )
-        embed.add_field(name="👤 角色", value=f"{res['char_name']}（{res['char_class']}）", inline=True)
-        embed.add_field(name="❤️ 血量", value=f"{res['hp']}/{res['max_hp']}", inline=True)
-        embed.add_field(name="🎒 背包物品", value=f"{len(res['inventory'])} 件隨身物品", inline=True)
-        embed.add_field(name="📍 當前地點", value=res["location"], inline=True)
-        embed.add_field(name="🎯 當前目標", value=res["current_quest"], inline=True)
-        embed.add_field(name="📓 旅程手記", value=f"{res['notes_count']} 條獨立線索快照", inline=True)
-        embed.set_footer(text=f"💡 隨時在任何頻道或討論串輸入 !load {res['save_name']} 即可接續進度！")
+        embed.set_footer(text=f"💡 隨時在任何頻道或討論串輸入 !load {res['save_name']} 即可接續進度！"[:2000])
+        _add_bounded_field(embed, "👤 角色", f"{res['char_name']}（{res['char_class']}）", inline=True, max_val_len=300)
+        _add_bounded_field(embed, "❤️ 血量", f"{res['hp']}/{res['max_hp']}", inline=True, max_val_len=100)
+        _add_bounded_field(embed, "🎒 背包物品", f"{len(res['inventory'])} 件隨身物品", inline=True, max_val_len=100)
+        _add_bounded_field(embed, "📍 當前地點", res["location"], inline=True, max_val_len=300)
+        _add_bounded_field(embed, "🎯 當前目標", res["current_quest"], inline=True, max_val_len=300)
+        _add_bounded_field(embed, "📓 旅程手記", f"{res['notes_count']} 條獨立線索快照", inline=True, max_val_len=100)
         await ctx.send(embed=embed)
 
     @commands.command(name="load", aliases=["讀檔", "載入"])
@@ -121,29 +197,42 @@ class RpgCog(commands.Cog):
         """載入冒險進度：!load <存檔名稱>"""
         if not is_target_channel(ctx.channel, self.settings):
             return
-        if not save_name:
+        if not save_name or not save_name.strip():
             await ctx.send("❓ 請提供要載入的存檔名稱，例如：`!load 森林遺跡`（可先輸入 `!saves` 查看所有存檔）")
             return
+        if not self.settings.enable_japanese_mode:
+            active_party = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id, True)
+            other_members = [c for c in active_party if c["user_id"] != ctx.author.id]
+            if other_members and not await self._has_community_mod_or_owner(ctx):
+                await ctx.send("🔒 社群模式下，隊伍尚有其他成員時，僅限管理員（管理訊息權限）或機器人擁有者可執行 `!load` 覆寫當前頻道進度。")
+                return
+        clean_save = save_name.strip()
         res = await asyncio.to_thread(
-            rpg_engine.load_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, save_name
+            rpg_engine.load_game, ctx.channel.id, ctx.author.id, ctx.author.display_name, clean_save
         )
         if not res:
-            await ctx.send(f"❌ 找不到存檔「{save_name}」。輸入 `!saves` 可查看目前所有保存的存檔清單！")
+            await ctx.send(f"❌ 找不到存檔「{clean_save[:120]}」。輸入 `!saves` 可查看目前所有保存的存檔清單！")
             return
         await asyncio.to_thread(rpg_engine.set_rpg_session_active, ctx.channel.id, True)
         inv_str = "、".join(res["inventory"]) if res["inventory"] else "（背包空）"
         embed = discord.Embed(
             title="📂 冒險進度載入成功！",
-            description=f"已將存檔 **【{res['save_name']}】** 還原至當前頻道/討論串！",
+            description=truncate_embed_text(f"已將存檔 **【{res['save_name']}】** 還原至當前頻道/討論串！", max_len=500),
             color=0x118AB2,
         )
-        embed.add_field(name="👤 角色", value=f"**{res['char_name']}**（{res['char_class']}）", inline=True)
-        embed.add_field(name="❤️ 血量", value=f"`{res['hp']}/{res['max_hp']}`", inline=True)
-        embed.add_field(name="📍 當前地點", value=f"`{res['location']}`", inline=False)
-        embed.add_field(name="🎯 當前目標", value=f"`{res['current_quest']}`", inline=False)
-        embed.add_field(name="🎒 背包物品", value=inv_str, inline=False)
-        embed.add_field(name="📓 旅程手記", value=f"已同步還原 {res['notes_count']} 條冒險線索（輸入 `!journal` 查看）", inline=False)
-        embed.set_footer(text=f"存檔時間：{res['saved_at']} | 冒險者已整裝待發！")
+        embed.set_footer(text=f"存檔時間：{res['saved_at']} | 冒險者已整裝待發！"[:2000])
+        _add_bounded_field(embed, "👤 角色", f"**{res['char_name']}**（{res['char_class']}）", inline=True, max_val_len=300)
+        _add_bounded_field(embed, "❤️ 血量", f"`{res['hp']}/{res['max_hp']}`", inline=True, max_val_len=100)
+        _add_bounded_field(embed, "📍 當前地點", f"`{res['location']}`", inline=False, max_val_len=500)
+        _add_bounded_field(embed, "🎯 當前目標", f"`{res['current_quest']}`", inline=False, max_val_len=500)
+        _add_bounded_field(embed, "🎒 背包物品", inv_str, inline=False, max_val_len=950)
+        _add_bounded_field(
+            embed,
+            "📓 旅程手記",
+            f"已同步還原 {res['notes_count']} 條冒險線索（輸入 `!journal` 查看）",
+            inline=False,
+            max_val_len=200,
+        )
         await ctx.send(embed=embed)
 
     @commands.command(name="saves", aliases=["存檔清單", "存檔列表"])
@@ -177,18 +266,28 @@ class RpgCog(commands.Cog):
         """記錄當前旅程的重要線索或手記：!note <內容>"""
         if not is_target_channel(ctx.channel, self.settings):
             return
-        if not content:
+        if not content or not content.strip():
             await ctx.send("❓ 請輸入要記錄的冒險線索或手記，例如：`!note 守衛老伯最怕老鼠` 或 `!note 發現了發光的紫水晶手鐲`")
             return
+        clean_note = content.strip()
+        if self.settings.enable_safety_guardrail:
+            inj = safety_guardrail.check_prompt_injection(
+                clean_note,
+                enable_japanese_mode=self.settings.enable_japanese_mode,
+                max_chars=1000,
+            )
+            if not inj.allowed:
+                await ctx.send(inj.reply or "⚠️ 內容包含不允許的指令語法或過長。")
+                return
         nid = await asyncio.to_thread(
             rpg_engine.add_journey_note,
             channel_id=ctx.channel.id,
             user_id=ctx.author.id,
             user_name=ctx.author.display_name,
-            content=content.strip(),
+            content=clean_note,
             note_type="clue",
         )
-        await ctx.send(f"📝 已記錄當前旅程手記 **#{nid}**：{content.strip()}\n💡 此線索已永久鎖定在本次冒險記憶中，AI 推進劇情時會自動融入！")
+        await ctx.send(f"📝 已記錄當前旅程手記 **#{nid}**：{clean_note[:1500]}\n💡 此線索已永久鎖定在本次冒險記憶中，AI 推進劇情時會自動融入！")
 
     @commands.command(name="journal", aliases=["notes", "手記本", "冒險筆記"])
     async def journal_command(self, ctx: commands.Context):
@@ -225,7 +324,7 @@ class RpgCog(commands.Cog):
             return
         embed = discord.Embed(
             title="🛡️ 冒險者已正式加入隊伍！",
-            description=(
+            description=truncate_embed_text(
                 f"**{uname}** 以「**{char['char_name']}**（{char['char_class']}）」之姿加入本頻道／討論串的冒險小隊！\n\n"
                 f"📍 **隊伍地點**：`{char['location']}`\n"
                 f"🎯 **當前使命**：`{char['current_quest']}`\n"
@@ -253,12 +352,17 @@ class RpgCog(commands.Cog):
 
     async def _handle_party_kick(self, ctx: commands.Context, target_query: Optional[str]):
         """將指定成員（可 @mention 或輸入名稱）移出當前冒險隊伍。"""
+        if not self.settings.enable_japanese_mode and not await self._has_community_mod_or_owner(ctx):
+            caller_char = await asyncio.to_thread(rpg_engine.get_rpg_character, ctx.channel.id, ctx.author.id)
+            if not caller_char or not caller_char.get("is_in_party"):
+                await ctx.send("🔒 社群模式下僅限目前隊伍成員、管理員或機器人擁有者可使用 `!party kick`。")
+                return
         if not target_query or not target_query.strip():
             await ctx.send("❓ 請指定要移出隊伍的對象，例如：`!party kick @隊友` 或 `!party kick 亞瑟`")
             return
         kicked = await asyncio.to_thread(rpg_engine.kick_rpg_member, ctx.channel.id, target_query)
         if not kicked:
-            await ctx.send(f"❌ 在目前入隊名單中找不到符合 `{target_query.strip()}` 的成員。")
+            await ctx.send(f"❌ 在目前入隊名單中找不到符合 `{target_query.strip()[:120]}` 的成員。")
             return
         remaining = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, ctx.channel.id)
         await ctx.send(
@@ -285,24 +389,46 @@ class RpgCog(commands.Cog):
         if not chars:
             await ctx.send("🏕️ 當前頻道或討論串中尚未有任何冒險者入隊。輸入 `!rpg join` 加入隊伍，或 `!rpg start [主題]` 開局！")
             return
+        notes = await asyncio.to_thread(rpg_engine.get_journey_notes, ctx.channel.id)
         embed = discord.Embed(
-            title=f"👥 冒險小隊隊伍名冊（共 {len(chars)} 位冒險者）",
-            description=f"📍 **小隊當前地點**：`{chars[0]['location']}`\n🎯 **當前使命**：`{chars[0]['current_quest']}`",
+            title=f"👥 冒險小隊隊伍名冊（共 {len(chars)} 位冒險者）"[:256],
+            description=truncate_embed_text(
+                f"📍 **小隊當前地點**：`{chars[0]['location']}`\n🎯 **當前使命**：`{chars[0]['current_quest']}`",
+                max_len=800,
+            ),
             color=0x06D6A0,
         )
+        embed.set_footer(
+            text=f"📓 本趟旅程共 {len(notes)} 條線索 | 入隊 !party join / 退隊 !party leave / 存檔 !save <名>"[:2000]
+        )
+        per_member_val_cap = 950 if len(chars) <= 5 else 400
         for c in chars[:20]:
             hp_ratio = max(0.0, min(1.0, c["hp"] / max(1, c["max_hp"])))
             filled_blocks = int(hp_ratio * 10)
             bar = "█" * filled_blocks + "░" * (10 - filled_blocks)
             inv_str = "、".join(c["inventory"]) if c["inventory"] else "（無隨身物品）"
-            embed.add_field(
-                name=f"👤 {c['char_name']}（{c['char_class']}）- {c['user_name']}",
-                value=truncate_embed_text(f"❤️ 血量：`{c['hp']}/{c['max_hp']}` [{bar}]\n🎒 背包：{inv_str}", max_len=950),
+            added = _add_bounded_field(
+                embed,
+                f"👤 {c['char_name']}（{c['char_class']}）- {c['user_name']}",
+                f"❤️ 血量：`{c['hp']}/{c['max_hp']}` [{bar}]\n🎒 背包：{inv_str}",
                 inline=False,
+                max_val_len=per_member_val_cap,
             )
-        notes = await asyncio.to_thread(rpg_engine.get_journey_notes, ctx.channel.id)
-        embed.set_footer(text=f"📓 本趟旅程共 {len(notes)} 條線索 | 入隊 !party join / 退隊 !party leave / 存檔 !save <名>")
-        await ctx.send(embed=embed)
+            if not added:
+                break
+        file_obj = None
+        try:
+            png_bytes = await asyncio.to_thread(rpg_renderer.render_party_dashboard_png, chars, len(notes))
+            if png_bytes:
+                file_obj = discord.File(io.BytesIO(png_bytes), filename="party_status.png")
+                embed.set_image(url="attachment://party_status.png")
+        except Exception as e:
+            self.logger.warning(f"⚠️ 渲染小隊視覺看板 PNG 失敗，退回純文字 Embed: {e}")
+
+        if file_obj is not None:
+            await ctx.send(embed=embed, file=file_obj)
+        else:
+            await ctx.send(embed=embed)
 
     @commands.command(name="adventure", aliases=["adv", "冒險"])
     async def adventure_command(self, ctx: commands.Context, *, topic: str = None):
@@ -324,10 +450,11 @@ class RpgCog(commands.Cog):
         custom_traits = prof.get("custom_traits") or {}
 
         embed = discord.Embed(
-            title=f"{title_prefix} - 【{char['char_name']}】",
-            description=backstory if backstory else "一位踏上未知道路的神秘旅者...",
+            title=f"{title_prefix} - 【{char['char_name']}】"[:256],
+            description=truncate_embed_text(backstory if backstory else "一位踏上未知道路的神秘旅者...", max_len=1500),
             color=0xF15BB5 if char.get("hp", 100) > 25 else 0xE63946,
         )
+        embed.set_footer(text="💡 支援修仙、賽博龐克、克蘇魯、奇幻冒險等任意世界觀！輸入 !sheet 查看或更新卡片")
 
         id_lines = [f"• **身分/定位**：{char_class}"]
         if race:
@@ -336,7 +463,7 @@ class RpgCog(commands.Cog):
             id_lines.append(f"• **陣營/派系**：{alignment}")
         if background:
             id_lines.append(f"• **出身背景**：{background}")
-        embed.add_field(name="👤 基本身分", value="\n".join(id_lines), inline=True)
+        _add_bounded_field(embed, "👤 基本身分", "\n".join(id_lines), inline=True, max_val_len=950)
 
         hp_ratio = max(0.0, min(1.0, char.get("hp", 100) / max(1, char.get("max_hp", 100))))
         filled = int(hp_ratio * 10)
@@ -344,7 +471,7 @@ class RpgCog(commands.Cog):
         combat_lines = [f"• **體力/狀態值**：`{char.get('hp', 100)}/{char.get('max_hp', 100)}`\n  [{bar}]"]
         if ac is not None:
             combat_lines.append(f"• **防禦 (AC)**：`{ac}`")
-        embed.add_field(name="⚔️ 狀態與數值", value="\n".join(combat_lines), inline=True)
+        _add_bounded_field(embed, "⚔️ 狀態與數值", "\n".join(combat_lines), inline=True, max_val_len=950)
 
         if custom_traits:
             trait_lines = [
@@ -353,10 +480,12 @@ class RpgCog(commands.Cog):
                 if k not in ("武器", "防具", "道具", "裝備", "隨身裝備", "隨身物品")
             ]
             if trait_lines:
-                embed.add_field(
-                    name="🔮 專屬世界觀特質 / 設定",
-                    value=truncate_embed_text("\n".join(trait_lines[:8]), max_len=950),
+                _add_bounded_field(
+                    embed,
+                    "🔮 專屬世界觀特質 / 設定",
+                    "\n".join(trait_lines[:8]),
                     inline=False,
+                    max_val_len=950,
                 )
 
         if stats:
@@ -365,23 +494,104 @@ class RpgCog(commands.Cog):
                 f"`DEX 敏捷`：{stats.get('DEX', 10):>2}   |   `WIS 感知`：{stats.get('WIS', 10):>2}\n"
                 f"`CON 體質`：{stats.get('CON', 10):>2}   |   `CHA 魅力`：{stats.get('CHA', 10):>2}"
             )
-            embed.add_field(name="📊 核心能力屬性 (Ability Scores)", value=stat_lines, inline=False)
+            _add_bounded_field(embed, "📊 核心能力屬性 (Ability Scores)", stat_lines, inline=False, max_val_len=950)
 
         if skills:
-            embed.add_field(
-                name="🎭 專長技能 / 功法法術",
-                value=truncate_embed_text("、".join(skills), max_len=950),
-                inline=False,
-            )
+            _add_bounded_field(embed, "🎭 專長技能 / 功法法術", "、".join(skills), inline=False, max_val_len=950)
 
         if inv:
             inv_display = "\n".join([f"• {it}" for it in inv])
             if len(inv_display) > 800:
                 inv_display = "、".join(inv)
-            embed.add_field(name="🎒 隨身持有物 / 法寶裝備", value=truncate_embed_text(inv_display, max_len=950), inline=False)
+            _add_bounded_field(embed, "🎒 隨身持有物 / 法寶裝備", inv_display, inline=False, max_val_len=950)
 
-        embed.set_footer(text="💡 支援修仙、賽博龐克、克蘇魯、奇幻冒險等任意世界觀！輸入 !sheet 查看或更新卡片")
-        await ctx.send(embed=embed)
+        file_obj = None
+        try:
+            png_bytes = await asyncio.to_thread(rpg_renderer.render_character_sheet_png, char)
+            if png_bytes:
+                file_obj = discord.File(io.BytesIO(png_bytes), filename="char_sheet.png")
+                embed.set_image(url="attachment://char_sheet.png")
+        except Exception as e:
+            self.logger.warning(f"⚠️ 渲染角色卡視覺圖卡 PNG 失敗，退回純文字 Embed: {e}")
+
+        if file_obj is not None:
+            await ctx.send(embed=embed, file=file_obj)
+        else:
+            await ctx.send(embed=embed)
+
+    async def send_check_prompt_view(
+        self,
+        channel: discord.abc.Messageable,
+        check_requests: list[dict],
+        content_text: str = "",
+    ) -> Optional[discord.Message]:
+        """發送附帶互動擲骰按鈕列（Row 0 命運檢定 + Row 1 快速查詢）的檢定提示訊息。"""
+        reqs = list(check_requests or [])[:3]
+        if not reqs:
+            return None
+
+        lines = []
+        for idx, req in enumerate(reqs, 1):
+            cname = str(req.get("check_name") or f"檢定 {idx}").strip()
+            dc = req.get("dc", 12)
+            expr = str(req.get("dice_expr") or "1d20").strip()
+            is_ru = expr.lower().replace(" ", "") == "1d100"
+            dc_txt = f"`{expr} <= {dc}`" if is_ru else f"`{expr}`｜**DC {dc}**"
+            parts = [f"{idx}. **{cname}**（{dc_txt}）"]
+            if req.get("stat_or_skill"):
+                parts.append(f"屬性/專長：`{req['stat_or_skill']}`")
+            if req.get("target_player"):
+                parts.append(f"指定：{req['target_player']}")
+            line = " — ".join(parts)
+            if req.get("reason"):
+                line += f"\n   └ *{req['reason']}*"
+            lines.append(line)
+
+        embed = discord.Embed(
+            title="🎲 需要進行命運檢定！",
+            description=truncate_embed_text("\n".join(lines), max_len=3600),
+            color=0x9B5DE5,
+        )
+        embed.set_footer(text="💡 點擊下方藍色按鈕擲骰（系統將自動帶入角色屬性加值並由 DM 續寫劇情）")
+
+        view = RpgRollCheckView(self, reqs)
+        clean_content = (content_text or "").strip()
+        if len(clean_content) > 1900:
+            from core.chat_pipeline import send_split_messages
+
+            await send_split_messages(channel, clean_content)
+            clean_content = ""
+        msg_content = clean_content if clean_content else None
+        sent = await channel.send(content=msg_content, embed=embed, view=view)
+        view.message = sent
+        return sent
+
+    async def trigger_dm_after_roll(
+        self,
+        channel: discord.abc.Messageable,
+        user: discord.abc.User,
+        result_dict: dict,
+    ) -> None:
+        """Option A：玩家點擊按鈕擲骰後，依頻道鎖自動呼叫 DM 續寫後續劇情。"""
+        if self.gemini_client is None or channel is None:
+            return
+        channel_id = getattr(channel, "id", 0)
+        lock = self._get_dm_roll_lock(channel_id)
+        async with lock:
+            try:
+                from core.chat_pipeline import continue_rpg_after_dice_roll
+
+                await continue_rpg_after_dice_roll(
+                    self.bot,
+                    self.gemini_client,
+                    self.settings,
+                    channel,
+                    user,
+                    result_dict,
+                    logger=self.logger,
+                )
+            except Exception as e:
+                self.logger.error(f"❌ 擲骰後 DM 自動續寫失敗 (channel={channel_id}): {e}", exc_info=True)
 
     @commands.command(name="sheet", aliases=["角色卡", "人物卡", "charsheet"])
     async def sheet_command(self, ctx: commands.Context, *, sheet_text: str = None):
@@ -396,12 +606,16 @@ class RpgCog(commands.Cog):
 
         if content and "\n" not in content and content.lower().endswith((".txt", ".md", ".json")):
             local_path = assistant_db.IMPORTS_DIR / Path(content).name
-            if local_path.is_file():
-                try:
-                    content = local_path.read_text(encoding="utf-8", errors="ignore").strip()
-                except Exception as e:
-                    await ctx.send(f"⚠️ 讀取本機檔案 `{local_path.name}` 失敗：{e}")
-                    return
+            try:
+                loaded_local = await asyncio.to_thread(
+                    _read_local_text_bounded, local_path, max_bytes=MAX_TEXT_ATTACHMENT_BYTES, errors="ignore"
+                )
+                if loaded_local is not None:
+                    content = loaded_local
+            except Exception as e:
+                self.logger.warning(f"⚠️ 讀取本機角色卡檔案 {local_path.name} 失敗: {e}")
+                await ctx.send(f"⚠️ 無法讀取本機檔案 `{local_path.name}`（{e}）。")
+                return
 
         if ctx.message.attachments:
             for att in ctx.message.attachments:
@@ -411,14 +625,27 @@ class RpgCog(commands.Cog):
                         continue
                     try:
                         file_bytes = await att.read()
+                        if len(file_bytes) > MAX_TEXT_ATTACHMENT_BYTES:
+                            await ctx.send(f"⚠️ 附件 `{att.filename}` 超過 2MB 上限，已略過。")
+                            continue
                         file_str = file_bytes.decode("utf-8", errors="ignore")
                         if file_str.strip():
                             content = file_str.strip() if not content else content + "\n\n" + file_str.strip()
                     except Exception as e:
-                        await ctx.send(f"⚠️ 讀取附件 `{att.filename}` 失敗：{e}")
+                        self.logger.warning(f"⚠️ 讀取角色卡附件 {att.filename} 失敗: {e}")
+                        await ctx.send(f"⚠️ 讀取附件 `{att.filename}` 失敗，請確認為有效純文字檔。")
 
         if content:
-            parsed = rpg_engine.parse_character_sheet(content, default_name=uname)
+            if self.settings.enable_safety_guardrail:
+                inj = safety_guardrail.check_prompt_injection(
+                    content,
+                    enable_japanese_mode=self.settings.enable_japanese_mode,
+                    max_chars=20000,
+                )
+                if not inj.allowed:
+                    await ctx.send(inj.reply or "⚠️ 角色卡內容包含不允許的指令語法或過長。")
+                    return
+            parsed = await asyncio.to_thread(rpg_engine.parse_character_sheet, content, default_name=uname)
             applied = await asyncio.to_thread(rpg_engine.apply_character_sheet, cid, uid, uname, parsed)
             await self.send_sheet_embed(ctx, applied, title_prefix="✨ 角色卡匯入並入隊成功！")
             return
@@ -472,13 +699,14 @@ class RpgCog(commands.Cog):
             await self.saves_command(ctx)
             return
         if act in ("delsave", "deletesave", "rmsave", "刪除存檔"):
-            if not arg:
+            if not arg or not arg.strip():
                 await ctx.send("❓ 請輸入要刪除的存檔名稱，例如：`!rpg delsave 森林遺跡`")
                 return
-            if await asyncio.to_thread(rpg_engine.delete_save, arg.strip(), uid):
-                await ctx.send(f"🗑️ 已刪除存檔 **【{arg.strip()}】**。")
+            clean_save = arg.strip()[:120]
+            if await asyncio.to_thread(rpg_engine.delete_save, clean_save, uid):
+                await ctx.send(f"🗑️ 已刪除存檔 **【{clean_save}】**。")
             else:
-                await ctx.send(f"❌ 找不到存檔 **【{arg.strip()}】**。")
+                await ctx.send(f"❌ 找不到存檔 **【{clean_save}】**（或無權刪除他人建立的存檔）。")
             return
         if act in ("note", "clue", "線索", "手記", "筆記"):
             await self.note_command(ctx, content=arg)
@@ -487,6 +715,11 @@ class RpgCog(commands.Cog):
             await self.journal_command(ctx)
             return
         if act in ("delnote", "rmnote", "刪除手記"):
+            if not self.settings.enable_japanese_mode and not await self._has_community_mod_or_owner(ctx):
+                caller_char = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
+                if not caller_char or not caller_char.get("is_in_party"):
+                    await ctx.send("🔒 社群模式下僅限目前小隊成員、管理員或機器人擁有者可刪除旅程手記。")
+                    return
             if not arg or not arg.strip().isdigit():
                 await ctx.send("❓ 請輸入要刪除的手記編號，例如：`!rpg delnote 1`")
                 return
@@ -497,30 +730,38 @@ class RpgCog(commands.Cog):
                 await ctx.send(f"❌ 找不到當前旅程手記 **#{nid}**。")
             return
         if act in ("reset", "restart", "重置", "重開"):
+            if not self.settings.enable_japanese_mode:
+                active_party = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid, True)
+                other_members = [c for c in active_party if c["user_id"] != uid]
+                if other_members and not await self._has_community_mod_or_owner(ctx):
+                    await ctx.send("🔒 社群模式下，隊伍尚有其他成員時，僅限管理員或機器人擁有者可執行 `!rpg reset`（若僅需個人退隊請使用 `!rpg leave`）。")
+                    return
             await asyncio.to_thread(rpg_engine.reset_rpg_character, cid, uid)
             await asyncio.to_thread(rpg_engine.set_rpg_session_active, cid, False)
             await ctx.send(f"🔄 **{uname}** 的冒險紀錄與旅程手記已重置，可以隨時開始新的冒險。")
             return
         if act in ("name", "rename"):
-            if not arg:
+            if not arg or not arg.strip():
                 await ctx.send("❓ 請輸入新角色名，例如：`!rpg name 艾莉絲`")
                 return
             existing = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
             if not existing or not existing["is_in_party"]:
                 await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改角色名稱。")
                 return
-            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_name=arg.strip())
+            new_name = arg.strip()[:80]
+            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_name=new_name)
             await ctx.send(f"✅ 角色名稱已更改為：**{char['char_name']}**")
             return
         if act in ("class", "job"):
-            if not arg:
+            if not arg or not arg.strip():
                 await ctx.send("❓ 請輸入新職業名稱，例如：`!rpg class 精靈弓箭手`")
                 return
             existing = await asyncio.to_thread(rpg_engine.get_rpg_character, cid, uid)
             if not existing or not existing["is_in_party"]:
                 await ctx.send("🏕️ 你尚未加入目前隊伍！請先輸入 `!rpg join`（或 `!sheet <角色設定>`）入隊後再修改職業稱號。")
                 return
-            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_class=arg.strip())
+            new_class = arg.strip()[:80]
+            char = await asyncio.to_thread(rpg_engine.update_rpg_character, cid, uid, uname, char_class=new_class)
             await ctx.send(f"✅ 角色職業已更改為：**{char['char_class']}**")
             return
 
@@ -546,32 +787,34 @@ class RpgCog(commands.Cog):
         bar = "█" * filled_blocks + "░" * (10 - filled_blocks)
 
         embed = discord.Embed(
-            title=f"🗡️ 【{char['char_name']}】的冒險者狀態卡",
+            title=f"🗡️ 【{char['char_name']}】的冒險者狀態卡"[:256],
             color=0xF15BB5 if char["hp"] > 25 else 0xE63946,
         )
+        all_chars = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid)
+        footer_text = "💡 完整角色卡 !sheet | 保存 !save <名> | 載入 !load <名> | 擲骰 !roll"
+        if len(all_chars) > 1:
+            footer_text = f"👥 目前小隊共有 {len(all_chars)} 位成員！輸入 !party 查看全隊名冊 | !sheet 查看角色卡 | !save <名> 存檔"
+        embed.set_footer(text=footer_text[:2000])
         prof = char.get("profile") or {}
         race_align = (
             f"（{prof.get('race', '')} {char['char_class']} | {prof.get('alignment', '')}）"
             if (prof.get("race") or prof.get("alignment"))
             else f"（{char['char_class']}）"
         )
-        embed.add_field(name="👤 角色身分", value=f"**{char['char_name']}** {race_align}", inline=True)
-        embed.add_field(name="❤️ 生命值 (HP)", value=f"`{char['hp']}/{char['max_hp']}` [{bar}]", inline=True)
-        embed.add_field(name="📍 當前地點", value=f"`{char['location']}`", inline=False)
-        embed.add_field(name="🎯 當前目標", value=f"`{char['current_quest']}`", inline=False)
-        embed.add_field(name="🎒 背包隨身裝備", value=truncate_embed_text(inv_str, max_len=950), inline=False)
-        embed.add_field(name="📓 本趟旅程手記", value=f"{len(notes)} 條線索與情報（輸入 `!journal` 查看）", inline=False)
-        all_chars = await asyncio.to_thread(rpg_engine.get_all_characters_in_channel, cid)
-        footer_text = "💡 完整角色卡 !sheet | 保存 !save <名> | 載入 !load <名> | 擲骰 !roll"
-        if len(all_chars) > 1:
-            footer_text = f"👥 目前小隊共有 {len(all_chars)} 位成員！輸入 !party 查看全隊名冊 | !sheet 查看角色卡 | !save <名> 存檔"
-        embed.set_footer(text=footer_text)
+        _add_bounded_field(embed, "👤 角色身分", f"**{char['char_name']}** {race_align}", inline=True, max_val_len=400)
+        _add_bounded_field(embed, "❤️ 生命值 (HP)", f"`{char['hp']}/{char['max_hp']}` [{bar}]", inline=True, max_val_len=150)
+        _add_bounded_field(embed, "📍 當前地點", f"`{char['location']}`", inline=False, max_val_len=500)
+        _add_bounded_field(embed, "🎯 當前目標", f"`{char['current_quest']}`", inline=False, max_val_len=500)
+        _add_bounded_field(embed, "🎒 背包隨身裝備", inv_str, inline=False, max_val_len=950)
+        _add_bounded_field(embed, "📓 本趟旅程手記", f"{len(notes)} 條線索與情報（輸入 `!journal` 查看）", inline=False, max_val_len=200)
         await ctx.send(embed=embed)
 
     @commands.command(name="lore", aliases=["world", "設定", "世界觀"])
     async def lore_command(self, ctx: commands.Context, action: str = None, *, arg: str = None):
         """動態世界設定集（Lorebook）管理。"""
-        if not is_target_channel(ctx.channel, self.settings):
+        if not is_target_channel(ctx.channel, self.settings) and not await is_bot_owner(
+            self.bot, self.settings, ctx.author
+        ):
             return
 
         act = (action or "").lower()
@@ -583,7 +826,7 @@ class RpgCog(commands.Cog):
                 return
             lines = [f"**#{e['id']} 關鍵字：`{e['keywords']}`**\n└ {e['content']}" for e in entries]
             embed = discord.Embed(
-                title=f"📖 世界觀設定集 (Lorebook) - 共 {len(entries)} 筆設定",
+                title=f"📖 世界觀設定集 (Lorebook) - 共 {len(entries)} 筆設定"[:256],
                 description=truncate_embed_text("\n\n".join(lines[:20])),
                 color=0x00BBF9,
             )
@@ -599,13 +842,17 @@ class RpgCog(commands.Cog):
 
             if raw_text and "\n" not in raw_text and raw_text.lower().endswith((".txt", ".md", ".json", ".text")):
                 local_path = assistant_db.IMPORTS_DIR / Path(raw_text).name
-                if local_path.is_file():
-                    try:
-                        raw_text = local_path.read_text(encoding="utf-8", errors="replace").strip()
+                try:
+                    loaded_local = await asyncio.to_thread(
+                        _read_local_text_bounded, local_path, max_bytes=MAX_TEXT_ATTACHMENT_BYTES, errors="replace"
+                    )
+                    if loaded_local is not None:
+                        raw_text = loaded_local
                         self.logger.info(f"📖 成功從本機 data/imports/{local_path.name} 讀取世界觀設定")
-                    except Exception as e:
-                        await ctx.send(f"❌ 讀取本機檔案 `{local_path.name}` 失敗：{e}")
-                        return
+                except Exception as e:
+                    self.logger.warning(f"⚠️ 讀取本機世界觀檔案 {local_path.name} 失敗: {e}")
+                    await ctx.send(f"❌ 無法讀取本機檔案 `{local_path.name}`（{e}）。")
+                    return
 
             if ctx.message.attachments:
                 att = ctx.message.attachments[0]
@@ -615,11 +862,15 @@ class RpgCog(commands.Cog):
                         return
                     try:
                         file_bytes = await att.read()
+                        if len(file_bytes) > MAX_TEXT_ATTACHMENT_BYTES:
+                            await ctx.send(f"❌ 附件 `{att.filename}` 超過 2MB 大小上限！")
+                            return
                         file_text = file_bytes.decode("utf-8", errors="replace")
                         raw_text = file_text + ("\n" + raw_text if raw_text else "")
                         self.logger.info(f"📖 成功從附件 {att.filename} 讀取世界觀設定 ({len(file_bytes)} bytes)")
                     except Exception as e:
-                        await ctx.send(f"❌ 讀取附件檔案失敗：{e}")
+                        self.logger.warning(f"⚠️ 讀取世界觀附件 {att.filename} 失敗: {e}")
+                        await ctx.send(f"❌ 讀取附件 `{att.filename}` 失敗，請確認為有效純文字檔。")
                         return
 
             if not raw_text.strip():
@@ -632,7 +883,16 @@ class RpgCog(commands.Cog):
                 )
                 return
 
-            parsed = rpg_engine.parse_lore_text_blocks(raw_text)
+            if self.settings.enable_safety_guardrail:
+                inj = safety_guardrail.check_prompt_injection(
+                    raw_text,
+                    enable_japanese_mode=self.settings.enable_japanese_mode,
+                )
+                if not inj.allowed:
+                    await ctx.send(inj.reply or "⚠️ 世界觀設定內容包含不允許的指令語法。")
+                    return
+
+            parsed = await asyncio.to_thread(rpg_engine.parse_lore_text_blocks, raw_text)
             if not parsed:
                 await ctx.send("❌ 未能識別出有效的設定條目。請確認使用 `【名稱】內容` 或 `名稱：內容` 格式！")
                 return
@@ -652,8 +912,8 @@ class RpgCog(commands.Cog):
             return
 
         if act in ("clear", "reset", "清空", "重置"):
-            if not self.settings.enable_japanese_mode and ctx.guild and not ctx.author.guild_permissions.manage_messages:
-                await ctx.send("⚠️ 在社群伺服器中，僅限擁有「管理訊息」權限的管理員可執行 `!lore clear` 清空全服世界觀設定喔！（一般成員可使用 `!lore del <編號>` 刪除單筆設定）")
+            if not self.settings.enable_japanese_mode and not await self._has_community_mod_or_owner(ctx):
+                await ctx.send("⚠️ 在社群伺服器中，僅限擁有「管理訊息」權限的管理員或機器人擁有者可執行 `!lore clear` 清空全服世界觀設定喔！")
                 return
             count = await asyncio.to_thread(rpg_engine.clear_lorebook)
             await ctx.send(f"🧹 已清空世界觀設定集（共刪除 {count} 筆設定）。隨時可以重新匯入新世界觀！")
@@ -666,11 +926,26 @@ class RpgCog(commands.Cog):
             parts = arg.split("|", 1)
             kws = parts[0].strip()
             cnt = parts[1].strip()
+            if not kws or not cnt:
+                await ctx.send("❓ 關鍵字與設定內容皆不可為空！請輸入：`!lore add 關鍵字 | 設定內容`")
+                return
+            if self.settings.enable_safety_guardrail:
+                inj = safety_guardrail.check_prompt_injection(
+                    f"{kws}\n{cnt}",
+                    enable_japanese_mode=self.settings.enable_japanese_mode,
+                    max_chars=2000,
+                )
+                if not inj.allowed:
+                    await ctx.send(inj.reply or "⚠️ 內容包含不允許的指令語法或過長。")
+                    return
             lid = await asyncio.to_thread(rpg_engine.add_lorebook_entry, kws, cnt)
-            await ctx.send(f"✅ 已成功將世界設定 **#{lid}** 存入設定集！關鍵字：`{kws}`")
+            await ctx.send(f"✅ 已成功將世界設定 **#{lid}** 存入設定集！關鍵字：`{kws[:200]}`")
             return
 
         if act in ("del", "delete", "rm", "-"):
+            if not self.settings.enable_japanese_mode and not await self._has_community_mod_or_owner(ctx):
+                await ctx.send("🔒 在社群伺服器中，僅限擁有「管理訊息」權限的管理員或機器人擁有者可刪除世界觀設定。")
+                return
             if not arg or not arg.strip().isdigit():
                 await ctx.send("❓ 請輸入要刪除的設定編號，例如：`!lore del 1`")
                 return
@@ -680,3 +955,7 @@ class RpgCog(commands.Cog):
             else:
                 await ctx.send(f"❌ 找不到設定編號 **#{lid}**。")
             return
+
+        await ctx.send(
+            "❓ 未知的 `!lore` 子指令。可用指令：`!lore`、`!lore add <關鍵字> | <內容>`、`!lore import`、`!lore del <編號>`、`!lore clear`"
+        )

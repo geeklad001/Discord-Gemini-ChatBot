@@ -277,6 +277,46 @@ class TestBoardGames(unittest.TestCase):
             bg.pending_board_card_updates.reset(tok_bg)
             assistant_tools.current_discord_msg.reset(tok_msg)
 
+    def test_gomoku_pve_normal_and_hard_ai_no_name_error(self):
+        for cid, diff in ((401, "normal"), (402, "hard")):
+            g = bg.create_game(cid, "gomoku", "pve", 1, "Alice", diff)
+            g, note = bg.apply_move(g["id"], 1, "G7")
+            cands = bg.get_gomoku_candidates(g["state"]["board"], limit=10, player_hint=2)
+            self.assertGreater(len(cands), 0)
+            self.assertTrue(all(bg._parse_grid_coord(c, bg.GOMOKU_SIZE) is not None for c in cands))
+
+            g, full_note = bg.play_pve_ai_turn_sync(g, note)
+            self.assertEqual(g["status"], "active")
+            self.assertEqual(g["move_count"], 2)
+            self.assertEqual(g["turn"], 1)
+            self.assertIn("🤖", full_note)
+            self._verify_png(bg.render_board_image(g))
+
+        # Verify hard AI blocks an immediate 4-in-a-row threat without crashing
+        g_hard = bg.create_game(403, "gomoku", "pve", 1, "Alice", "hard")
+        for col in ("D", "E", "F", "G"):
+            r, c = bg._parse_grid_coord(f"{col}7", bg.GOMOKU_SIZE)
+            g_hard["state"]["board"][r][c] = 1
+        g_hard["turn"] = 2
+        g_hard["move_count"] = 4
+        bg._save_game_state(g_hard)
+        ai_mv = bg.compute_ai_move_for_game(g_hard, difficulty_override="hard")
+        self.assertIn(ai_mv, ("C7", "H7"))
+
+    def test_chess_active_check_rendering_no_name_error(self):
+        g = bg.create_game(404, "chess", "pvp", 1, "WhitePlayer")
+        g = bg.join_pvp_game(g["id"], 2, "BlackPlayer")
+        g, _ = bg.apply_move(g["id"], 1, "e4")
+        g, _ = bg.apply_move(g["id"], 2, "e5")
+        g, _ = bg.apply_move(g["id"], 1, "Qh5")
+        g, _ = bg.apply_move(g["id"], 2, "g6")
+        g, check_note = bg.apply_move(g["id"], 1, "Qxe5")
+
+        self.assertEqual(g["status"], "active")
+        self.assertTrue(g["state"]["in_check"])
+        self.assertIn("將軍", check_note)
+        self._verify_png(bg.render_board_image(g))
+
 
 if __name__ == "__main__":
     unittest.main()

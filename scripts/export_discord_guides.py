@@ -451,7 +451,10 @@ async def save_attachment_image(
     images_dir: Path,
     out_dir: Path,
 ) -> tuple[Optional[dict[str, Any]], Optional[str]]:
-    """Download full-resolution attachment image via `att.save()` and record dimensions."""
+    """Download full-resolution attachment image via `att.save()` (capped at MAX_EMBED_IMAGE_BYTES) and record dimensions."""
+    if att.size and att.size > MAX_EMBED_IMAGE_BYTES:
+        return None, f"附件 `{att.filename}` 大小超過 15MB 上限 ({att.size} bytes)，已略過"
+
     safe_name = sanitize_filename(att.filename, fallback_ext=".png")
     target_name = f"{msg_id}_att{idx}_{safe_name}"
     images_dir.mkdir(parents=True, exist_ok=True)
@@ -463,6 +466,11 @@ async def save_attachment_image(
         if img_path.exists():
             img_path.unlink(missing_ok=True)
         return None, f"附件 `{att.filename}` 下載失敗：{exc}"
+
+    if img_path.exists() and img_path.stat().st_size > MAX_EMBED_IMAGE_BYTES:
+        actual_size = img_path.stat().st_size
+        img_path.unlink(missing_ok=True)
+        return None, f"附件 `{att.filename}` 大小超過 15MB 上限 ({actual_size} bytes)，已略過"
 
     width = att.width
     height = att.height

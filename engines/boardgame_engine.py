@@ -6,13 +6,9 @@ import contextvars
 import copy
 import io
 import json
-import math
-import random
 import re
 from datetime import datetime
 from typing import Optional
-
-from PIL import Image, ImageDraw, ImageFont
 
 from engines.assistant_db import TZ_TAIPEI, get_conn, get_db_path
 
@@ -603,6 +599,14 @@ def apply_move(game_id: int, user_id: int, move_str: str) -> tuple[dict, str]:
         r1, c1, r2, c2, promo = mv
         moved_piece = state["board"][r1][c1]
         cap_piece = state["board"][r2][c2]
+        is_ep_capture = (
+            moved_piece.upper() == "P"
+            and bool(state.get("ep"))
+            and [r2, c2] == list(state["ep"])
+            and not cap_piece
+        )
+        if is_ep_capture:
+            cap_piece = state["board"][r1][c2]
         nxt = _chess_apply_move_raw(state, mv, white_turn)
         opp_white = not white_turn
         opp_in_check = _chess_in_check(nxt["board"], opp_white)
@@ -610,7 +614,12 @@ def apply_move(game_id: int, user_id: int, move_str: str) -> tuple[dict, str]:
 
         lan = _chess_format_lan(mv)
         tag = "+" if opp_in_check else ""
-        cap_txt = f" 吃 {CHESS_PIECE_NAMES.get(cap_piece, cap_piece)}" if cap_piece else ""
+        if is_ep_capture:
+            cap_txt = f" 吃過路兵 {CHESS_PIECE_NAMES.get(cap_piece, cap_piece)}" if cap_piece else " 吃過路兵"
+        elif cap_piece:
+            cap_txt = f" 吃 {CHESS_PIECE_NAMES.get(cap_piece, cap_piece)}"
+        else:
+            cap_txt = ""
         promo_txt = f" (升變={promo.upper()})" if promo else ""
         nxt["moves"] = list(state.get("moves", [])) + [f"{player_label} {lan}{tag}"]
         rep_counts = dict(state.get("rep_counts", {}))

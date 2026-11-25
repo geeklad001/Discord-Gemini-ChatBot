@@ -1,9 +1,11 @@
 import contextvars
+import os
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import discord
 
+from core.config import _parse_bool, _parse_optional_channel_id
 from engines import (
     assistant_db,
     boardgame_engine,
@@ -147,7 +149,7 @@ def add_flashcard_card(
 ) -> str:
     """
     將欲學習的日語單字、片語、文法或佳句整理成單字卡 (Flashcard) 儲存至資料庫中。
-    若未指定牌組名稱 (deck_name)，系統會自動放入預設的「⭐ 兩人的日常收藏」牌組中。
+    若未指定牌組名稱 (deck_name)，系統會自動放入使用者的預設牌組（或系統預設單字收集箱）中。
     參數:
       word_or_phrase: 日語漢字或單字/片語（例如：「木漏れ日」、「乾杯」、「美味しい」）。
       reading: 平假名讀音（例如：「こもれび」、「かんぱい」、「おいしい」）。
@@ -162,8 +164,12 @@ def add_flashcard_card(
 
     if deck_name and deck_name.strip():
         deck = flashcard_engine.get_or_create_deck(deck_name.strip(), created_by=user_name)
+    elif user_id:
+        deck = flashcard_engine.get_user_active_deck(user_id)
     else:
-        deck = flashcard_engine.get_user_active_deck(user_id) if user_id else flashcard_engine.get_or_create_deck("⭐ 兩人的日常收藏")
+        is_jp_mode = _parse_bool(os.getenv("ENABLE_JAPANESE_MODE"), default=True)
+        default_box = "⭐ 兩人的日常收藏" if is_jp_mode else "📚 預設單字收集箱"
+        deck = flashcard_engine.get_or_create_deck(default_box)
 
     card = flashcard_engine.add_card(
         deck_id=deck["id"],
@@ -195,6 +201,32 @@ def lookup_game_wiki(query: str) -> str:
     return game_wiki_engine.lookup_game_wiki_tool_impl(query)
 
 
+def _resolve_tool_channel_id(msg: Optional[discord.Message], *, for_lifesim: bool = False) -> int:
+    """解析工具應查詢／操作的頻道 ID（日語雙頻道模式下若 TTS 頻道無局則回退查詢 TARGET_CHANNEL_ID）。"""
+    if not msg:
+        return 0
+    cid = getattr(msg.channel, "id", 0)
+    uid = getattr(msg.author, "id", None)
+    if for_lifesim:
+        if lifesim_engine.get_active_life_run(cid, user_id=uid) is not None:
+            return cid
+    else:
+        if boardgame_engine.get_latest_game_in_channel(cid, include_finished_hours=4) is not None:
+            return cid
+
+    is_jp_mode = _parse_bool(os.getenv("ENABLE_JAPANESE_MODE"), default=True)
+    tts_cid = _parse_optional_channel_id(os.getenv("TTS_CHANNEL_ID"), "TTS_CHANNEL_ID", None)
+    target_cid = _parse_optional_channel_id(os.getenv("TARGET_CHANNEL_ID"), "TARGET_CHANNEL_ID", None)
+    if is_jp_mode and tts_cid and cid == tts_cid and target_cid:
+        if for_lifesim:
+            if lifesim_engine.get_active_life_run(target_cid, user_id=uid) is not None:
+                return target_cid
+        else:
+            if boardgame_engine.get_latest_game_in_channel(target_cid, include_finished_hours=4) is not None:
+                return target_cid
+    return cid
+
+
 def _queue_board_card_update(game_id: int, note: str, run_ai: bool = False) -> None:
     pending = boardgame_engine.pending_board_card_updates.get()
     if pending is not None:
@@ -207,7 +239,7 @@ def boardgame_get_state() -> str:
     當使用者用自然語言描述想移動哪顆棋子或想落子在哪裡時，必須先呼叫此工具對照合法座標與盤面，嚴禁自己猜測或編造棋盤狀態！
     """
     msg = current_discord_msg.get()
-    channel_id = msg.channel.id if msg else 0
+    channel_id = _resolve_tool_channel_id(msg)
     return boardgame_engine.get_board_status_summary_for_llm(channel_id)
 
 
@@ -229,6 +261,7 @@ def boardgame_start(
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
+    channel_id = _resolve_tool_channel_id(msg)
     gtype = boardgame_engine.resolve_game_type(game_type)
     if not gtype:
         return f"❓ 找不到遊戲 `{game_type}`。目前支援：黑白棋 (othello)、西洋棋 (chess)、四子棋 (connect4)、五子棋 (gomoku)。"
@@ -236,7 +269,7 @@ def boardgame_start(
     clean_diff = boardgame_engine.resolve_difficulty(difficulty)
     try:
         game = boardgame_engine.create_game(
-            channel_id=msg.channel.id,
+            channel_id=channel_id,
             game_type=gtype,
             mode=clean_mode,
             p1_id=msg.author.id,
@@ -269,7 +302,7 @@ def boardgame_start(
         f"✅ 已成功開啟【{boardgame_engine.GAME_CATALOG[gtype]['name']}】"
         f"（模式：{clean_mode.upper()} | 對手：{boardgame_engine.DIFFICULTY_LABELS[clean_diff] if clean_mode == 'pve' else '等待好友加入'}）！\n"
         f"系統將在你的回覆下方自動貼出高清座標棋盤卡片與點擊互動選單。{extra_hint}\n"
-        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+        f"{boardgame_engine.get_board_status_summary_for_llm(channel_id)}"
     )
 
 
@@ -283,13 +316,14 @@ def boardgame_play_move(move_str: str) -> str:
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    active = boardgame_engine.get_active_game(msg.channel.id)
+    channel_id = _resolve_tool_channel_id(msg)
+    active = boardgame_engine.get_active_game(channel_id)
     if not active or active["status"] != "active":
         return "⚠️ 目前此頻道沒有進行中的對局。若玩家想玩，可先呼叫 `boardgame_start` 開局。"
     try:
         updated, note = boardgame_engine.apply_move(active["id"], msg.author.id, move_str)
     except ValueError as e:
-        legal_hint = boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)
+        legal_hint = boardgame_engine.get_board_status_summary_for_llm(channel_id)
         return f"⚠️ 該步不合法：{e}\n{legal_hint}"
 
     if updated["mode"] == "pve" and updated.get("difficulty") == "llm" and updated["status"] == "active":
@@ -306,7 +340,7 @@ def boardgame_play_move(move_str: str) -> str:
     status_tail = "🎉 對局已分出勝負／結束！" if updated["status"] == "finished" else "系統已更新圖形棋盤卡並貼在回覆下方。"
     return (
         f"✅ 已落子並完成規則校驗！\n{full_note}\n{status_tail}\n"
-        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+        f"{boardgame_engine.get_board_status_summary_for_llm(channel_id)}"
     )
 
 
@@ -318,7 +352,8 @@ def boardgame_undo() -> str:
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    active = boardgame_engine.get_active_game(msg.channel.id)
+    channel_id = _resolve_tool_channel_id(msg)
+    active = boardgame_engine.get_active_game(channel_id)
     if not active or active["status"] != "active":
         return "⚠️ 目前沒有進行中的對局可退回上一步。"
     try:
@@ -335,7 +370,7 @@ def boardgame_undo() -> str:
     _queue_board_card_update(updated["id"], f"↩️ 全體玩家已同意，棋盤已退回上一步（第 {updated['move_count']} 手）！")
     return (
         f"↩️ 全體參賽玩家皆已同意，棋盤已安全退回上一步！\n"
-        f"{boardgame_engine.get_board_status_summary_for_llm(msg.channel.id)}"
+        f"{boardgame_engine.get_board_status_summary_for_llm(channel_id)}"
     )
 
 
@@ -344,7 +379,8 @@ def boardgame_resign() -> str:
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    active = boardgame_engine.get_active_game(msg.channel.id)
+    channel_id = _resolve_tool_channel_id(msg)
+    active = boardgame_engine.get_active_game(channel_id)
     if not active:
         return "ℹ️ 目前此頻道沒有進行中的對局。"
     try:
@@ -360,7 +396,8 @@ def boardgame_refresh_board() -> str:
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    active = boardgame_engine.get_active_game(msg.channel.id)
+    channel_id = _resolve_tool_channel_id(msg)
+    active = boardgame_engine.get_active_game(channel_id)
     if not active:
         return "🎲 目前此頻道沒有進行中或等待中的棋局，要開一局嗎？"
     _queue_board_card_update(active["id"], "已依請求重新顯示最新棋盤面板")
@@ -402,36 +439,40 @@ def _queue_lifesim_card_update(
 
 def lifesim_start(story_mode: str = "fast", era: str = "present", draw_method: str = "births") -> str:
     """
-    為當前玩家開啟一場《80億分之1 (1in8B)》寫實人生模擬，依全球 197 國真實人口統計抽出生地、時代、家境與五維初始值。
+    為當前玩家開啟一場《80億分之1 (1in8B)》寫實人生模擬，依全球 197 國真實人口統計抽出生地、城鄉、先天特質、家境與五維初始值。
     參數:
-      story_mode: 'fast'（極速統計版，預設）或 'llm'（Gemini 沉浸劇情版，支援自然語言自訂決定）。
+      story_mode: 'fast'（⚡ 0-Token 深度本地版，預設）、'hybrid'（🎭 精華混合版，關鍵轉折才叫 AI）或 'llm'（🧠 全程 AI 沉浸劇情版）。
       era: 'present'（現代）、'past_1980'、'past_1950' 或 'future_2050'。
       draw_method: 'births'（依全球新生兒出生比例，預設）或 'population'（依總人口比例）。
     """
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    sm = "llm" if str(story_mode or "").strip().lower() in ("llm", "gemini", "ai", "沉浸", "劇情") else "fast"
+    channel_id = _resolve_tool_channel_id(msg, for_lifesim=True)
+    sm = lifesim_engine.resolve_story_mode(story_mode)
     resolved_era = lifesim_engine.resolve_era(era)
     resolved_method = lifesim_engine.resolve_draw_method(draw_method)
-    run = lifesim_engine.create_life_run(
-        channel_id=msg.channel.id,
-        user_id=msg.author.id,
-        user_name=msg.author.display_name,
-        story_mode=sm,
-        era=resolved_era,
-        draw_method=resolved_method,
-    )
+    try:
+        run = lifesim_engine.create_life_run(
+            channel_id=channel_id,
+            user_id=msg.author.id,
+            user_name=msg.author.display_name,
+            story_mode=sm,
+            era=resolved_era,
+            draw_method=resolved_method,
+        )
+    except ValueError as e:
+        return f"⚠️ 無法開啟新的人生模擬：{e}"
     _queue_lifesim_card_update(
         run["id"],
         note="你呱呱墜地了！以下是你的全球出生證明書與首次命運轉折。",
         include_birth_cert=True,
-        needs_llm_next=(sm == "llm"),
+        needs_llm_next=lifesim_engine.should_use_llm_for_stage(run),
     )
     return (
         f"🌍 已為 {msg.author.display_name} 開啟《80億分之1》人生模擬 (#run_id={run['id']})！\n"
         f"⚡【最新權威狀態已更新，請以此為準，並簡短幽默點評出生設定即可；系統會自動在下方貼上出生證明圖卡與選項按鈕】\n"
-        f"{lifesim_engine.format_lifesim_status_for_llm(msg.channel.id, msg.author.id)}"
+        f"{lifesim_engine.format_lifesim_status_for_llm(channel_id, msg.author.id)}"
     )
 
 
@@ -439,48 +480,62 @@ def lifesim_decide(decision: str) -> str:
     """
     推進當前玩家在此頻道的《80億分之1》人生模擬事件（選擇 A/B/C、自然語言自訂行動、自動過完此生或投胎重開）。
     參數:
-      decision: 'A'/'B'/'C'（或 '1'/'2'/'3'）、'auto'/'自動過完'、'restart'/'投胎重開'，或在沉浸劇情模式下填寫玩家的口語自訂決定（例如：「決定半工半讀考大學」）。
+      decision: 'A'/'B'/'C'（或 '1'/'2'/'3'）、'auto'/'自動過完'、'restart'/'投胎重開'，或在混合/沉浸劇情模式下填寫玩家的口語自訂決定（例如：「決定半工半讀考大學」）。
     """
     msg = current_discord_msg.get()
     if not msg:
         return "❌ 無法取得目前 Discord 頻道上下文。"
-    active = lifesim_engine.get_active_life_run(msg.channel.id, msg.author.id)
+    channel_id = _resolve_tool_channel_id(msg, for_lifesim=True)
+    active = lifesim_engine.get_active_life_run(channel_id, msg.author.id)
     if not active:
         return "🌍 你目前在此頻道還沒有進行中的《80億分之1》人生。想立即投胎嗎？可以直接告訴我或輸入 `!play 1in8b`！"
 
     raw = (decision or "").strip()
     low = raw.lower()
     if low in ("auto", "自動", "自動過完", "快轉"):
-        finished = lifesim_engine.auto_finish_life(active["id"], msg.author.id)
+        try:
+            finished = lifesim_engine.auto_finish_life(active["id"], msg.author.id)
+        except ValueError as e:
+            return f"⚠️ 無法自動過完此生：{e}"
         _queue_lifesim_card_update(finished["id"], note="⚡ 已快速模擬完畢剩餘人生。")
         return (
             f"📜 {finished['char_name']} 已走完 {finished['age']} 歲的人生（{finished.get('death_cause', '')}）。"
             f"系統將自動貼出終局謝幕卡與總結圖片！"
         )
     if low in ("restart", "重開", "投胎", "投胎重開", "abandon", "放棄"):
-        finished = lifesim_engine.abandon_life_run(active["id"], msg.author.id)
+        try:
+            finished = lifesim_engine.abandon_life_run(active["id"], msg.author.id)
+        except ValueError as e:
+            return f"⚠️ 無法結束本輪人生：{e}"
         _queue_lifesim_card_update(finished["id"], note="已結束本輪人生，準備重新投胎！")
         return f"🔁 已為你結束「{finished['char_name']}」本輪模擬，點下方卡片的「再投胎一次」即可重抽國籍！"
 
     idx_map = {"a": 0, "1": 0, "選a": 0, "選1": 0, "b": 1, "2": 1, "選b": 1, "選2": 1, "c": 2, "3": 2, "選c": 2, "選3": 2}
     if low in idx_map:
-        updated, note = lifesim_engine.resolve_life_step(active["id"], msg.author.id, choice_idx=idx_map[low])
+        try:
+            updated, note = lifesim_engine.resolve_life_step(active["id"], msg.author.id, choice_idx=idx_map[low])
+        except ValueError as e:
+            return f"⚠️ 無法推進人生抉擇：{e}"
         _queue_lifesim_card_update(
             updated["id"],
             note=note,
-            needs_llm_next=(updated["story_mode"] == "llm" and updated["status"] == "active"),
+            needs_llm_next=lifesim_engine.should_use_llm_for_stage(updated),
         )
         status_note = "已壽終正寢，系統將貼出人生謝幕卡！" if updated["status"] == "finished" else "已推進至下一階段，最新卡片與選項將附在下方！"
         return (
             f"⏳ {status_note}\n"
             f"⚡【最新權威狀態已更新】\n"
-            f"{lifesim_engine.format_lifesim_status_for_llm(msg.channel.id, msg.author.id) or updated.get('death_cause', '')}"
+            f"{lifesim_engine.format_lifesim_status_for_llm(channel_id, msg.author.id) or updated.get('death_cause', '')}"
         )
 
-    if active["story_mode"] != "llm":
-        return "⚡ 目前為「極速統計版」，請輸入 `A` / `B` / `C`（或點擊卡片按鈕），若想自由輸入任何自訂行動請重開選擇「🧠 Gemini 沉浸劇情版」！"
+    if active["story_mode"] not in ("llm", "hybrid"):
+        return "⚡ 目前為「0-Token 深度本地版」，請輸入 `A` / `B` / `C`（或點擊卡片按鈕與副行動選單），若想自由輸入任何自訂行動請重開選擇「🎭 精華混合版」或「🧠 全程 AI 沉浸劇情版」！"
 
-    _queue_lifesim_card_update(active["id"], custom_decision=raw, needs_llm_next=True)
+    _queue_lifesim_card_update(
+        active["id"],
+        custom_decision=raw,
+        needs_llm_next=(active["story_mode"] == "llm"),
+    )
     return (
         f"🧠 已受理 {msg.author.display_name} 的自訂決定「{raw}」，"
         f"系統正在依國家背景與目前屬性結算真實後果，稍後將直接在下方附上新卡片！"
@@ -539,6 +594,7 @@ def get_scoped_tools(
         ])
     if include_rpg:
         tools.extend([
+            rpg_engine.rpg_request_check,
             rpg_engine.rpg_roll_check,
             rpg_engine.rpg_update_state,
             rpg_engine.rpg_record_lore,

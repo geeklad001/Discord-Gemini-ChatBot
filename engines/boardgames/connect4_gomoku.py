@@ -4,7 +4,7 @@ import math
 import random
 from typing import Optional
 
-from engines.boardgames.othello import _coord_label
+from engines.boardgames.othello import _coord_label, _parse_grid_coord
 
 # =============================================================
 # 2. 四子棋 (Connect Four) 規則與 AI
@@ -132,7 +132,7 @@ def _pick_connect4_ai_move(board: list[list[int]], player: int, difficulty: str)
         _c4_drop(nb, c, player)
         if _c4_find_win(nb, player):
             return str(c + 1)
-        val = _c4_alphabeta(nb, 3 - player, player, depth - 1, -math.inf, math.inf)
+        val = _c4_alphabeta(nb, 3 - player, player, depth - 1, best_val, math.inf)
         if val > best_val + 1e-6:
             best_val = val
             best_cols = [c]

@@ -344,6 +344,10 @@ def lint_wiki_file(
         label = entry_id or f"第 {idx} 筆 (行 {entry['start_line']})"
 
         # 1. YAML 必填欄位檢查
+        if not entry["yaml_lines"] or not re.match(r"^id:\s*\S", entry["yaml_lines"][0]):
+            errors.append(
+                f"[{label}] YAML 第一行（`---` 緊接的下一行）必須為 `id: ...`，否則 `game_wiki_engine` 將無法解析此卡片"
+            )
         for req_field in REQUIRED_YAML_FIELDS:
             val = meta.get(req_field)
             if not val:
@@ -416,7 +420,7 @@ def lint_wiki_file(
                     if len(alias) < 2:
                         continue
                     if re.search(
-                        rf"(?<![\uac00-\ud7a3]){re.escape(alias)}",
+                        rf"(?<![\uac00-\ud7a3]){re.escape(alias)}(?![\uac00-\ud7a3])",
                         clean_body,
                         re.IGNORECASE,
                     ):

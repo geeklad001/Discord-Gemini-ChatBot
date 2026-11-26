@@ -16,11 +16,11 @@ keywords: [9週年, 九週年, 魔法高中, 魔法學園, 魔高, 마법고, �
 related_ids: [anniv9_sys_elements_wands, anniv9_sys_collection_guides, anniv9_sys_expansion_2026_dragon]
 ---
 【《殭屍學園》[平行世界與活動] — 魔法高中總覽與歷年改版演進】
-- **定位**：9 週年魔法異世界 AU（`마법고`／`맙고`、魔高），以 `루나디아` 學園為舞台，採類銀河戰士惡魔城探索，含 9 屬性、100 法杖、900 寶箱。
-- **2023 初版（08/24~11/23）**：8/24、9/7、9/21 分章實裝，全收集領 500 瓦斯（贈「9週年 魔法高中」徽章）。
-- **2024 復刻（09/10~10/24）**：三章同開，取消 14 多人地城人數限制，全收集改發魔力券（`매직 티켓`）並增冒險日誌。
-- **2025 復刻（09/25~11/06）**：增 金俊浩（`김준호`）未來後記與新版 Pack；暗改光大招淨化負面效果。
-- **2026 擴充（11/26~2027/01/07）**：實裝《龍與魔法師的約定》，追加原初魔法與防禦戰。
+- **定位**：9 週年魔法異世界 AU（`마법고`/`맙고`），舞台 `루나디아` 學園，含 9 屬性、100 法杖、900 寶箱。
+- **2023 初版（08/24~11/23）**：分三章實裝；預約＋結局＋全收集合計 500 瓦斯，破 Ch1 火進階（`화염 심화`／`뚝배구리`）贈「9週年 魔法高中」徽章。
+- **2024 復刻（09/10~10/24）**：三章同開，取消 14 地城人數下限，全收集改發魔力券（`매직 티켓`）並增冒險日誌。
+- **2025 復刻（09/25~11/06）**：增 金俊浩（`김준호`）未來後記與新版 Pack；光大招暗改淨化。
+- **2026 擴充（11/26~2027/01/07）**：《龍與魔法師的約定》實裝原初魔法、防禦戰與法杖刻印。
 
 ---
 id: anniv9_sys_elements_wands
@@ -126,15 +126,15 @@ name_kr: 보물상자 900개 / 지팡이 100개 / 캐릭터 카드 94장 / 트�
 source: Naver Cafe (15804194, 16751942) / FB 討論區 / Discord 攻略資訊
 updated_at: 2026-11
 freshness: stable
-resource_links: ["열매님 900 寶箱全位置｜https://www.youtube.com/watch?v=JNBaa6UJGb0", "열매님 100 法杖全位置｜https://www.youtube.com/watch?v=1yT94FIxoso", "肥白 Ch1 300 寶箱｜https://youtu.be/zzxadBcQgiE", "수학자 Ch2 287 寶箱｜https://www.youtube.com/watch?v=0YUmpUM9JlE", "수학자 Ch2 漏掉 13 寶箱與保管所｜https://www.youtube.com/watch?v=FreHexfP9gQ", "슈튜 Ch3 300 寶箱｜https://www.youtube.com/watch?v=BCmwZsu2zH4", "FB 900 寶箱截圖雲端（需加入FB社團）｜https://www.facebook.com/groups/1755166524775722/permalink/3422634581362233/", "FB 全收集常見漏箱心得（需加入FB社團）｜https://www.facebook.com/groups/1755166524775722/posts/3437176536574704/"]
-keywords: [900寶箱, 900箱, 300寶箱, 100法杖, 100杖, 94卡片, 全收集, 漏箱, 899, 861萬, 트레져헌터, 寶藏獵人社團, 寶藏獵人社團成員徽章, 열매님, 肥白, 수학자, 슈튜]
+resource_links: ["열매님 900 寶箱全位置｜https://www.youtube.com/watch?v=JNBaa6UJGb0", "열매님 100 法杖全位置｜https://www.youtube.com/watch?v=1yT94FIxoso", "肥白 Ch1 300 寶箱｜https://youtu.be/zzxadBcQgiE", "수학자 Ch2 287 寶箱｜https://www.youtube.com/watch?v=0YUmpUM9JlE", "수학자 Ch2 漏掉 13 寶箱與保管所｜https://www.youtube.com/watch?v=FreHexfP9gQ", "슈튜 Ch3 300 寶箱｜https://www.youtube.com/watch?v=BCmwZsu2zH4", "FB 900 寶箱截圖雲端（需加入FB社團）｜https://www.facebook.com/groups/1755166524775722/permalink/3422634581362233/"]
+keywords: [900寶箱, 900箱, 300寶箱, 100法杖, 100杖, 94卡片, 全收集, 漏箱, 861萬, 트레져헌터, 寶藏獵人社團, 寶藏獵人社團成員徽章, 열매님, 肥白, 수학자, 슈튜]
 related_ids: [anniv9_sys_overview_timeline, anniv9_sys_40cycle_rune_farming, anniv9_sys_manatree_rift_archive]
 ---
 【《殭屍學園》[平行世界與活動] — 900 寶箱／100 法杖／94 卡片全收集導覽】
 - **全收集獎勵**：寶箱 900 個（各章 300）、法杖 100 把（27＋27＋46）、角色卡 94 張；2024 起全收集各獎 **10 張魔力券（`매직 티켓`）**，900 箱並解鎖寶藏獵人社團（`트레져 헌터`）。
 - **商店預算**：露娜收藏與造型／飾品／寵物等商店總需約 **861 萬盧恩**，建議先靠 40 循環刷幣再購入。
 - **導覽索引**（見下方連結）：
-  - **總覽與截圖**：`열매님` 900 箱／100 杖全集；FB 社團 900 箱雲端與 `899/900` 漏箱提示。
+  - **總覽與截圖**：`열매님` 900 箱／100 杖全集；FB 社團 900 箱截圖雲端。
   - **分章 300 箱**：Ch1 `肥白`；Ch2 `수학자`（287 箱＋補漏 13 箱）；Ch3 `슈튜`。
 
 ---
@@ -146,19 +146,19 @@ chapter: all
 subject: 2026年11月26日擴充龍與魔法師的約定新系統寵物與平衡調整
 aspects: [2026擴充內容, 黑幼龍戰利品, 怪物與火魔法平衡]
 name_zh: 2026-11-26 新擴充《龍與魔法師的約定》改版重點
-name_kr: 마법고 : 용과 마법사의 약속 / 원시 마법 / 블랙 해츨링
-source: Naver Cafe (17589508)
+name_kr: 마법고 : 용과 마법사의 약속 / 원시 마법 / 지팡이 각인 / 드래곤 하트 조각 / 블랙 해츨링
+source: Naver Cafe (17589508, 17579017, 17591269, 17592153, 17592211, 17592312, 17592316, 17592326, 17592341)
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["Cafe 2026.11.26 擴充公告 17589508｜https://cafe.naver.com/onimobile/17589508"]
-keywords: [용과 마법사의 약속, 龍與魔法師的約定, 원시 마법, 原初魔法, 블랙 해츨링, 킹뚜벗쿵, 넝쿠, 룬 골렘, 화염 궁극기, 2026, 11월 26일, 흑룡 사무엘]
+resource_links: ["Cafe 2026.11.26 擴充公告 17589508｜https://cafe.naver.com/onimobile/17589508", "Cafe 11/18 法杖刻印預告 17579017｜https://cafe.naver.com/onimobile/17579017", "Cafe 龍與魔法師獎勵 17591269｜https://cafe.naver.com/onimobile/17591269", "Cafe 龍之關門提示公告 17592153｜https://cafe.naver.com/onimobile/17592153"]
+keywords: [용과 마법사의 약속, 龍與魔法師的約定, 원시 마법, 原初魔法, 지팡이 각인, 法杖刻印, 용의 관문, 드래곤 하트 조각, 루나디아의 월광, 블랙 해츨링, 킹뚜벗쿵, 넝쿠, 룬 골렘, 화염 궁극기, 2026, 11월 26일, 흑룡 사무엘]
 related_ids: [anniv9_sys_overview_timeline, anniv9_sys_elements_wands, anniv9_sys_manatree_rift_archive]
 ---
 【《殭屍學園》[平行世界與活動] — 2026-11-26《龍與魔法師的約定》改版重點】
-- **期間**：`2026.11.26 ~ 2027.01.07`（6 週，11/26 14:00~17:00 維護）。
-- **新展開與終局**：揭示 `고대마법 보관소` 原初魔法（`원시 마법`），增防禦戰、極限魔杖覺醒、通往某人 `심상 세계` 之戒指戰鬥與隱藏劇情，首搭 `쥬시랩 슈퍼샘플링(BETA)` 畫質強化。
-- **新寵物與主題**：通關後於新地圖以盧恩買 `블랙 해츨링`（黑幼龍）；同步推出「黑龍 撒母爾（`흑룡 사무엘`）」主題。
-- **平衡調整**：`킹뚜벗쿵` HP `1100→2000`（增火增幅）；`넝쿠` 火增幅改即死（`즉사`）；4 種 `룬 골렘` HP `1900→1000`；火大招傷 `1800→2000` 且 `+3` +10% 改套用至全火魔法；水基礎開關微延。
+- **期間**：`2026.11.26 ~ 2027.01.07`（11/26 原定 14:00~17:00，延至 18:20 KST／260 分開服）。
+- **系統**：`고대마법 보관소` 原初魔法、防禦戰、`지팡이 각인`（11/18 預告、11/26 實裝，「把法杖之力推向極限」）及戒指 `심상 세계` 戰；首搭 `쥬시랩 슈퍼샘플링`；`17592153` 預告補 `용의 관문` 提示。
+- **討伐獎勵**：破「黑龍 撒母爾（`흑룡 사무엘`）」獲 `루나디아의 월광` 與 `드래곤 하트 조각`，解鎖買 `블랙 해츨링`（價未確）。
+- **平衡**：`킹뚜벗쿵` 血 `1100→2000`；`넝쿠` 火增幅即死；`룬 골렘` 血 `1900→1000`；火大招 `1800→2000`、`+3` 全火 +10%；水開關微延。
 
 ---
 id: anniv9_nav_ch1_quests
@@ -173,7 +173,7 @@ name_kr: 마법고 챕터 1 메인 / 서브 / 에픽 퀘스트
 source: FB 攻略樓 / Discord 攻略區 / Naver Cafe (14438180)
 updated_at: 2026-11
 freshness: stable
-resource_links: ["🎬 肥白 Ch1 主線全過程｜https://youtu.be/4q2d1SRm3Rw", "🎬 肥白 火學院主線｜https://youtu.be/Hym_bcXqRfs", "🎬 肥白 風學院主線｜https://youtu.be/Aa1z0IXVVlI", "🎬 肥白 草學院主線｜https://youtu.be/nEx2tfk3m5E", "🎬 수학자 Ch1 主線全片｜https://www.youtube.com/watch?v=mFrdlR24an0", "🎬 수학자 Ch1 史詩(不幸的人/接待準備)｜https://www.youtube.com/watch?v=qVs5mFkfBW4", "🎬 수학자 Ch1 支線#1(藝瑟/新春/萱萱)｜https://www.youtube.com/watch?v=uQwPSPZoguc", "🎬 당보 火灰燼水晶10處｜https://www.youtube.com/watch?v=IFzJHwVmvL0", "🎬 당보 風颱風蛋10處｜https://www.youtube.com/watch?v=rk4Rdxwpmso", "🎬 당보 草靈魂種子10處｜https://www.youtube.com/watch?v=owg9XypiqhY", "☕ Cafe Ch1 全任務整理(14438180)｜https://cafe.naver.com/onimobile/14438180", "💬 DC Ch1 支線#2/#3 影片索引｜https://discord.com/channels/1135967382708437154/1142064309673939016/1144471149166735400"]
+resource_links: ["🎬 肥白 Ch1 主線全過程｜https://youtu.be/4q2d1SRm3Rw", "🎬 肥白 火學院主線｜https://youtu.be/Hym_bcXqRfs", "🎬 肥白 風學院主線｜https://youtu.be/Aa1z0IXVVlI", "🎬 肥白 草學院主線｜https://youtu.be/nEx2tfk3m5E", "🎬 수학자 Ch1 主線全片｜https://www.youtube.com/watch?v=mFrdlR24an0", "🎬 수학자 Ch1 史詩(不幸的人/接待準備)｜https://www.youtube.com/watch?v=qVs5mFkfBW4", "🎬 수학자 Ch1 支線#1(藝瑟/新春/萱萱)｜https://www.youtube.com/watch?v=uQwPSPZoguc", "🎬 당보 火灰燼水晶10處｜https://www.youtube.com/watch?v=IFzJHwVmvL0", "🎬 당보 風颱風蛋10處｜https://www.youtube.com/watch?v=rk4Rdxwpmso", "🎬 당보 草靈魂種子10處｜https://www.youtube.com/watch?v=owg9XypiqhY", "☕ Cafe Ch1 全任務整理(14438180)｜https://cafe.naver.com/onimobile/14438180", "💬 DC Ch1 支線#2(南東進/小雪花)｜https://discord.com/channels/1135967382708437154/1142064309673939016/1144471149166735400", "🎬 수학자 Ch1 支線#3(延善宇/염수아/沈慧教)｜https://www.youtube.com/watch?v=NsA61-OBOyU"]
 keywords: [魔法高中第一章, 마법고 챕터1, 火學院, 風學院, 草學院, 灰燼水晶, 颱風蛋, 靈魂種子, 잿빛수정, 태풍의 알, 영혼의 씨앗, 不幸的人, 奇怪的接待準備, 圍巾的主人]
 related_ids: [anniv9_nav_ch2_quests, anniv9_nav_hidden_faq, anniv9_boss_stage_blockdog]
 ---
@@ -263,19 +263,19 @@ timeline: au
 series: anniv9
 chapter: all
 subject: 9 元素試煉（高練）與白雪蓮校長最終試煉（校婆試煉）組隊攻略
-aspects: [高練4人無死, 10/12/15試煉石, 校婆試煉, 全屬性-3魔杖, 黑貓飾品]
+aspects: [高練4人無死, 10/12/15試煉石, 校婆試煉, 全屬性-3魔杖, 元素精靈翅膀]
 name_zh: 魔法高中 9 元素試煉（高練）與白雪蓮校長最終試煉（校婆試煉）攻略
 name_kr: 엘리멘트의 시험 / 백설현의 마지막 시험 / 천년의 저주 지팡이
-source: FB 社團攻略與問答 / Naver Cafe (14429433, 16751942) / Discord 攻略區
+source: Naver Cafe (14429433, 16751942) / FB 肥白攻略樓 / Discord 攻略區
 updated_at: 2026-11
 freshness: stable
-resource_links: ["🎬 수학자 校長白雪蓮最終試煉(約50分)｜https://www.youtube.com/watch?v=SI0Gto3vUOA", "🎬 肥白 +4火試煉通關｜https://youtu.be/_6FUtQrYuwU", "🎬 肥白 +4風試煉通關｜https://youtu.be/Kc_kYaFgag0", "🎬 肥白 +4草試煉通關｜https://youtu.be/AWKOhVf9WZo", "🎬 肥白 +4草雷試煉過程｜https://youtu.be/dDsCUU87Gkc", "📘 FB 高練與校婆黑貓前置問答(需加入FB社團)｜https://www.facebook.com/groups/1755166524775722/posts/3426456940979997/", "📘 FB 校婆試煉組隊與雷校技巧(需加入FB社團)｜https://www.facebook.com/groups/1755166524775722/posts/3433271453631879/", "💬 DC 校長測試飾品圖鑑｜https://discord.com/channels/1135967382708437154/1142064409733255178/1154030433449816124"]
-keywords: [高練, 9元素試煉, 困難試煉, 校婆試煉, 白雪蓮試煉, 백설현의 마지막 시험, 천년의 저주 지팡이, 全屬性-3魔杖, 엘리멘트의 시험, 黑貓飾品]
+resource_links: ["🎬 수학자 校長白雪蓮最終試煉(約50分)｜https://www.youtube.com/watch?v=SI0Gto3vUOA", "🎬 肥白 +4火試煉通關｜https://youtu.be/_6FUtQrYuwU", "🎬 肥白 +4風試煉通關｜https://youtu.be/Kc_kYaFgag0", "🎬 肥白 +4草試煉通關｜https://youtu.be/AWKOhVf9WZo", "🎬 肥白 +4草雷試煉過程｜https://youtu.be/dDsCUU87Gkc", "💬 DC 校長測試飾品圖鑑｜https://discord.com/channels/1135967382708437154/1142064409733255178/1154030433449816124"]
+keywords: [高練, 9元素試煉, 困難試煉, 校婆試煉, 白雪蓮試煉, 백설현의 마지막 시험, 천년의 저주 지팡이, 全屬性-3魔杖, 엘리멘트의 시험, 엘리멘트 패밀리어 날개, 元素精靈翅膀, 黑貓飾品, 黑貓]
 related_ids: [anniv9_nav_ch1_quests, anniv9_nav_ch2_quests, anniv9_nav_ch3_quests]
 ---
 【《殭屍學園》[平行世界與活動] — 9 元素試煉（`高練`）與白雪蓮校長最終試煉（`校婆試煉`）組隊攻略】
 - **9 元素試煉（俗稱 `高練` / 困難試煉）**：各學派第 3 選項「元素之試煉 (`엘리멘트의 시험`)」，前置須蒐集各校對應試煉石（火／風／草各 **10**、雷／冰／光各 **12**、土／水／暗各 **15** 個）。**強制 4 人組隊且全員無死**通關，任一人死亡即失敗並於教室重生。
-- **校婆試煉（`白雪蓮` 校長最終試煉）**：須先全破 9 屬性試煉方可挑戰。**強制 4 人組隊並裝備 `천년의 저주 지팡이` （全屬性 -3 魔杖）連破 9 關**，單局耗時約 50 分鐘，**一人死即全滅**；通關可任選 1 件黑貓系列飾品（其餘可用符文購入）。
+- **校婆試煉（`白雪蓮` 校長最終試煉）**：須先全破 9 屬性試煉方可挑戰。**強制 4 人組隊並裝備 `천년의 저주 지팡이` （全屬性 -3 魔杖）連破 9 關**，單局耗時約 50 分鐘，**一人死即全滅**；通關可任選 1 件 `엘리멘트 패밀리어 날개`（元素精靈翅膀 9 種，含闇屬黑貓等；其餘 8 種各 200 萬盧恩）。
 
 ---
 id: anniv9_boss_stage_blockdog
@@ -287,16 +287,16 @@ subject: Ch1～Ch3 階段 Boss 總覽與狗王單刷導覽
 aspects: [火青蛙, 狗王, 블락독, 階段Boss血量, 保管所路線, 單刷賺幣]
 name_zh: 魔法高中 Ch1～Ch3 階段 Boss 總覽與狗王（블락독）單刷導覽
 name_kr: 뚝배구리 / 솜새탕 / 오바바 / 번개벌레 / 블락독 / 천재지병 / 짜게치
-source: Namuwiki / Naver Cafe (16751942) / FB 攻略貼文 / Discord 攻略區
+source: Namuwiki / Naver Cafe (16751942) / Discord 攻略區
 updated_at: 2026-11
 freshness: stable
-resource_links: ["🎬 DA TA 狗王(블락독) 1分18秒單刷｜https://www.youtube.com/watch?v=0xULngQxXn0", "📘 FB 三門雙王速通練度參考(需加入FB社團)｜https://www.facebook.com/groups/1755166524775722/posts/4104556786503339/", "☕ Cafe 保管所路線與刷幣效率(16751942)｜https://cafe.naver.com/onimobile/16751942"]
-keywords: [뚝배구리, 火青蛙, 솜새탕, 오바바, 번개벌레, 블락독, 狗王, 暗黑狗, 三門雙王, 천재지병, 짜게치]
+resource_links: ["🎬 DA TA 狗王(블락독) 1分18秒單刷｜https://www.youtube.com/watch?v=0xULngQxXn0", "☕ Cafe 保管所路線與刷幣效率(16751942)｜https://cafe.naver.com/onimobile/16751942"]
+keywords: [뚝배구리, 火青蛙, 솜새탕, 오바바, 번개벌레, 블락독, 狗王, 暗黑狗, 천재지병, 짜게치]
 related_ids: [anniv9_boss_kevin, anniv9_nav_ch1_quests, anniv9_nav_ch2_quests, anniv9_nav_ch3_quests]
 ---
 【《殭屍學園》[平行世界與活動] — Ch1～Ch3 階段 Boss 總覽與狗王單刷導覽】
 - **Ch1 階段 Boss**：`뚝배구리`（俗稱「火青蛙」，火進階 3F，HP `2000`）；`솜새탕`（風進階 3F，HP `1400`）；`오바바`（Ch1 舊據點 `레드팔콘의 옛 아지트`，HP `9000`）。
-- **Ch2 階段 Boss 與狗王**：`번개벌레`（冰進階 3F，HP `1600`）；`블락독`（俗稱「狗王／暗黑狗」，Ch2 古代魔法保管所封印房，HP `2800`，會切換**火／雷／冰**屬性；與 FB 攻略所提之三門雙王「倫達 `론다` 」各自獨立）。保管所主線路線為 `中-左-右-中上-左下`，單刷 `블락독` 約 30 秒～1 分餘可賺 `2,000` 符文。
+- **Ch2 階段 Boss 與狗王**：`번개벌레`（冰進階 3F，HP `1600`）；`블락독`（俗稱「狗王／暗黑狗」，Ch2 古代魔法保管所封印房，HP `2800`，會切換**火／雷／冰**屬性）。保管所主線路線為 `中-左-右-中上-左下`，單刷 `블락독` 約 30 秒～1 分餘可賺 `2,000` 符文。
 - **Ch3 階段 Boss**：`천재지병`（水進階最終層，HP `5000`）；`짜게치`（暗進階尾王，亦為 40 循環刷符文終點戰）。
 
 ---
@@ -333,17 +333,17 @@ subject: 隱藏區域、文萍（文平）地城 6 處與高頻卡關 FAQ 導覽
 aspects: [校長室隱藏電梯, 8按鈕碎片, 文萍地城, 工坊魔杖店, 1~3章合集, 真假開關]
 name_zh: 魔法高中隱藏區域、文萍（文平）地城 6 處與高頻卡關 FAQ 導覽
 name_kr: 불친절한 문고리의 방 / 문평 던전 / 마법고 챕터 1~3
-source: Naver Cafe (16731230) / FB 社團問答 / Discord 攻略區
+source: Naver Cafe (16731230, 16751942) / Namuwiki / Discord 攻略區
 updated_at: 2026-11
 freshness: stable
-resource_links: ["🎬 수학자 1~3章主線全流程合集｜https://www.youtube.com/watch?v=5pH0YW-oaR8", "🎬 김호원 校長室隱藏房8按鈕｜https://www.youtube.com/watch?v=kBfOg_BMpGU", "🎬 김호원 真假開關與屬性剋制TMI｜https://www.youtube.com/watch?v=751iehTmeDM", "📘 FB 過風魔法後工坊尋路(需加入FB社團)｜https://www.facebook.com/groups/1755166524775722/posts/3764786613813693/", "☕ Cafe 隱藏任務與文萍地城清單(16731230)｜https://cafe.naver.com/onimobile/16731230"]
-keywords: [불친절한 문고리의 방, 校長室隱藏電梯, 8按鈕碎片, 文萍地城, 文平地城, 문평 던전, 風魔法工坊, 魔杖店, 1~3章合集, 真假元素開關]
+resource_links: ["🎬 수학자 1~3章主線全流程合集｜https://www.youtube.com/watch?v=5pH0YW-oaR8", "🎬 김호원 校長室隱藏房8按鈕｜https://www.youtube.com/watch?v=kBfOg_BMpGU", "🎬 김호원 真假開關與屬性剋制TMI｜https://www.youtube.com/watch?v=751iehTmeDM", "☕ Cafe 隱藏任務與文萍地城清單(16731230)｜https://cafe.naver.com/onimobile/16731230"]
+keywords: [불친절한 문고리의 방, 校長室隱藏電梯, 8按鈕碎片, 文萍地城, 文平地城, 문평 던전, 바위나무 공방, 岩石樹木工坊, 風魔法工坊, 魔杖店, 1~3章合集, 真假元素開關]
 related_ids: [anniv9_nav_ch1_quests, anniv9_nav_ch2_quests, anniv9_nav_ch3_quests]
 ---
 【《殭屍學園》[平行世界與活動] — 隱藏區域、`文萍` 地城 6 處與高頻卡關 FAQ 導覽】
 - **校長室隱藏電梯**：從大廳左花瓶裂縫進扭曲次元走廊→ `불친절한 문고리의 방` ，須收集 **8 種按鈕碎片**（校長室入口 1 個＋鯨魚碼頭／混沌／宇宙／光大廳／B2／真心走廊／Sunny Side 各 3 碎片）。
 - **`文萍` (`문평`，玩家常稱文平) 地城 6 處**：迷路魔法師走廊、勉強懸掛展望台、徘徊秘密花園、積塵書齋、刺痛落雷痕跡、蒼白霜冠（每處 3 關，除圖書館外各給魔杖，全通獲 `文萍` 角色卡）。
-- **高頻卡關 FAQ**：過風魔法後找不到「工坊 (`Stonetree Workshop`)」＝即開局去過的**魔杖店**（最左商店街右上角）；真假元素開關與屬性剋制看 `김호원` 短片，全章節懶人導航看 `수학자` 1~3 章合集。
+- **高頻卡關 FAQ**：過風魔法後找不到「工坊」＝即開局去過的**魔杖店**（`바위나무 공방` ／岩石樹木工坊，位於最左商店街右上角）；真假元素開關與屬性剋制看 `김호원` 短片，全章節懶人導航看 `수학자` 1~3 章合集。
 
 ---
 id: anniv9_2026_live_rewards_skip
@@ -353,20 +353,19 @@ series: anniv9
 chapter: all
 subject: 2026年11月26日開服實況延長維護跳過功能與通關獎勵補遺
 aspects: [延長維護與開服時間, 劇情跳過功能與首日Bug, 龍與魔法師的約定通關獎勵, 首日未解鎖邊界]
-name_zh: 2026-11-26《龍與魔法師的約定》開服補遺（跳過／獎勵／首日實況）
-name_kr: 마법고 스킵 기능 / 용과 마법사의 약속 클리어 보상 / 타오르는 분노
-source: Naver Cafe (17589508, 17591655, 17591675, 17591269, 17591738, 17591775) / YouTube
+name_zh: 2026-11-26《龍與魔法師的約定》開服補遺（跳過／獎勵／首殺實測）
+name_kr: 마법고 스킵 기능 / 용과 마법사의 약속 클리어 보상 / 타오르는 분노 / 드래곤 하트 조각 / 루나디아의 월광
+source: Naver Cafe (17589508, 17591655, 17591675, 17591269, 17592153, 17592211, 17592312, 17592316, 17592326, 17592341, 17591738, 17591775) / YouTube
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["☕ Cafe 11/26改版與延維(17589508)｜https://cafe.naver.com/onimobile/17589508", "☕ Cafe 跳過功能公告(17591675)｜https://cafe.naver.com/onimobile/17591675", "☕ Cafe 通關翅膀與新道具(17591269)｜https://cafe.naver.com/onimobile/17591269", "🎬 Awesomepiece 2026預告｜https://www.youtube.com/watch?v=buDtOuW_x10", "🎬 수학자 2026開服實況｜https://www.youtube.com/watch?v=U6hoq6N-LU4", "🎬 중화반응 2026開服實況｜https://www.youtube.com/watch?v=4QybVBitudo"]
-keywords: [魔法高跳過, 마법고 스킵, 劇情跳過, 타오르는 분노, 燃燒的憤怒, 용과 마법사의 약속, 黑龍撒母爾, 흑룡 사무엘, 블랙 해츨링, 원시 마법, 防禦戰, 2026開服, 延長維護, 攻擊冷卻]
+resource_links: ["☕ Cafe 11/26改版與延長維護(17589508)｜https://cafe.naver.com/onimobile/17589508", "☕ Cafe 龍之關門提示公告(17592153)｜https://cafe.naver.com/onimobile/17592153", "☕ Cafe 跳過功能公告(17591675)｜https://cafe.naver.com/onimobile/17591675", "☕ Cafe 通關翅膀與新道具(17591269)｜https://cafe.naver.com/onimobile/17591269", "🎬 Awesomepiece 2026預告｜https://www.youtube.com/watch?v=buDtOuW_x10", "🎬 수학자 2026開服實況｜https://www.youtube.com/watch?v=U6hoq6N-LU4", "🎬 중화반응 2026開服實況｜https://www.youtube.com/watch?v=4QybVBitudo"]
+keywords: [魔法高跳過, 마법고 스킵, 劇情跳過, 타오르는 분노, 드래곤 하트 조각, 루나디아의 월광, 용의 관문, 용과 마법사의 약속, 黑龍撒母爾, 흑룡 사무엘, 블랙 해츨링, 원시 마법, 防禦戰, 2026開服, 延長維護, 攻擊冷卻]
 related_ids: [anniv9_sys_expansion_2026_dragon, anniv9_2026_magic_tickets_and_day1_notes, anniv9_sys_overview_timeline]
 ---
 【《殭屍學園》[平行世界與活動] — 2026-11-26《龍與魔法師的約定》開服補遺】
-- **[11/26 開服實況]**：維護延至 `18:20 KST`（260 分）；`자율학습` 尚未更新。首晚現攻擊預壓無法蓄力及冷卻改由下往上轉之 UI 問題。
-- **[劇情跳過]**：`17591675` 新增演出跳過，**限持通關徽章者使用**（首日偶發對話卡死）。
-- **[通關獎勵]**：`17591269` 討伐黑龍 `撒母爾` (`흑룡 사무엘`) 獎新翅膀 `타오르는 분노` 及紅晶 `"Coming Soon"` 道具；2026 冒險日誌贈 130 張魔力券（詳見專卡）。
-- **⚠️ 防誤判提醒**：`[截至 11/26 開服首日]` 防禦戰、原初魔法、極限覺醒、`블랙 해츨링` 盧恩定價與 `타오르는 분노`／紅晶道具實際效果尚待後續玩家開荒補充，切勿編造數值或固定譯名。
+- **[開服與跳過]**：11/26 延至 `18:20 KST`（260 分）開服；`17591675` 跳過限通關徽章（偶發卡對話），且現攻擊預壓／冷卻 UI 異常；`17592153` 預告下輪補 `용의 관문` 提示（未刻印或 `반달나무` 可開）。
+- **[首殺實測]**：`17592312`/`17592341` 等已擊敗黑龍 `撒母爾` (`흑룡 사무엘`)，領 `타오르는 분노` 翅膀、`루나디아의 월광` 徽章與 `드래곤 하트 조각`（**依入場杖龍刻印數抵銷大招鎖魔**），且見 `블랙 해츨링`。
+- **⚠️ 防誤判提醒**：`블랙 해츨링` 盧恩價（`17592417` 未答）、翅膀數值、防禦戰波次與 `11/25` 日誌 130 券估算均缺開服後實測，勿編造。
 
 ---
 id: anniv9_2026_magic_tickets_and_day1_notes
@@ -374,23 +373,21 @@ category: au_series
 timeline: au
 series: anniv9
 chapter: all
-subject: 2026魔力券總量與冒險日誌130張及首日開荒避雷與速通路線
-aspects: [2026魔力券總量, 保底特殊造型, 米內爾換盧恩避雷, 首日速通路線]
-name_zh: 2026 魔力券總量（日誌 130 張）與首日避雷／速通指南
+subject: 2026魔力券開服前試算（日誌130張待驗證）與礦物換匯避雷及開服前速通路線
+aspects: [2026魔力券開服前試算, 保底特殊造型, 礦物換盧恩避雷, 開服前速通路線]
+name_zh: 2026 魔力券開服前試算與礦物（미넬）換盧恩避雷／速通指南
 name_kr: 모험일지 매직 티켓 130개 / 미넬 환전 / 마법고 스피드런
-source: Naver Cafe (17590088, 15804719, 17591119, 17591094, 17590435, 17590428, 17591669) / YouTube
+source: Naver Cafe (17590088, 15804719, 17591119, 17591094, 17590435, 17590428, 17591669, 17591740) / YouTube
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["☕ Cafe 2026魔力券與抽卡試算(17590088)｜https://cafe.naver.com/onimobile/17590088", "☕ Cafe 2024舊版無課試算(15804719)｜https://cafe.naver.com/onimobile/15804719", "☕ Cafe 11/26開局至校長試煉速通(17591094)｜https://cafe.naver.com/onimobile/17591094", "☕ Cafe 全寶箱優化路線(17590435)｜https://cafe.naver.com/onimobile/17590435", "☕ Cafe 主線按鈕速通(17590428)｜https://cafe.naver.com/onimobile/17590428", "🎬 수학자 2026改版整理｜https://www.youtube.com/watch?v=iiAv-V-sq8o"]
-keywords: [魔力券, 매직 티켓, 130張魔力券, 魔力石, 매직 스톤, 冒險日誌, 모험일지, 特殊造型保底, 실타래, 米內爾換錢, 미넬, 盧恩換匯, 速通路線]
+resource_links: ["☕ Cafe 2026魔力券與抽卡開服前試算(17590088)｜https://cafe.naver.com/onimobile/17590088", "☕ Cafe 2024舊版無課試算(15804719)｜https://cafe.naver.com/onimobile/15804719", "☕ Cafe 開局至校長試煉開服前速通(17591094)｜https://cafe.naver.com/onimobile/17591094", "☕ Cafe 全寶箱優化路線開服前整理(17590435)｜https://cafe.naver.com/onimobile/17590435", "☕ Cafe 主線按鈕速通開服前整理(17590428)｜https://cafe.naver.com/onimobile/17590428", "🎬 수학자 2026改版整理｜https://www.youtube.com/watch?v=iiAv-V-sq8o"]
+keywords: [魔力券, 매직 티켓, 130張魔力券, 魔力石, 매직 스톤, 冒險日誌, 모험일지, 特殊造型保底, 실타래, 礦物換盧恩, 미넬, 미네랄, 盧恩換匯, 速通路線]
 related_ids: [anniv9_2026_live_rewards_skip, anniv9_sys_collection_guides, anniv9_farm_public_dark_deep]
 ---
-【《殭屍學園》[平行世界與活動] — 2026 魔力券總量與首日開荒避雷】
-- **[2026 魔力券]**：冒險日誌給 **130 張**＋60 瓦斯＋600 魔力石（2024 年僅 55 張＋30 瓦斯）；加計全收集各 10 張、史詩與支線 `10+@` 張＋600 魔力石，無課約 150 抽可換 `실타래` 150 個保底 1 階特殊造型。
-- **[首日避雷與速通]**：
-  - `미넬` 盧恩兌換**限 1 次且極虧**（`17591119` 實測建議改用於其他模式）。
-  - 付費通行證仍限每日 5 任務；舊 9 週年造型券僅換瓦斯；首日速通看 `17591094`、`17590435`。
-- **⚠️ 防誤判提醒**：`[11/26 開服首日暫況]` 支線確切券數及黑龍 `撒母爾` (`사무엘`) 是否另贈券尚待後續玩家開荒補充。
+【《殭屍學園》[平行世界與活動] — 2026 魔力券開服前試算與礦物換匯避雷】
+- **[開服前試算（11/25 `17590088`）]**：開服前估冒險日誌 **130 張**＋60 瓦斯＋600 魔力石（2024 僅 55 張），加全收集各 10 張與支線 `10+@` 張，估約 150 抽換 `실타래` 150 個保底 1 階特殊造型。
+- **[開服前整理與實況]**：`17591119`（`12:35` 開服前）提醒 `미넬`（礦物 `미네랄` 簡稱）換盧恩**限 1 次且極虧**；`17591094`（`12:13`）與 `17590435`／`17590428`（`11/25`）均為**開服前整理**（非 `18:20` 後實測）。開服後確認付費日誌限每日 5 任務、舊券僅換瓦斯。
+- **⚠️ 防誤判提醒**：日誌 130 張券仍缺開服後實證（`17592163`／`17592407` 未答）。
 
 ---
 id: anniv9_farm_cycle_evolution_2023_2026
@@ -402,17 +399,17 @@ subject: 2023至2026年9週年組隊刷盧恩循環演進與法杖刻印分歧
 aspects: [已封鎖舊刷點, 2023至2024年60與80循環, 2025年光大招暗改40循環, 2026法杖刻印分歧]
 name_zh: 9 週年歷代組隊刷盧恩演進（60↔40 循環與 2026 刻印分歧）
 name_kr: 룬작 변천사 / 60사이클 / 80사이클 / 40사이클 / 지팡이 각인 / 피죤 퍼플비앙카
-source: Naver Cafe (17579017, 17580082, 17591119, 16761867, 15826755, 15879191, 14461819) / YouTube / Namuwiki
+source: Naver Cafe (17579017, 17580082, 17591119, 17590902, 17592211, 16761867, 15826755, 15879191, 14461819) / YouTube / Namuwiki
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["🎬 김호원 2025改版40循環詳解｜https://www.youtube.com/watch?v=6GOZlJvZADE", "🎬 위트 闇進階25秒速刷｜https://www.youtube.com/watch?v=juRZPsl_WXQ", "🎬 위트 闇進階35秒速刷｜https://www.youtube.com/watch?v=RJBdU4DYD8E", "🎬 인클 4人闇進階14秒速刷｜https://www.youtube.com/watch?v=6dkVwQIKI-s", "☕ Cafe 2025改版40循環(16761867)｜https://cafe.naver.com/onimobile/16761867", "☕ Cafe 2026刻印復活60循環(17591119)｜https://cafe.naver.com/onimobile/17591119", "☕ Cafe 刻印避雷警告(17580082)｜https://cafe.naver.com/onimobile/17580082", "🎬 위트 舊Ch2雷樹封鎖點｜https://www.youtube.com/watch?v=aIDLaYaagio"]
+resource_links: ["🎬 김호원 2025改版40循環詳解｜https://www.youtube.com/watch?v=6GOZlJvZADE", "🎬 위트 闇進階25秒速刷｜https://www.youtube.com/watch?v=juRZPsl_WXQ", "🎬 위트 闇進階35秒速刷｜https://www.youtube.com/watch?v=RJBdU4DYD8E", "🎬 인클 4人闇進階14秒速刷｜https://www.youtube.com/watch?v=6dkVwQIKI-s", "☕ Cafe 2025改版40循環(16761867)｜https://cafe.naver.com/onimobile/16761867", "☕ Cafe 刻印復活60循環開服前推算(17591119)｜https://cafe.naver.com/onimobile/17591119", "☕ Cafe 刻印避雷開服前警告(17580082)｜https://cafe.naver.com/onimobile/17580082", "🎬 위트 舊Ch2雷樹封鎖點｜https://www.youtube.com/watch?v=aIDLaYaagio"]
 keywords: [60사이클, 60循環, 80사이클, 40사이클, 40循環, 지팡이 각인, 法杖刻印, 피죤 퍼플비앙카, 짜게치, 룬작, 刷盧恩, 녹슨 발전소, 천둥나무, 光大招暗改, 빛궁 잠수함패치]
 related_ids: [anniv9_sys_40cycle_rune_farming, anniv9_farm_public_dark_deep, anniv9_farm_solo_and_tickets_guide]
 ---
 【《殭屍學園》[平行世界與活動] — 歷代組隊刷盧恩演進與刻印分歧】
-- **【⚠️ 歷史舊制（已封鎖／2025 失效）】**：`녹슨 발전소`、`천둥나무` (`aIDLaYaagio`) 早於 2023 封鎖；`오바바`（2 分 20 秒）跑圖過久不適刷幣。2023–2024 `[4人固排]` `60사이클`／`80사이클`（分均最高 ~2 萬）因 2025 `빛궁` 暗改淨化燒傷失效。
-- **【2025→2026.11 刻印分歧】**：`[4人固排 未刻印]` 用 `40사이클`（30–40 秒 1 萬）；`지팡이 각인`（11/19 實裝，禁 `천년의 저주`）若消去 `피죤 퍼플비앙카` 負階，使 1 撞 `40사이클` 失效（需撞 2 下）並**復活 60 循環**。
-- **⚠️ 防誤判提醒**：`[開服初期實測中]` 2026 刻印 60 循環實戰耗時與新終局尚待驗證；組團先對齊刻印，切勿混排！
+- **【⚠️ 歷史舊制（已封鎖／失效）】**：`녹슨 발전소`、`천둥나무` 2023 封鎖；`오바바` 跑圖過久不適刷幣。2023–24 `60사이클`/`80사이클`（分均 ~2 萬）因 2025 `빛궁` 淨化燒傷失效。
+- **【2025→2026.11 刻印分歧】**：`[4人固排 未刻印]` 跑 `40사이클`（30–40 秒 1 萬）；`지팡이 각인`（11/18 預告、11/26 實裝，禁 `천년의 저주`）若消去 `피죤` 負階，預估使 1 撞 40 循環失效並**復活 60 循環**。
+- **⚠️ 防誤判提醒**：`17591119`/`17590902`/`17580082` 皆**開服前推算**，截至 `11/27 00:57 KST` 尚無開服後 60/40 計時實測。
 
 ---
 id: anniv9_farm_public_dark_deep
@@ -421,7 +418,7 @@ timeline: au
 series: anniv9
 chapter: ep3
 subject: 9週年刷盧恩總效率排行與4人野房闇進階及不掉幣通則
-aspects: [效率總排行與飾品預算, 野房闇進階配置與禁忌, 光+3與Boss不掉幣通則]
+aspects: [效率總排行與主要商店預算, 野房闇進階配置與禁忌, 光+3與Boss不掉幣通則]
 name_zh: 9 週年刷盧恩總排行、4 人野房闇進階與光+3 通則
 name_kr: 공방 어둠 심화 / 룬작 효율 / 빛 +3 / 861만 룬
 source: Naver Cafe (16751942, 15918635, 17341892, 16802715, 14602385) / YouTube / Namuwiki
@@ -432,8 +429,8 @@ keywords: [공방 어둠 심화, 野房刷盧恩, 闇進階, 861萬盧恩, 柳�
 related_ids: [anniv9_farm_cycle_evolution_2023_2026, anniv9_farm_solo_and_tickets_guide, anniv9_sys_collection_guides]
 ---
 【《殭屍學園》[平行世界與活動] — 刷盧恩總排行、野房闇進階與光+3 通則】
-- **[總效率排行]**：`40사이클` > `어둠 공방` > `블락독` > `뚜벗과 뚜벗쿵`（全飾品 861 萬盧恩，含 `柳花善` (`류화선`) 160 萬）。
-- **[4人野房] `공방 어둠 심화`**：約 1 分 1 萬盧恩（全飾品約 117 時 vs 40 循環 70 時）。推 `핏빛장미`、`피죤`、`구르미룸`、`시간의 물줄기`；須 1 暗 `+4` 清影配水 `+1` 以上輸出，忌亂開水大招。
+- **[總效率排行]**：`40사이클` > `어둠 공방` > `블락독` > `뚜벗과 뚜벗쿵`（`16751942` 記露娜收藏與造型／寵物／飾品等主要商店合計 861 萬盧恩，含 `柳花善` (`류화선`) 造型 160 萬）。
+- **[4人野房] `공방 어둠 심화`**：約 1 分 1 萬盧恩（`17341892` 玩家估 `올악세` 117 時 vs 40 循環 70 時）。推 `핏빛장미`、`피죤`、`구르미룸`、`시간의 물줄기`；須 1 暗 `+4` 清影配水 `+1` 以上，忌亂開水大招。
 - **⚠️ 防誤判提醒**：`[全模式通則]` 魔法高中 Boss 不掉盧恩，`빛 +3` 僅加成小怪掉落（+50%），**不加成過關結算盧恩**。
 
 ---
@@ -443,18 +440,18 @@ timeline: au
 series: anniv9
 chapter: all
 subject: 9週年單人刷盧恩（狗王調血前後／地獄峰／砸罐）與魔力券總覽
-aspects: [狗王調血前後單刷, 地獄峰無藥水單刷, 壺1至2人刷幣, 魔力券速拿總覽]
+aspects: [狗王調血前後單刷, 地獄峰無藥水單刷, 壺1至2人刷幣, 魔力券開服前估算]
 name_zh: 9 週年單人刷盧恩（狗王／地獄峰／壺）與魔力券速拿指南
 name_kr: 블락독 솔플 / 지옥봉우리 / 뚜벗과 뚜벗쿵 / 매직 티켓
 source: Naver Cafe (16751942, 14526530, 14536176, 14540509, 17591119, 17590088) / YouTube / Namuwiki
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["🎬 DA TA 狗王1分18秒單刷｜https://www.youtube.com/watch?v=0xULngQxXn0", "🎬 좀비 잡는 출세 狗王30秒速刷｜https://www.youtube.com/watch?v=2i35eVMtiWs", "🎬 설룬 魔法高單刷盧恩｜https://www.youtube.com/watch?v=tBb9uxHA3kY", "☕ Cafe 狗王25至30秒(14526530)｜https://cafe.naver.com/onimobile/14526530", "☕ Cafe 狗王改版23秒(14536176)｜https://cafe.naver.com/onimobile/14536176", "☕ Cafe 狗王穩1大招(14540509)｜https://cafe.naver.com/onimobile/14540509", "☕ Cafe 2026魔力券試算(17590088)｜https://cafe.naver.com/onimobile/17590088"]
+resource_links: ["🎬 DA TA 狗王1分18秒單刷｜https://www.youtube.com/watch?v=0xULngQxXn0", "🎬 좀비 잡는 출세 狗王30秒速刷｜https://www.youtube.com/watch?v=2i35eVMtiWs", "🎬 설룬 魔法高單刷盧恩｜https://www.youtube.com/watch?v=tBb9uxHA3kY", "☕ Cafe 狗王25至30秒(14526530)｜https://cafe.naver.com/onimobile/14526530", "☕ Cafe 狗王改版23秒(14536176)｜https://cafe.naver.com/onimobile/14536176", "☕ Cafe 狗王穩1大招(14540509)｜https://cafe.naver.com/onimobile/14540509", "☕ Cafe 2026魔力券開服前估算(17590088)｜https://cafe.naver.com/onimobile/17590088"]
 keywords: [블락독, 狗王單刷, 지옥봉우리, 地獄峰, 노포션 룬작, 無藥水刷幣, 뚜벗과 뚜벗쿵, 砸罐子刷幣, 설룬 솔플, 매직 티켓, 魔力券速拿, 2000盧恩]
 related_ids: [anniv9_farm_cycle_evolution_2023_2026, anniv9_farm_public_dark_deep, anniv9_2026_magic_tickets_and_day1_notes, anniv9_boss_stage_blockdog]
 ---
 【《殭屍學園》[平行世界與活動] — 單人刷盧恩與 2026 魔力券速拿】
-- **[1人單刷] `블락독`**：2023/9/11 調血後棄敲暈改壓血；持 `천둥나무 씨앗` 或 `생명의 지평선`（草 `+2` 食人花重疊 4 彈），穩健 1 大招約 30 秒、3 大招極限 22–24 秒賺 2,000 盧恩。
-- **[1人／1~2人] 替代刷點**：`지옥봉우리`（火 `+3` 無藥水單刷）；`뚜벗과 뚜벗쿵` 壺（`불그라 푸르라` 約 3 分 1,500、浮動 600–5,000+）。
-- **[2026 魔力券速拿]**：冒險日誌 130 張＋全收集各 10 張＋支線 `10+@` 張。
-- **⚠️ 防誤判提醒**：`[開服初期實測中]` 11/26 火大招上修（`1800→2000` 及 `+3` 全火套用）是否提升 `지옥봉우리` 收益尚待實測。
+- **[1人單刷] `블락독`**：2023/9/11 調血後棄敲暈改壓血；持 `천둥나무 씨앗` 或 `생명의 지평선`（草 `+2` 疊 4 彈），1 大招約 30 秒、3 大招極限 22–24 秒賺 2,000 盧恩。
+- **[1~2人替代]**：`지옥봉우리`（Namu 載具火 `+3`，`17591119` 開服前提醒作無藥水單刷）；`뚜벗과 뚜벗쿵` 壺（約 3 分 1,500、浮動 600–5,000+）。
+- **[2026 魔力券]**：`17590088`（11/25 開服前估算）計日誌 130 張＋全收集各 10＋支線 `10+@` 張，開服後尚無實數確認。
+- **⚠️ 防誤判提醒**：11/26 火大招上修對 `지옥봉우리` 之實戰收益尚待實測。

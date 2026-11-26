@@ -606,7 +606,7 @@ async def build_current_message_media_parts(
                     text=(
                         f"\n[系統提示：使用者分享了 YouTube 影片 {safe_title_tag}（{item['canonical_url']}），"
                         f"但該影片時長為 **{dur_str}**，已超過短影片分析上限（目前上限為 **{max_str}**）。"
-                        f"為了避免大量 Token 消耗與長時間等待，系統未載入該影片畫面。"
+                        f"影片過長，為避免久候暫未載入畫面內容。"
                         f"請親切告知使用者影片時長超過上限，建議提供 {max_str} 以內的精華短片、Shorts 或直接以文字討論。]"
                     )
                 ))

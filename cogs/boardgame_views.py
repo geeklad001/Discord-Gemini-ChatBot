@@ -178,7 +178,7 @@ def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> d
         lines.append(f"{meta['emoji']} **{meta['name']}**（`{key}` | {meta['size']}）\n└ {meta['desc']}")
     lines.append(
         "🌍 **80億分之1 (1 in 8 Billion)**（`1in8b` | 197 國真實人口統計）\n"
-        "└ 依聯合國/世界銀行 197 國真實出生機率隨機投胎，含城鄉・特質・檢定擲骰・跨國移居！（⚡0-Token 深度版 / 🎭混合版 / 🧠AI 劇情版）"
+        "└ 依聯合國/世界銀行 197 國真實出生機率隨機投胎，含城鄉・特質・檢定擲骰・跨國移居！（⚡經典深度版 / 🎭精華劇情版 / 🧠全程故事版）"
     )
 
     banners = []
@@ -194,7 +194,7 @@ def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> d
     embed = discord.Embed(
         title="🎮 Discord 遊戲大廳 (`!play`)",
         description=truncate_embed_text(
-            "所有棋盤規則、隨機機率與五維數值皆由 **Python 引擎＋SQLite** 嚴格校驗，**零作弊、零幻覺**，並生成專屬高清圖片卡片！\n\n"
+            "所有棋局規則與人生模擬皆由內建裁判系統嚴格判定、公平公正，並即時繪製專屬圖片卡片！\n\n"
             + "\n\n".join(lines)
             + status_banner,
             max_len=3800,
@@ -204,9 +204,9 @@ def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> d
     embed.add_field(
         name="🚀 極簡玩法（按鈕選單 ＋ 自然語言都能玩）",
         value=(
-            "• **用選的**：下拉選遊戲與模式（棋盤支援 **PvE AI / 🧠LLM / PvP**；`80億分之1` 可選 **⚡0-Token 深度版 / 🎭混合版 / 🧠AI 劇情版 / 🧵開專屬串**）\n"
-            "• **用說的**：直接打「我想跟 LLM 玩黑白棋」、「幫我下 C4」、「我想玩80億分之1」、「這題選A / 我決定去考公職」\n"
-            "• **用指令**：`!play 黑白棋` / `!play 西洋棋 llm` / `!play 1in8b` / `!play 圖鑑`"
+            "• **用選的**：下拉選遊戲與模式（棋盤支援 **對戰電腦 / 🧠 機器人親下 / 雙人對戰**；`80億分之1` 可選 **⚡經典深度版 / 🎭精華劇情版 / 🧠全程故事版 / 🧵開專屬串**）\n"
+            "• **用說的**：直接打「我想跟你玩黑白棋」、「幫我下 C4」、「我想玩80億分之1」、「這題選A / 我決定去考公職」\n"
+            "• **用指令**：`!play 黑白棋` / `!play 西洋棋 ai` / `!play 1in8b` / `!play 圖鑑`"
         ),
         inline=False,
     )
@@ -289,7 +289,7 @@ class GameLobbyView(discord.ui.View):
                 label="80億分之1 (1in8B 人生模擬)",
                 value="1in8b",
                 emoji="🌍",
-                description="197國真實機率投胎｜⚡0-Token 深度版 / 🎭混合版 / 🧠AI 劇情版",
+                description="197國真實機率投胎｜⚡經典深度版 / 🎭精華劇情版 / 🧠全程故事版",
                 default=(self.selected_game == "1in8b"),
             )
         )
@@ -299,10 +299,10 @@ class GameLobbyView(discord.ui.View):
 
     def _make_mode_select(self) -> discord.ui.Select:
         mode_opts = [
-            discord.SelectOption(label="PvE 對戰本地 AI（簡單 🌱）", value="pve:easy", default=(self.selected_mode == "pve:easy")),
-            discord.SelectOption(label="PvE 對戰本地 AI（普通 ⚔️）", value="pve:normal", default=(self.selected_mode == "pve:normal")),
-            discord.SelectOption(label="PvE 對戰本地 AI（困難 🔥）", value="pve:hard", default=(self.selected_mode == "pve:hard")),
-            discord.SelectOption(label="PvE 對戰後端 Gemini LLM（會回話且防作弊 🧠）", value="pve:llm", default=(self.selected_mode == "pve:llm")),
+            discord.SelectOption(label="對戰電腦（簡單 🌱）", value="pve:easy", default=(self.selected_mode == "pve:easy")),
+            discord.SelectOption(label="對戰電腦（普通 ⚔️）", value="pve:normal", default=(self.selected_mode == "pve:normal")),
+            discord.SelectOption(label="對戰電腦（困難 🔥）", value="pve:hard", default=(self.selected_mode == "pve:hard")),
+            discord.SelectOption(label="對戰機器人本人（會陪聊互動 🧠）", value="pve:llm", default=(self.selected_mode == "pve:llm")),
             discord.SelectOption(label="PvP 雙人公開對戰（等待群友加入 👥）", value="pvp:open", default=(self.selected_mode == "pvp:open")),
         ]
         sel = discord.ui.Select(placeholder="2️⃣ 選擇 PvE 難度或 PvP 對戰...", options=mode_opts, row=1)

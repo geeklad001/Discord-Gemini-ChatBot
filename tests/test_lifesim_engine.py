@@ -396,8 +396,9 @@ class TestLifeSimDeepUpgrade(unittest.TestCase):
     def test_cog_views_embeds_selects_and_life_command(self):
         run = self._create_guaranteed_active_run(channel_id=130, user_id=501, user_name="UiTester", story_mode="hybrid")
         setup_embed = build_lifesim_setup_embed("present", "births", "fast")
-        self.assertIn("0-Token", setup_embed.description)
-        self.assertIn("精華混合版", setup_embed.description)
+        self.assertIn("經典深度版", setup_embed.description)
+        self.assertIn("精華劇情版", setup_embed.description)
+        self.assertNotIn("0-Token", setup_embed.description)
 
         async def _verify_ui():
             intents = discord.Intents.none()

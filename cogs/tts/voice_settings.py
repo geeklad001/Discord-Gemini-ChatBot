@@ -78,7 +78,7 @@ class VoiceSettingsMixin:
         color: int,
         footer: str,
     ) -> None:
-        lines = ["**⚡ 免費輕量聲線（Edge-TTS・0 顯存）**"]
+        lines = ["**⚡ 內建標準聲線**"]
         for vid, meta in tts_engine.EDGE_VOICES.items():
             mark = " ✅" if vid == current_voice_id else ""
             lines.append(f"• `{meta['short_name']}` — {meta['label']}{mark}")
@@ -201,6 +201,30 @@ class VoiceSettingsMixin:
             await self._handle_bot_voice(ctx, arg)
             return
 
+        mute_aliases = ("off", "mute", "quiet", "silent", "stop", "關閉", "靜音", "不讀", "不念", "停用")
+        unmute_aliases = ("on", "unmute", "speak", "read", "開啟", "恢復", "取消靜音", "朗讀")
+        toggle_aliases = ("toggle", "切換")
+        if action in mute_aliases or action in unmute_aliases or action in toggle_aliases:
+            if action in mute_aliases:
+                target_muted = True
+            elif action in unmute_aliases:
+                target_muted = False
+            else:
+                target_muted = not bool(pref.get("proxy_muted"))
+            await asyncio.to_thread(
+                tts_engine.set_user_voice_pref,
+                ctx.author.id,
+                proxy_muted=target_muted,
+                default_voice=self.settings.tts_default_voice,
+            )
+            if target_muted:
+                await ctx.send(
+                    "🔇 已設定**不要自動朗讀你打的文字**（改回開啟請輸入 `!voice on` 或從 `!voice` 面板點按鈕；明確使用 `!say` 仍可發聲）。"
+                )
+            else:
+                await ctx.send("🔊 已恢復**自動朗讀你在文字區打的文字**。")
+            return
+
         if self.settings.enable_user_voice_clone:
             clone_msg = (
                 "🔒 語音克隆需經安全轉檔與機器人擁有者審核，無法由 `!voice` 直接註冊。\n"
@@ -216,7 +240,7 @@ class VoiceSettingsMixin:
         async def _reset_personal() -> str:
             await asyncio.to_thread(tts_engine.reset_user_voice_pref, ctx.author.id)
             default_label = tts_engine.get_voice_display_label(self.settings.tts_default_voice)
-            return f"🔄 已將你的聲線恢復為預設：**{default_label}**（語速 `+0%` / 音高 `+0Hz`）。"
+            return f"🔄 已將你的聲線恢復為預設：**{default_label}**（語速 `+0%` / 音高 `+0Hz` / 自動代說：開啟）。"
 
         async def _save_personal(
             *,
@@ -241,9 +265,9 @@ class VoiceSettingsMixin:
             rate_key="rate_pct",
             pitch_key="pitch_hz",
             list_title="🎙️ 可用聲線清單",
-            list_f5_header="\n**🎙️ 特色聲線（F5-TTS・主機提供）**",
+            list_f5_header="\n**🎙️ 特色／專屬聲線**",
             list_color=0x38BDF8,
-            list_footer="輸入 !voice 開啟下拉選單，或 !voice <關鍵字> 直接切換",
+            list_footer="輸入 !voice 開啟選單、!voice off/on 開關不讀字，或 !voiceclone 了解專屬語音克隆",
             pitch_invalid_msg="❌ 音高請輸入整數，例如 `!voice pitch +10` 或 `!voice pitch -8`（範圍 `-30..+30`）。",
             rate_invalid_msg="❌ 語速請輸入整數百分比，例如 `!voice rate +15` 或 `!voice rate -10`（範圍 `-50..+50`）。",
             pitch_info_prefix="ℹ️ 你目前的音高調整為",
@@ -333,7 +357,7 @@ class VoiceSettingsMixin:
             rate_key=rate_key,
             pitch_key=pitch_key,
             list_title=f"🤖 機器人可用聲線清單（{mode_label}）",
-            list_f5_header="\n**🎙️ 公開特色聲線（F5-TTS）**",
+            list_f5_header="\n**🎙️ 公開特色聲線**",
             list_color=0xA855F7,
             list_footer="輸入 !voice bot 開啟下拉選單，或 !voice bot [jp] <關鍵字> 直接切換",
             pitch_invalid_msg="❌ 音高請輸入整數，例如 `!voice bot pitch +8` 或 `!voice bot jp pitch -5`。",
@@ -345,7 +369,7 @@ class VoiceSettingsMixin:
             switched_prefix=f"✅ 已設定機器人**{mode_label}**聲線為：",
             not_found_hint="公開聲線，請輸入 `!voice bot` 開啟選單或 `!voice bot list` 查看清單。",
             clone_reject_msg=(
-                "🔒 私人語音克隆僅限機器人擁有者於本機伺服器設定，機器人聲線僅可使用內建 Edge-TTS 或主機公開聲線。"
+                "🔒 機器人聲線僅可使用內建標準聲線或已公開的特色聲線。"
             ),
             reset_fn=_reset_bot,
             save_fn=_save_bot,

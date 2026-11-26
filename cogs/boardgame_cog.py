@@ -167,7 +167,7 @@ class BoardGameCog(commands.Cog):
         if not fallback_mv:
             return game, "", ""
         updated, ai_note = await asyncio.to_thread(bg.apply_move, game["id"], 0, fallback_mv)
-        return updated, f"🤖 [LLM 思考超時/違例，由本地防作弊裁判代走] {ai_note}", ""
+        return updated, f"🤖 [思考超時，改由標準棋手接手] {ai_note}", ""
 
     async def _run_pve_turn_if_needed(self, game: dict, note_prefix: str) -> tuple[dict, str, str]:
         """若為 PvE 且輪到 Bot/LLM，執行其回合；回傳 (updated_game, clean_card_note, llm_thoughts_text)。"""

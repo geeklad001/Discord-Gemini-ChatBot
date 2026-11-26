@@ -39,10 +39,15 @@ def init_tts_tables() -> None:
                     voice_id TEXT NOT NULL,
                     rate_pct INTEGER NOT NULL DEFAULT 0,
                     pitch_hz INTEGER NOT NULL DEFAULT 0,
+                    proxy_muted INTEGER NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            cursor.execute("PRAGMA table_info(tts_user_prefs)")
+            existing_user_cols = {r[1] for r in cursor.fetchall()}
+            if "proxy_muted" not in existing_user_cols:
+                cursor.execute("ALTER TABLE tts_user_prefs ADD COLUMN proxy_muted INTEGER NOT NULL DEFAULT 0")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS tts_guild_settings (
@@ -136,7 +141,7 @@ def get_user_voice_pref(user_id: int, default_voice: str = DEFAULT_EDGE_VOICE) -
     init_tts_tables()
     with assistant_db.get_conn() as conn:
         row = conn.execute(
-            "SELECT user_id, voice_id, rate_pct, pitch_hz FROM tts_user_prefs WHERE user_id = ?",
+            "SELECT user_id, voice_id, rate_pct, pitch_hz, proxy_muted FROM tts_user_prefs WHERE user_id = ?",
             (int(user_id),),
         ).fetchone()
     if row is None:
@@ -145,6 +150,7 @@ def get_user_voice_pref(user_id: int, default_voice: str = DEFAULT_EDGE_VOICE) -
             "voice_id": default_voice,
             "rate_pct": 0,
             "pitch_hz": 0,
+            "proxy_muted": False,
             "is_custom": False,
         }
     return {
@@ -152,6 +158,7 @@ def get_user_voice_pref(user_id: int, default_voice: str = DEFAULT_EDGE_VOICE) -
         "voice_id": str(row["voice_id"] or default_voice),
         "rate_pct": clamp_rate_pct(int(row["rate_pct"] or 0)),
         "pitch_hz": clamp_pitch_hz(int(row["pitch_hz"] or 0)),
+        "proxy_muted": bool(row["proxy_muted"]),
         "is_custom": True,
     }
 
@@ -162,6 +169,7 @@ def set_user_voice_pref(
     voice_id: Optional[str] = None,
     rate_pct: Optional[int] = None,
     pitch_hz: Optional[int] = None,
+    proxy_muted: Optional[bool] = None,
     default_voice: str = DEFAULT_EDGE_VOICE,
 ) -> dict[str, Any]:
     init_tts_tables()
@@ -169,38 +177,43 @@ def set_user_voice_pref(
     with assistant_db.get_conn() as conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
-            "SELECT voice_id, rate_pct, pitch_hz FROM tts_user_prefs WHERE user_id = ?",
+            "SELECT voice_id, rate_pct, pitch_hz, proxy_muted FROM tts_user_prefs WHERE user_id = ?",
             (int(user_id),),
         ).fetchone()
         if row is None:
             cur_voice = default_voice
             cur_rate = 0
             cur_pitch = 0
+            cur_muted = False
         else:
             cur_voice = str(row["voice_id"] or default_voice)
             cur_rate = clamp_rate_pct(int(row["rate_pct"] or 0))
             cur_pitch = clamp_pitch_hz(int(row["pitch_hz"] or 0))
+            cur_muted = bool(row["proxy_muted"])
 
         new_voice = cur_voice if voice_id is None else (voice_id.strip() or default_voice)
         new_rate = cur_rate if rate_pct is None else clamp_rate_pct(rate_pct)
         new_pitch = cur_pitch if pitch_hz is None else clamp_pitch_hz(pitch_hz)
+        new_muted = cur_muted if proxy_muted is None else bool(proxy_muted)
         conn.execute(
             """
-            INSERT INTO tts_user_prefs (user_id, voice_id, rate_pct, pitch_hz, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO tts_user_prefs (user_id, voice_id, rate_pct, pitch_hz, proxy_muted, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 voice_id = excluded.voice_id,
                 rate_pct = excluded.rate_pct,
                 pitch_hz = excluded.pitch_hz,
+                proxy_muted = excluded.proxy_muted,
                 updated_at = excluded.updated_at
             """,
-            (int(user_id), new_voice, new_rate, new_pitch, now),
+            (int(user_id), new_voice, new_rate, new_pitch, 1 if new_muted else 0, now),
         )
     return {
         "user_id": int(user_id),
         "voice_id": new_voice,
         "rate_pct": new_rate,
         "pitch_hz": new_pitch,
+        "proxy_muted": new_muted,
         "is_custom": True,
     }
 

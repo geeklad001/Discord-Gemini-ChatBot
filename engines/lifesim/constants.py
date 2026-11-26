@@ -53,9 +53,9 @@ FOCUS_LABELS = {
 }
 
 STORY_MODE_LABELS = {
-    "fast": "⚡ 0-Token 深度本地版（預設）",
-    "hybrid": "🎭 精華混合版（關鍵轉折才叫 AI）",
-    "llm": "🧠 全程 AI 沉浸劇情版",
+    "fast": "⚡ 經典深度版（預設）",
+    "hybrid": "🎭 精華劇情版（關鍵轉折加演）",
+    "llm": "🧠 全程故事版（自由輸入行動）",
 }
 
 URBAN_RURAL_LABELS = {

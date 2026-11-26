@@ -16,8 +16,8 @@ keywords: [聖誕節, 크리스마스, 前夜祭, 전야제, 聖誕快車2, 크�
 related_ids: [xmas_2426_atelier_mechanics_farming, xmas_2426_melody_mechanics_farming, xmas_2426_patch_hottime_shop_notes]
 ---
 【《殭屍學園》[平行世界與活動] — 聖誕節活動總覽與 2026 前夜祭】
-每年 11 月底～12 月中開跑、延續至 1 月初，自 2018 年起確立雪妖精（ `눈요미` ）與雪花村（ `눈꽃마을` ）主題。歷代主打合作製禮與派對裝修，依序推出《聖誕快車 1～3》（2018～2021）、《聖誕家庭派對》（2022）、《聖誕快車大亨》（2023）、《聖誕旋律》（2024）與《聖誕工坊》（2025）。
-- **2026 前夜祭（11.26～12.10）**：官方投票由 `7,424` 票選出 **《聖誕快車 2》（ `크리스마스 익스프레스 2` ）** 復刻。`11/26` 維護後至 `12/10` 維護前限時 2 週並更新冬季廣場（ `겨울 광장` ），完成 `[눈요미의 특별 미션]`（交付 100 個公仔）領 `4,000` 聖誕幣，於 `12/10` 聖誕商店開啟後使用。
+多於 11 月底～12 月中開跑、延續至 12 月底或隔年 1 月初，自 2018 年起確立雪妖精（ `눈요미` ）與雪花村（ `눈꽃마을` ）主題。歷代依序推出《聖誕快車 1～3》（2018～2021）、《聖誕家庭派對》（2022）、《聖誕快車大亨》（2023）、《聖誕旋律》（2024）與《聖誕工坊》（2025）。
+- **2026 前夜祭（11.26～12.10）**：官方投票（共 `7,424` 名玩家參與）選出 **《聖誕快車 2》（ `크리스마스 익스프레스 2` ）** 復刻。`11/26` 維護後至 `12/10` 維護前限時 2 週並更新冬季廣場（ `겨울 광장` ），完成 `[눈요미의 특별 미션]`（交付 100 個公仔）領 `4,000` 聖誕幣，於 `12/10` 聖誕商店開啟後使用。
 
 ---
 id: xmas_2426_atelier_mechanics_farming
@@ -84,7 +84,7 @@ related_ids: [xmas_2426_patch_hottime_shop_notes, xmas_2426_overview_and_2026_ev
 【《殭屍學園》[平行世界與活動] — 2024《聖誕旋律》機制與刷幣／123태 攻略】
 `2024.11.28～2025.01.09` 舉辦（首個 11 月開跑），共 8 關（4 人配額 `5/7/9/10/10/12/13/16` ；R1～5 限 2:00、R6～7 2:30、R8 2:40）。
 - **工序**：發條（ `태엽` ）配紅 / 黃 / 藍染料染音符（三色黑且 **黑音符無法重染** ），製珠寶盒 / 芭蕾舞伶 / 雪花球 / 旋轉木馬 4 種音樂盒（ `오르골` ）；壓縮機（ `압착기` ）可將 2 音符壓成 `눈요미` 、2 發條壓成 `우드드롭` 。
-- **刷幣與 R8**：計分 **「黑 +2、他色 +1、無時間分」**（R2～8 通關另送 70 分），單刷（ `코노` ）應 **跳過黑色不搓** 更賺。R8 冰面肥皂泡採 **`123태`** ：P1～P3 顧 1～3 號訂單，P4 專跑發條與壓縮機。
+- **刷幣與 R8**：計分 **「黑 +2、他色 +1、無時間分」**（R2～8 通關另送 70 分），刷幣（ `코노` ）應 **跳過黑色不搓** 更賺。R8 冰面肥皂泡採 **`123태`** ：P1～P3 顧 1～3 號訂單，P4 專跑發條與壓縮機。
 
 ---
 id: xmas_2426_patch_hottime_shop_notes
@@ -96,17 +96,17 @@ subject: 2024–2025 聖誕改版歷程、熱時與商店結算提醒
 aspects: [改版修復時程, 雙倍幣熱時, 商店徽章結算]
 name_zh: 2024–2025 聖誕改版歷程與熱時／商店提醒 (12.05 BGM / 12.18 修復 / 19:00~24:00 핫타임)
 name_kr: 크리스마스 멜로디 / 크리스마스 아뜰리에 / 핫타임 / 눈요미의 크리스마스 상점
-source: Naver Cafe (16048151, 16064343, 16915098, 16956351) / Namuwiki / Notion 成就對照
+source: Naver Cafe (16028984, 16048151, 16064343, 16080115, 16120757, 16900968, 16915098, 16956351) / Namuwiki / Notion 成就對照
 updated_at: 2026-11
 freshness: volatile
-resource_links: ["☕ 12/05 旋律 BGM 更新公告｜https://cafe.naver.com/onimobile/16048151", "☕ 12/11 聖誕幣雙倍熱時公告｜https://cafe.naver.com/onimobile/16064343", "☕ 12/18 進度條修復與追加預告｜https://cafe.naver.com/onimobile/16915098"]
+resource_links: ["☕ 2024 旋律 11/28 開跑公告｜https://cafe.naver.com/onimobile/16028984", "☕ 12/05 旋律 BGM 更新公告｜https://cafe.naver.com/onimobile/16048151", "☕ 12/11 聖誕幣雙倍熱時公告｜https://cafe.naver.com/onimobile/16064343", "☕ 12/18 無限制與熱時公告｜https://cafe.naver.com/onimobile/16080115", "☕ 2024 檔 1/09 結束公告｜https://cafe.naver.com/onimobile/16120757", "☕ 2025 工坊 12/11 開跑公告｜https://cafe.naver.com/onimobile/16900968", "☕ 12/18 進度條修復與追加預告｜https://cafe.naver.com/onimobile/16915098", "☕ 2025 檔 1/08 結束公告｜https://cafe.naver.com/onimobile/16956351"]
 keywords: [핫타임, 雙倍熱時, 눈요미의 크리스마스 상점, 聖誕商店, 눈꼬마, 12.05 BGM, 12.18 觀戰修復, 12.24 雙徽章, 2024 聖誕節徽章, 2024 音樂盒大師, 雪花球音樂盒大師, 旋轉木馬音樂盒大師, 芭蕾舞伶音樂盒大師, 珠寶盒音樂盒大師]
 related_ids: [xmas_2426_overview_and_2026_eve, xmas_2426_melody_mechanics_farming, xmas_2426_atelier_emblems_challenges]
 ---
 【《殭屍學園》[平行世界與活動] — 2024–2025 聖誕改版歷程與熱時／商店提醒】
 - **2024《聖誕旋律》**：`11.28` 開跑；`12.05` 實裝分關 BGM、修飄雪與 3 樹拍照點；`12.18` 無限制；`01.09` 結束。全 6 徽章：2024 聖誕節徽章、2024 音樂盒大師、雪花球／旋轉木馬／芭蕾舞伶／珠寶盒音樂盒大師（各 500 次）。
-- **2025《聖誕工坊》**：`12.11～01.08` 舉辦；`12.18` 修復進度條過長與觀戰提前顯示訂單，預告 `12.24` 追加雙徽章與無限制。
-- **熱時與商店**：平日與週末 `19:00～24:00` 開 **2 倍聖誕幣熱時（ `핫타임` ）**；`눈요미의 크리스마스 상점`（含 `3,000` 幣徽章）、`눈꼬마` 造型與聖誕道具於 `01.08`／`01.09` 維護準時下架。
+- **2025《聖誕工坊》**：`12.11～01.08` 舉辦；`12.18` 修進度條過長與觀戰預顯示訂單，`12.24` 加雙徽章與無限制，**無雙倍熱時**。
+- **熱時與商店**：`[僅限 2024 聖誕旋律]` 12 月剩餘週末及聖誕週平日 `19:00～24:00` 開 2 倍幣（ `핫타임` ）；`눈요미의 크리스마스 상점`（含 `3,000` 幣徽章）與 `눈꼬마` 分於 `01.09`（2024 檔）／`01.08`（2025 檔）下架。
 
 ---
 id: xmas_1423_express_tycoon_coop
@@ -126,11 +126,11 @@ keywords: [크리스마스 익스프레스 타이쿤, 크익타, 聖誕快車大
 related_ids: [xmas_1423_express_tycoon_solo, xmas_1423_express_1_to_3, gloss_evt_christmas_series]
 ---
 【《殭屍學園》[平行世界與活動] — 2023《聖誕快車大亨》機制與 4 人 5,200 幣刷幣攻略】
-2023.12.14 上線（`크익타`），8 關單圖、每關 30 秒購物。
-- 換幣：**聖誕幣＝禮品分數 × 3.5**（最高 5,229 幣）。`눈요미 코인` 須先升**包裝台（`포장대`）**與**音樂盒（`오르골`）**才加聖誕幣。
-- Fever（R1～8）：觸發前須交 `2,3,4,5,5,6,6,8` 隻（後 `2,4,4,5,5,6,7,9`）；觸發後搶交 Fever 單，餘花入爐清。
-- 4 人分工：撿 **8+ 雪球幣**。R1～4：A 雪球＋爐／下桌、B 音樂盒＋上袋／爐、C 包裝台＋下撲滿、D 全花盆；R5～8 補盆爐。先交後方單（`郭俊亨` (`곽준형`) 先於 `馬勇俊` (`마용규`)）騰 Fever 格。
-- 徽章：2023 聖誕節（8,500 幣）、公仔大亨徽章、公仔大亨大師徽章（計畫全完，12/21 開）。
+2023.12.14（`크익타`）8 關單圖、每關 30s 購物。
+- 換幣：**聖誕幣＝分數 × 3.5**（最高 5,229）。局內 `눈요미 코인` **不直接換算聖誕幣**，須優先升級**包裝台（ `포장대` ）**與**音樂盒（ `오르골` ）**以提升結算聖誕幣。
+- Fever（R1～8）：前交 `2,3,4,5,5,6,6,8`（後 `2,4,4,5,5,6,7,9`）；觸發搶交 Fever 單，餘花入爐。
+- 4p：撿 **8+ 雪球幣**。R1～3：A 球爐桌、B 盒袋爐、C 包裝＋下撲滿、D 盆；R4～8 合升上右花盆、上袋、烤爐、托盤與右側撲滿／桌面。先交後單（`郭俊亨` `곽준형` 先於 `馬勇俊` `마용규`）。
+- 徽章：2023 聖誕節（8,500 幣）、公仔大亨、公仔大亨大師（12/21 開）。
 
 ---
 id: xmas_1423_express_tycoon_solo
@@ -164,17 +164,17 @@ subject: 2022 聖誕家庭派對大作戰規則與平衡修補
 aspects: [12/16平衡修補, 施工順序, 重物減速, 地板飾品保護]
 name_zh: 2022 聖誕家庭派對大作戰：規則、12/16 平衡修補與施工順序
 name_kr: 크리스마스 홈파티 대작전 / 크홈
-source: Naver Cafe (13343473 / 13351862 / 13349859) / Namuwiki / YouTube / FB 韓版交流討論區 / Notion 成就對照
+source: Naver Cafe (13343473 / 13351862 / 13374233 / 13349859) / Namuwiki / YouTube / FB 韓版交流討論區 / Notion 成就對照
 updated_at: 2026-11
 freshness: stable
-resource_links: ["Cafe 13343473 (12/15官方公告)｜https://cafe.naver.com/onimobile/13343473", "Cafe 13351862 (12/16平衡修補)｜https://cafe.naver.com/onimobile/13351862", "Cafe 13349859 (實戰施工TIP)｜https://cafe.naver.com/onimobile/13349859", "YouTube 通關教學(鍾武辰)｜https://youtu.be/50hg91kyK2s", "FB 社團攻略貼文(需加社團)｜https://www.facebook.com/groups/1755166524775722/permalink/3008272716131757/"]
+resource_links: ["Cafe 13343473 (12/15官方公告)｜https://cafe.naver.com/onimobile/13343473", "Cafe 13351862 (12/16平衡修補)｜https://cafe.naver.com/onimobile/13351862", "Cafe 13374233 (12/22開放2至3人)｜https://cafe.naver.com/onimobile/13374233", "Cafe 13349859 (實戰施工TIP)｜https://cafe.naver.com/onimobile/13349859", "YouTube 通關教學(鍾武辰)｜https://youtu.be/50hg91kyK2s", "FB 社團攻略貼文(需加社團)｜https://www.facebook.com/groups/1755166524775722/permalink/3008272716131757/"]
 keywords: [크리스마스 홈파티 대작전, 크홈, 聖誕家庭派對大作戰, 13351862, 1216平衡修補, 施工順序, 地板飾品損毀, 대성공 스탬프, 눈꽃마을 스페셜 파티플래너, 雪花村派對策劃師, 雪花村特別派對策劃師, 2022 聖誕節徽章, 搬運減速]
 related_ids: [xmas_1423_early_history_dimension_train, gloss_evt_christmas_series]
 ---
 【《殭屍學園》[平行世界與活動] — 2022《聖誕家庭派對大作戰》規則、12/16 平衡修補與施工順序】
-`2022.12.15～29`（`크홈`）6 關 4 人協力佈置（10 圖）。公告 **80%** 通關（Namuwiki 記 **70%**），100% 拿大成功印章與「雪花村特別派對策劃師」（23 點拿「派對策劃師」）；**搬運踩過地板飾品會損毀**。
-- 12/16 修補（`13351862`）：R2～6 加時 `30/60/60/40/20` 秒（時限 `3:00/3:30/3:30/3:40/4:50`）；幣 `+20/+50/+90/+150/+230/+330`（熱時間 ×2）；減輕搬運減速（2 人單搬 `80%→60%`；4 人 `90/80/60%→80/60/40%`）。
-- 施工順序：**牆飾（安全）→ 內側小傢俱 → 2 人 → 4 人 → 地板飾品**，避踩碎飾品；穩拿時間／終點分並先清雪橇重訪房。
+`2022.12.15～29`（`크홈`）6 關佈置（共 **23 圖**，Namuwiki 僅列 10 圖；首週限 4 人，12/22 `13374233` 開放 2～3 人）。**80%** 過關（Namuwiki 記 **70%**），100% 拿「雪花村特別派對策劃師」（23 點拿「派對策劃師」）；**搬運踩地飾會損毀**。
+- 12/16 修補（`13351862`）：R2～6 加時 `30/60/60/40/20s`（限 `3:00/3:30/3:30/3:40/4:50`）；幣 `+20/+50/+90/+150/+230/+330`（熱時 ×2）；降懲罰（2p 單 `80→60%`；4p `90/80/60→80/60/40%`）。
+- 順序：**牆飾（安全）→小傢俱→2p→4p→地飾**，避踩碎；拿時間／終點分、先清雪橇房。
 
 ---
 id: xmas_1423_express_1_to_3
@@ -183,19 +183,19 @@ timeline: au
 series: christmas
 chapter: all
 subject: 2018–2021 聖誕快車 1/2/3 演進與 스폰직 分工
-aspects: [快車1紅綠隊爭議, 快車2拍照與24公仔, 2026前夜祭復刻, 快車3三大危機, 스폰직]
+aspects: [快車1分隊爭議, 快車2拍照與24公仔, 2026前夜祭復刻, 快車3三大危機, 스폰직]
 name_zh: 2018–2021 聖誕快車 1／2／3：規則演進與 스폰직 分工
 name_kr: 크리스마스 익스프레스 1 / 2 / 3 / 스폰직
 source: Namuwiki / Naver Cafe (11091845 / 17589508) / FB 韓版交流討論區 / Notion 成就對照
 updated_at: 2026-11
 freshness: volatile
 resource_links: ["Namuwiki 聖誕活動總覽｜https://namu.wiki/w/%EC%A2%80%EB%B9%84%EA%B3%A0%EB%93%B1%ED%95%99%EA%B5%90/%EC%9D%B4%EB%B2%A4%ED%8A%B8/%ED%81%AC%EB%A6%AC%EC%8A%A4%EB%A7%88%EC%8A%A4", "Cafe 11091845 (3代官方公告)｜https://cafe.naver.com/onimobile/11091845", "Cafe 17589508 (2026前夜祭2代復刻)｜https://cafe.naver.com/onimobile/17589508", "FB 快車2部分難關與R9圖文攻略(需加社團)｜https://www.facebook.com/groups/1755166524775722/posts/2737468979878800/"]
-keywords: [크리스마스 익스프레스, 크익, 크익2, 크익3, 聖誕快車, 聖誕快遞, 포토존, 照相館, 스폰직, 停電熄燈地鼠, 2026前夜祭復刻, 2018 公仔大師徽章, 2019 公仔大師徽章, 快遞大師]
+keywords: [크리스마스 익스프레스, 크익, 크익2, 크익3, 聖誕快車, 聖誕快遞, 포토 부스, 照相館, 스폰직, 停電熄燈地鼠, 2026前夜祭復刻, 2018 公仔大師徽章, 2019 公仔大師徽章, 快遞大師]
 related_ids: [xmas_express2_maps_and_mechanics, xmas_express2_old_vs_new_farming, xmas_1423_express_tycoon_coop, xmas_1423_early_history_dimension_train, gloss_evt_christmas_series]
 ---
 【《殭屍學園》[平行世界與活動] — 2018–2021《聖誕快車 1／2／3》演進與 `스폰직`】
-- 1 代（2018）：《煮過頭》式 10 關（限 4 單）；初分紅綠隊（魯道夫勝），通 10 關購「2018 公仔大師徽章」。
-- 2 代（2019／20・22・26 復刻）：1,000 禮品；**24 公仔**、4 包裝＋**照相館（ `포토존` ）**（異種雙人、同種拍立得），通 10 關贈「2019 公仔大師徽章」，**2026 前夜祭（11.26～12.10）復刻**。FB 攻略僅記 R9 特定地圖「圖貳」之**種子箱由左至右依彩虹色排列（該圖無深藍單）**，非通用種花順序亦非 Namuwiki 內容。
+- 1 代（2018）：《煮過頭》式 10 關（限 4 單）；初分聖誕老人／魯道夫兩隊（ `산타팀` vs `루돌프팀` ，魯道夫勝），通 10 關購「2018 公仔大師徽章」。
+- 2 代（2019／20・21・22・26 復刻）：1,000 禮品；**24 公仔**、4 包裝＋**照相館（ `포토 부스` ）**（異種雙人、同種拍立得），通 10 關贈「2019 公仔大師徽章」，**2026 前夜祭（11.26～12.10）復刻**。FB 攻略僅記 R9 特定地圖「圖貳」之**種子箱由左至右依彩虹色排列（該圖無深藍單）**，非通用種花順序亦非 Namuwiki 內容。
 - 3 代（2021）：雪球砲打色球，增停電、熄燈與地鼠，通關贈「快遞大師」；`스폰직` 指韓服野房依出生點分工。
 
 ---
@@ -211,7 +211,7 @@ name_kr: 차원열차 / 눈꽃마을 / 눈요미 / 소원석
 source: Namuwiki / Naver Cafe (11091845) / FB 韓版交流討論區 / Notion 成就對照 / 巴哈台服圖鑑
 updated_at: 2026-11
 freshness: stable
-resource_links: ["Namuwiki 聖誕活動總覽｜https://namu.wiki/w/%EC%A2%80%EB%B9%84%EA%B3%A0%EB%93%B1%ED%95%99%EA%B5%90/%EC%9D%B4%EB%B2%A4%ED%8A%B8/%ED%81%AC%EB%A6%AC%EC%8A%A4%EB%A7%88%EC%8A%A4", "Cafe 11091845 (2021許願石後續與VIP)｜https://cafe.naver.com/onimobile/11091845", "FB 2019vs2020聖誕翅膀對比(需加社團)｜https://www.facebook.com/groups/1755166524775722/posts/2510785342547166/"]
+resource_links: ["Namuwiki 聖誕活動總覽｜https://namu.wiki/w/%EC%A2%80%EB%B9%84%EA%B3%A0%EB%93%B1%ED%95%99%EA%B5%90/%EC%9D%B4%EB%B2%A4%ED%8A%B8/%ED%81%AC%EB%A6%AC%EC%8A%A4%EB%A7%88%EC%8A%A4", "Cafe 11091845 (2021許願石後續與雪花村開放)｜https://cafe.naver.com/onimobile/11091845", "FB 2019vs2020聖誕翅膀對比(需加社團)｜https://www.facebook.com/groups/1755166524775722/posts/2510785342547166/"]
 keywords: [차원열차, 次元列車, 소원석, 許願石, 눈싸움, 2014聖誕, 2015打雪仗, 2017聖誕樹大賽, 2020純復刻, 눈요미, 눈꽃마을, 魔法魔女彩蛋, 2016 聖誕節徽章, 2017 聖誕節徽章, 2019 聖誕節徽章, 雪芙米的寶貝朋友]
 related_ids: [xmas_1423_express_1_to_3, gloss_evt_christmas_series]
 ---
@@ -231,7 +231,7 @@ aspects: [26張關卡變體, 1人配額, 桌台互換, 魔法花盆, 9R三張地
 updated_at: 2026-11
 freshness: volatile
 related_ids: [xmas_1423_express_1_to_3, xmas_express2_figure_recipes_1, xmas_express2_figure_recipes_2, xmas_express2_old_vs_new_farming]
-keywords: [聖誕快車2, 크익2, 크리스마스 익스프레스2, 聖誕快車2地圖, 聖誕快車2第9關, 聖誕快車2第10關, 바꿔치기, 마법 화분, 마법 화로, 9라운드, 10라운드, 冰面圖, 火車彩虹種子圖, 回字形圖, 2026前夜祭]
+keywords: [聖誕快車2, 聖誕快車 2, 快車2, 速刷攻略, 有哪些地圖, 크익2, 크리스마스 익스프레스2, 聖誕快車2地圖, 聖誕快車2第9關, 聖誕快車2第10關, 바꿔치기, 마법 화분, 마법 화로, 9라운드, 10라운드, 冰面圖, 火車彩虹種子圖, 回字形圖, 2026前夜祭]
 resource_links: ["YouTube 1p全通實戰(열매님)｜https://www.youtube.com/watch?v=700SD65JuiY", "YouTube 攻略清單(진다래)｜https://www.youtube.com/playlist?list=PLlkpKRv1dTyxMzhyxVuycVy6Iz1G1odAG", "YouTube 9R三圖單刷(깅도이)｜https://www.youtube.com/watch?v=s2dPjSLf93w", "YouTube 速種快包(위트)｜https://www.youtube.com/watch?v=uxuAxdTHM7c", "YouTube 2p技巧(위트)｜https://www.youtube.com/watch?v=18MlJYc8ma4", "YouTube 10R單刷(A키스)｜https://www.youtube.com/watch?v=uA_bd60SWFo", "YouTube 10R單刷(서리니)｜https://www.youtube.com/watch?v=gxbDKalTi2s", "YouTube 攻略與開箱(셀포)｜https://www.youtube.com/watch?v=UfTPMY6BeF4", "YouTube 1p一命通關(설룬)｜https://www.youtube.com/watch?v=w4YU91olEIY", "FB 韓版討論區 9R/10R圖文攻略｜https://www.facebook.com/groups/1755166524775722/posts/2737468979878800/", "Cafe 5232344 (26關實錄)｜https://cafe.naver.com/onimobile/5232344", "Cafe 8650401 (1R-10R詳解)｜https://cafe.naver.com/onimobile/8650401", "Cafe 5260266 (套組與9R攻略)｜https://cafe.naver.com/onimobile/5260266", "Cafe 5227052 (官方機制簡介)｜https://cafe.naver.com/onimobile/5227052"]
 ---
 【《殭屍學園》聖誕活動｜《聖誕快車 2》地圖池、R9 三圖與 R10 實戰機制】
@@ -295,12 +295,12 @@ aspects: [2026前夜祭100公仔, 舊制4p刷幣, 2p最穩, 舊幣誤併異常]
 updated_at: 2026-11
 freshness: volatile
 related_ids: [xmas_2426_overview_and_2026_eve, xmas_express2_maps_and_mechanics, xmas_1423_express_1_to_3]
-keywords: [聖誕快車2刷幣, 크익2 코노, 눈요미의 특별 미션, 100個公仔, 4000聖誕幣, 2026聖誕前夜祭任務, 2019快車2單局幣, 4人固排, 2人最穩, 와쳐 코인, 10라운드 클리어]
-resource_links: ["Cafe 17589508 (2026前夜祭官方公告)｜https://cafe.naver.com/onimobile/17589508", "Cafe 17553356 (前夜祭投票7424人)｜https://cafe.naver.com/onimobile/17553356", "Cafe 17591706 (首日實測2局解完)｜https://cafe.naver.com/onimobile/17591706", "Cafe 17591784 (100隻後無額外幣)｜https://cafe.naver.com/onimobile/17591784", "Cafe 17591754 (舊幣圖像異常)｜https://cafe.naver.com/onimobile/17591754", "Cafe 17591818 (舊幣合併回報)｜https://cafe.naver.com/onimobile/17591818", "Cafe 8609304 (2020百場徽章)｜https://cafe.naver.com/onimobile/8609304", "Cafe 5230488 (舊制單刷169幣)｜https://cafe.naver.com/onimobile/5230488", "Cafe 8650401 (舊制人數差20幣)｜https://cafe.naver.com/onimobile/8650401", "YouTube 4p固排(깅도이)｜https://www.youtube.com/watch?v=TkJjTqNSXI8", "YouTube 2p速通(위트)｜https://www.youtube.com/watch?v=raDc3_rl0tg"]
+keywords: [聖誕快車2刷幣, 聖誕快車 2, 快車2, 速刷攻略, 크익2 코노, 눈요미의 특별 미션, 100個公仔, 4000聖誕幣, 2026聖誕前夜祭任務, 2019快車2單局幣, 4人固排, 2人最穩, 와쳐 코인, 10라운드 클리어]
+resource_links: ["Cafe 17589508 (2026前夜祭官方公告)｜https://cafe.naver.com/onimobile/17589508", "Cafe 17553356 (前夜祭投票7424人)｜https://cafe.naver.com/onimobile/17553356", "Cafe 5230488 (舊制單刷169幣)｜https://cafe.naver.com/onimobile/5230488", "Cafe 8650401 (舊制人數差20個)｜https://cafe.naver.com/onimobile/8650401", "YouTube 4p固排(깅도이)｜https://www.youtube.com/watch?v=TkJjTqNSXI8", "YouTube 2p速通(위트)｜https://www.youtube.com/watch?v=raDc3_rl0tg"]
 ---
 【《殭屍學園》聖誕活動｜《聖誕快車 2》新舊刷法比較（2019–2020 vs 2026 前夜祭）】
-- **【現行 `2026.11.26–12.10` 前夜祭】**：單局**不掉商店幣**，商店與新造型 12/10 才開；唯一幣源為 `[눈요미의 특별 미션]` 納品 **100 隻公仔領 4,000 聖誕幣**（首日玩家實測 1 局約交 79～89 隻，**約 2 局即可解完**，亦無通關新徽章）。另首日有多起回報前活動守望者幣／列車殘幣異常併入聖誕幣顯示，仍待官方確認是否熱修回收。
-- **【⚠️ 歷史舊制（2019–2020 正式場已失效）】**：當年單局直接掉幣，依玩家心得 `[僅限 1 人單刷]` 10R 全通約 169 幣、每增 1 人約 +20 幣；野團 **2 人最穩**、默契 **4 人上限最高**；推圖加成遠勝 `1R` 送頭自殺刷法。
+- **【現行 `2026.11.26–12.10` 前夜祭】**：公告 `17589508` 僅明載 100 隻公仔任務（`4,000` 幣，12/10 商店開後可用），**未載明單局是否額外掉幣或舊幣是否結轉**。首日玩家實測多僅領到任務 `4,000` 幣（約 2 局達標，暫無新徽章），完整刷幣與商店規則待 `12/10` 揭曉；零星守望者／列車殘幣併入顯示回報屬**未經官方證實之首日 Bug 疑慮**。
+- **【⚠️ 歷史舊制（2019–2020 正式場已失效）】**：`2019–2020` 舊制主流採多人通關領回合與過關獎勵；依玩家心得 `[僅限 1 人單刷]` 10R 全通約 169 幣，每增 1 人約差 20 個（原文記 `상자` ），野團 2 人最穩、默契 4 人上限最高。
 
 ---
 id: xmas_farming_express1_express3_homeparty
@@ -313,14 +313,14 @@ updated_at: 2026-11
 freshness: volatile
 related_ids: [xmas_1423_express_1_to_3, xmas_1423_home_party_guide, xmas_2426_patch_hottime_shop_notes, xmas_farming_tycoon_melody_atelier]
 keywords: [聖誕快車1刷幣, 聖誕快車3刷幣, 크익3 9라, 5라 스겜, 聖誕家庭派對刷幣, 크홈 코노, 크홈 패치, 1020幣, 時薪5000幣, 80%搖鈴跳過, 12月16日修補]
-resource_links: ["Cafe 11110299 (快車3證偽5R)｜https://cafe.naver.com/onimobile/11110299", "YouTube 快車3 2分教科書(슈튜)｜https://www.youtube.com/watch?v=gkBU98CLiuw", "YouTube 快車3實戰(좀비 잡는 출세)｜https://www.youtube.com/watch?v=T_KpOP5UPKg", "Cafe 13351862 (家派+870幣修補)｜https://cafe.naver.com/onimobile/13351862", "Cafe 13364733 (家派1020幣速刷)｜https://cafe.naver.com/onimobile/13364733", "Cafe 13374233 (家派開放2至3p)｜https://cafe.naver.com/onimobile/13374233", "YouTube 家派6R上側(꼬믕)｜https://www.youtube.com/watch?v=CHVq-Kedf0c", "YouTube 家派6R下側(꼬믕)｜https://www.youtube.com/watch?v=DXDQOGTjLuY", "YouTube 家派地圖版(츠부야키)｜https://www.youtube.com/watch?v=unxUhlZV02w", "YouTube 家派3人通關(호떡)｜https://www.youtube.com/watch?v=8P3tIrKXjyo", "YouTube 家派通關教學(鍾武辰)｜https://youtu.be/50hg91kyK2s"]
+resource_links: ["Cafe 11110299 (快車3證偽5R)｜https://cafe.naver.com/onimobile/11110299", "YouTube 快車3 2分教科書(슈튜)｜https://www.youtube.com/watch?v=gkBU98CLiuw", "YouTube 快車3實戰(좀비 잡는 출세)｜https://www.youtube.com/watch?v=T_KpOP5UPKg", "Cafe 13351862 (家派+970幣修補)｜https://cafe.naver.com/onimobile/13351862", "Cafe 13364733 (家派1020幣速刷)｜https://cafe.naver.com/onimobile/13364733", "Cafe 13374233 (家派開放2至3p)｜https://cafe.naver.com/onimobile/13374233", "YouTube 家派6R上側(꼬믕)｜https://www.youtube.com/watch?v=CHVq-Kedf0c", "YouTube 家派6R下側(꼬믕)｜https://www.youtube.com/watch?v=DXDQOGTjLuY", "YouTube 家派地圖版(츠부야키)｜https://www.youtube.com/watch?v=unxUhlZV02w", "YouTube 家派3人通關(호떡)｜https://www.youtube.com/watch?v=8P3tIrKXjyo", "YouTube 家派通關教學(鍾武辰)｜https://youtu.be/50hg91kyK2s"]
 ---
 【《殭屍學園》聖誕活動｜快車 1／3 ＆ 2022《家庭派對》新舊速刷比較】
 - **2018 快車 1**：`12/13` 擴 `7→10` 關＋19–22 時熱時（落後陣營 +50% 幣）；回合獎金高於重開，推 `2–3p` 過關。
-- **2021 快車 3**：`12/16` 放寬抓地鼠與調秒；實測證偽「`5R` 速刷」，**`9R` 全通優於 `5R` 重開**。
+- **2021 快車 3**：`12/16` 放寬抓地鼠判定；實測證偽「`5R` 速刷」，**`9R` 全通較優**。
 - **2022 家庭派對**：
   - **【⚠️ `12/15` 首日舊制（隔日修補）】**：限 4 人、通關僅 ~150 幣。
-  - **【`12/16` 修補＋ `12/22` 改版（加 +870 幣／開 2–3p）】**：最佳 `코노` 為 **`1–3R` 80% 搖鈴跳過 ＋ `4–6R` 100% 大成功**，11–12 分約 **~1,020 幣／時薪 ~5,000**（`[僅限雙倍熱時]` 約 ~2,040／破萬）。
+  - **【`12/16` 修補＋ `12/22` 改版（+970 幣／開 2–3p）】**：最佳 `코노` 為 **`1–3R` 80% 搖鈴跳過 ＋ `4–6R` 100% 大成功**，11–12 分約 **~1,020 幣／時薪 ~5,000**（`[僅限 12/23–12/25 19–23 時雙倍熱時]` 獎勵翻倍）。
 
 ---
 id: xmas_farming_tycoon_melody_atelier
@@ -333,9 +333,9 @@ updated_at: 2026-11
 freshness: volatile
 related_ids: [xmas_1423_express_tycoon_coop, xmas_1423_express_tycoon_solo, xmas_2426_melody_mechanics_farming, xmas_2426_atelier_mechanics_farming, xmas_farming_express1_express3_homeparty]
 keywords: [聖誕大亨刷幣, 크익타 5200코인, 聖誕旋律刷幣, 크멜 8라 코노, 聖誕工坊刷幣, 크아 4인 코노, 跳過黑色音符, 23455668, 無熱時, 3.5倍率, 31圖單刷]
-resource_links: ["YouTube 大亨5000幣4p(플우)｜https://www.youtube.com/watch?v=o4zYUWwM2tg", "YouTube 大亨4000+高效(열매님)｜https://www.youtube.com/watch?v=6T_X5iwvlE4", "YouTube 大亨野房(수학자)｜https://www.youtube.com/watch?v=RLMO7msAP0A", "YouTube 大亨單刷(열매님)｜https://www.youtube.com/watch?v=vCBEAje64Ys", "YouTube 大亨2p(빈워터)｜https://www.youtube.com/watch?v=zPe8_b62aPQ", "YouTube 旋律31圖單刷(초밥먹고싶다)｜https://www.youtube.com/watch?v=RR971eQ4t9c", "YouTube 旋律1+3(위트)｜https://www.youtube.com/watch?v=rGlhJwWTNTc", "YouTube 旋律2p2R(투투즈)｜https://www.youtube.com/watch?v=OU45N2RqlUw", "YouTube 旋律20秒(뱀꽃)｜https://www.youtube.com/watch?v=TYkqtWKsaWw", "YouTube 工坊全通(김호원)｜https://www.youtube.com/watch?v=OkWRxILL3Lw", "YouTube 工坊4p(수학자)｜https://www.youtube.com/watch?v=2uWMmCatMc4", "YouTube 工坊2p(준서닷)｜https://www.youtube.com/watch?v=2Fcrd9vRGxU", "YouTube 工坊單刷(이래도)｜https://www.youtube.com/watch?v=bJo_2RFgpKQ"]
+resource_links: ["Cafe 14848319 (大亨4p 5200幣攻略)｜https://cafe.naver.com/onimobile/14848319", "Cafe 16044438 (旋律4p刷幣實測)｜https://cafe.naver.com/onimobile/16044438", "Cafe 16054265 (旋律全圖與跳黑分析)｜https://cafe.naver.com/onimobile/16054265", "Cafe 16910146 (工坊全圖與時薪實測)｜https://cafe.naver.com/onimobile/16910146", "YouTube 大亨5000幣4p(플우)｜https://www.youtube.com/watch?v=o4zYUWwM2tg", "YouTube 大亨4000+高效(열매님)｜https://www.youtube.com/watch?v=6T_X5iwvlE4", "YouTube 大亨野房(수학자)｜https://www.youtube.com/watch?v=RLMO7msAP0A", "YouTube 大亨單刷(열매님)｜https://www.youtube.com/watch?v=vCBEAje64Ys", "YouTube 大亨2p(빈워터)｜https://www.youtube.com/watch?v=zPe8_b62aPQ", "YouTube 旋律31圖單刷(초밥먹고싶다)｜https://www.youtube.com/watch?v=RR971eQ4t9c", "YouTube 旋律1+3(위트)｜https://www.youtube.com/watch?v=rGlhJwWTNTc", "YouTube 旋律2p2R(투투즈)｜https://www.youtube.com/watch?v=OU45N2RqlUw", "YouTube 旋律20秒(뱀꽃)｜https://www.youtube.com/watch?v=TYkqtWKsaWw", "YouTube 工坊全通(김호원)｜https://www.youtube.com/watch?v=OkWRxILL3Lw", "YouTube 工坊4p(수학자)｜https://www.youtube.com/watch?v=2uWMmCatMc4", "YouTube 工坊2p(준서닷)｜https://www.youtube.com/watch?v=2Fcrd9vRGxU", "YouTube 工坊單刷(이래도)｜https://www.youtube.com/watch?v=bJo_2RFgpKQ"]
 ---
 【《殭屍學園》聖誕活動｜2023《大亨》／2024《旋律》／2025《工坊》速刷對照】
-- **2023 大亨**：`12/18` 修開局多幣與撲滿 Bug；`分數×3.5`，**`[僅限 4 人固排]` 固定買法 5,100～5,229 幣／局**（Fever `23455668`），`[僅限 1 人單刷]` ~2,500 幣。
-- **2024 旋律**：**無 `1–3R` 重開**，8 關全通**跳過黑色音符**最賺：**4p 170 幣／12 分（時薪 ~840，`[僅限雙倍熱時]` ~340／局）**＞ 3p 172 ＞ 2p 146 ＞ 1p ~128（時薪 ~534）。
-- **2025 工坊**：**無熱時**，`12/18 修復·12/24 雙徽章`；兼掉幣＋里程碑；6 關全通 **3–4p 170–183 幣（8–11 分≈1,100–1,200／時）** ＞ 2p（145–152）＞ 1p（122–135）。
+- **2023 大亨**：`12/18` 修 Bug；`分數×3.5`，**`[僅限 4p 固排]` 5,100～5,229 幣**（Fever `23455668`），`[僅限 1p]` ~2,500 幣。
+- **2024 旋律**：**無 `1–3R` 重開**，8 關**跳黑音符**；`16044438` 4p 170 幣／12 分（~840/時，`[僅限雙倍熱時]` ~340/局）、1p ~534/時；`16116452` 單局最高 **3p 172／2p 146／1p 128**。
+- **2025 工坊**：**無熱時**，掉幣兼里程碑；**3–4p 170–183 幣**（公房 10.7–11.2 分約時薪 ~920–1,030；最快 8–9 分可達 ~1,180–1,260／時）＞ 2p 145–152 ＞ 1p 122–135。

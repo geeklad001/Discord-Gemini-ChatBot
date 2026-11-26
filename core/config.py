@@ -10,7 +10,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 
 MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 圖片上限 10 MB
 MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024    # 文字設定檔上限 2 MB

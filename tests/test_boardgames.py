@@ -247,7 +247,8 @@ class TestBoardGames(unittest.TestCase):
         with patch("cogs.boardgame_cog.generate_with_fallback", new=AsyncMock(return_value=(bad_resp, "m1"))):
             updated2, note2, taunt2 = asyncio.run(cog._pick_and_apply_llm_move(g2))
         self.assertEqual(updated2["move_count"], 2)
-        self.assertIn("本地防作弊裁判", note2)
+        self.assertIn("改由標準棋手接手", note2)
+        self.assertNotIn("LLM", note2)
         self.assertEqual(taunt2, "")
 
     def test_board_context_includes_ascii_grid_and_finished_game_and_first_move(self):

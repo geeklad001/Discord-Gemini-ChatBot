@@ -134,13 +134,13 @@ class WikiCog(commands.Cog):
     async def _handle_wiki_replace(self, ctx: commands.Context, rest: str) -> None:
         if not self.settings.enable_japanese_mode and not await self._has_community_mod_or_owner(ctx):
             await ctx.reply(
-                "🔒 社群模式下僅限管理員（`manage_messages` / `manage_guild` / `administrator`）或 Bot 擁有者可執行知識庫熱修補覆寫！",
+                "🔒 社群模式下僅限管理員（`manage_messages` / `manage_guild` / `administrator`）或 Bot 擁有者可執行知識庫勘誤更新！",
                 mention_author=False,
             )
             return
         if not rest or ("|" not in rest and "｜" not in rest):
             await ctx.reply(
-                "🔄 **《殭屍學園》知識庫條目熱修補／覆寫用法**：\n"
+                "🔄 **《殭屍學園》知識庫條目勘誤更新用法**：\n"
                 "• `!wiki replace <舊條目ID或關鍵字> | <更新後的內容>`\n"
                 "• 範例：`!wiki replace slang_dkj | 最新改版說明...`\n"
                 "💡 若不確定舊條目 ID，可先輸入 `!wiki <關鍵字>` 查看該條目底部的 `ID: ...`。",
@@ -182,7 +182,7 @@ class WikiCog(commands.Cog):
             author_name=author_display,
         )
         if not res.get("success"):
-            await ctx.reply(f"⚠️ {res.get('error', '熱修補失敗。')}", mention_author=False)
+            await ctx.reply(f"⚠️ {res.get('error', '勘誤更新失敗。')}", mention_author=False)
             return
 
         embed = build_wiki_replace_embed(res["replaced_entry"], res["new_entry"])

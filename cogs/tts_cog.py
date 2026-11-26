@@ -423,6 +423,18 @@ class TtsCog(VoiceSettingsMixin, CloneServiceMixin, TtsAdminMixin, commands.Cog)
                     )
                     return False
 
+            pref = await asyncio.to_thread(
+                tts_engine.get_user_voice_pref,
+                message.author.id,
+                self.settings.tts_default_voice,
+            )
+            if pref.get("proxy_muted"):
+                self.logger.info(
+                    f"⏭️ [TTS 略過] [{message.author.display_name}] (ID:{message.author.id}) "
+                    "已開啟個人靜音代說 (proxy_muted=True)"
+                )
+                return False
+
             raw_content = getattr(message, "clean_content", None) or getattr(message, "content", "") or ""
             cleaned = tts_engine.clean_text_for_tts(raw_content, max_chars=self.settings.tts_max_chars)
             if not cleaned:
@@ -431,11 +443,6 @@ class TtsCog(VoiceSettingsMixin, CloneServiceMixin, TtsAdminMixin, commands.Cog)
                 )
                 return False
 
-            pref = await asyncio.to_thread(
-                tts_engine.get_user_voice_pref,
-                message.author.id,
-                self.settings.tts_default_voice,
-            )
             pipeline = self._get_or_create_pipeline(message.guild.id)
             enqueued = bool(
                 pipeline.enqueue(

@@ -205,7 +205,7 @@ def build_wiki_overview_embed(stats: dict) -> discord.Embed:
             "📥 **群友補充文本／擴充資料庫用法**：\n"
             "• **單筆新增**：`!wiki add 關鍵字1, 關鍵字2 | 條目內容說明`\n"
             "• **批次貼文或傳檔**：輸入 `!wiki import [主題名稱]` 並在後方換行貼上長文（支援 `【標題】內容`、`# 標題` 分段或整篇攻略），或直接**夾帶 `.txt` / `.md` 檔案上傳**！\n"
-            "• **改版勘誤／熱修補覆寫**：`!wiki replace <ID或關鍵字> | <新內容>`（軟屏蔽舊條目並以新內容優先回應）\n"
+            "• **改版勘誤／勘誤覆寫**：`!wiki replace <ID或關鍵字> | <新內容>`（隱藏舊條目並以新內容優先回應）\n"
             "• **管理補充條目**：`!wiki list`（查看群友補充清單）、`!wiki del <編號>`（刪除條目或撤銷覆寫）",
             max_len=3800,
         ),
@@ -235,9 +235,9 @@ def build_wiki_replace_embed(replaced_entry: dict, new_entry: dict) -> discord.E
     """Build the `!wiki replace` hotfix confirmation Embed."""
     kws_str = "、".join(new_entry.get("keywords", [])[:7])
     embed = discord.Embed(
-        title="🔄 已完成《殭屍學園》知識庫熱修補覆寫！",
+        title="🔄 已完成《殭屍學園》知識庫勘誤覆寫！",
         description=truncate_embed_text(
-            f"• **已軟屏蔽舊條目**：`{replaced_entry['id']}` 【{replaced_entry['name_zh']}】\n"
+            f"• **已覆寫並隱藏舊條目**：`{replaced_entry['id']}` 【{replaced_entry['name_zh']}】\n"
             f"• **生效中新條目**：`{new_entry['id']}` 【{new_entry['name_zh']}】\n"
             f"• **繼承與索引詞**：`{kws_str}`\n"
             f"• **整理基準日期**：{new_entry.get('updated_at', '')}\n\n"

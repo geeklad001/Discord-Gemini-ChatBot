@@ -189,9 +189,13 @@ class TtsAdminMixin:
             await self._handle_voiceclone(ctx, arg)
             return
 
+        if act in ("mute", "unmute", "靜音", "取消靜音"):
+            await self._handle_voice_command(ctx, sub=act)
+            return
+
         await ctx.send(
             "❓ 未知的 `!tts` 子指令。可用項目：\n"
-            "• 全體成員：`!tts status`、`!tts channels`、`!voice`、`!voiceclone`\n"
+            "• 全體成員：`!tts status`、`!tts channels`、`!voice`、`!voice off/on`（`!tts mute/unmute`）、`!voiceclone`\n"
             "• 管理員：`!tts channel add/remove/clear [#頻道]`、`!tts bind`、`!tts unbind`、`!tts ignore`、`!tts ai`、`!tts proxy`、`!tts vconly`、`!tts clear`\n"
             "• 擁有者：`!tts preload`、`!tts keepalive [on|off|秒]`、`!tts unload`、`!tts reloadvoices`"
         )
@@ -421,7 +425,7 @@ class TtsAdminMixin:
         )
         user_f5 = await self.synthesizer.fetch_f5_voices(user_id=ctx.author.id)
         user_voice_label = tts_engine.get_voice_display_label(user_pref["voice_id"], user_f5)
-        user_mode_note = "已自訂" if user_pref.get("is_custom") else "未設定・自動使用預設 Edge-TTS"
+        user_mode_note = "已自訂" if user_pref.get("is_custom") else "使用預設聲線"
         embed.add_field(
             name="你的個人聲線",
             value=(
@@ -471,7 +475,7 @@ class TtsAdminMixin:
 
         is_owner = await self.is_bot_owner(ctx.author)
         if not self.synthesizer.is_f5_configured:
-            f5_str = "⚡ 標準語音引擎（0 顯存，運作正常）"
+            f5_str = "⚡ 標準語音服務運作正常"
         else:
             health = await self.synthesizer.check_f5_health(force=True)
             if health:
@@ -516,7 +520,7 @@ class TtsAdminMixin:
                 f5_str = (
                     "⚪ 進階語音服務未啟動（目前自動改用標準語音，運作正常）"
                     if is_owner
-                    else "⚡ 目前使用標準語音引擎（運作正常）"
+                    else "⚡ 標準語音服務運作正常"
                 )
 
         embed.add_field(name="語音引擎", value=f5_str, inline=False)

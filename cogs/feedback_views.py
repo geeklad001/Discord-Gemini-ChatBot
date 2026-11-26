@@ -147,7 +147,11 @@ def build_feedback_detail_embed(report: dict) -> discord.Embed:
     )
     created_at = str(report.get("created_at") or "")
     updated_at = str(report.get("updated_at") or "")
-    embed.set_footer(text=f"建立於 {created_at} ｜ 最後更新 {updated_at} ｜ 來源：{report.get('source', 'command')}")
+    source_label = {
+        "ai_tool": "對話自動收錄",
+        "command": "指令提交",
+    }.get(report.get("source"), "其他")
+    embed.set_footer(text=f"建立於 {created_at} ｜ 最後更新 {updated_at} ｜ 來源：{source_label}")
     return embed
 
 

@@ -833,7 +833,7 @@ class RpgCog(commands.Cog):
             if len(entries) > 20:
                 embed.set_footer(text=f"💡 僅顯示前 20 筆（共 {len(entries)} 筆）| 聊天提到關鍵字時 AI 會自動調用！")
             else:
-                embed.set_footer(text="💡 聊天提到關鍵字時，AI 會自動調用該設定，完全不浪費多餘 Token！")
+                embed.set_footer(text="💡 聊天提到關鍵字時，系統會自動帶入該設定，讓劇情前後一致！")
             await ctx.send(embed=embed)
             return
 

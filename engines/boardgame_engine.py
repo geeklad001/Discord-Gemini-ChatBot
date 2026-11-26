@@ -84,7 +84,7 @@ DIFFICULTY_LABELS = {
     "easy": "🌱 簡單",
     "normal": "⚔️ 普通",
     "hard": "🔥 困難",
-    "llm": "🧠 Gemini LLM",
+    "llm": "🧠 機器人親下",
 }
 
 

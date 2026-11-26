@@ -289,10 +289,10 @@ def build_lifesim_setup_embed(era: str, draw_method: str, story_mode: str) -> di
             "你即將根據 **聯合國/世界銀行 197 國真實統計權重**，隨機降生在地球上的某個家庭（含城鄉機率、先天特質、歷史浪潮與跨國移居）。\n\n"
             f"• **時代**：`{ls.ERA_CONFIG[era_key]['label']}`\n"
             f"• **機率基準**：`{ls.DRAW_METHOD_LABELS[dm_key]}`\n"
-            f"• **故事引擎**：`{sm_label}`\n"
-            "  - `⚡ 0-Token 深度本地版`：78+ 條件事件＋檢定擲骰＋副行動（預設）\n"
-            "  - `🎭 精華混合版`：日常走本地 0-Token，僅 18/32/48 歲關鍵轉折與墓誌銘呼叫 AI\n"
-            "  - `🧠 全程 AI 沉浸劇情版`：每階段 AI 編劇＋隨時自訂行動彈窗\n\n"
+            f"• **玩法模式**：`{sm_label}`\n"
+            "  - `⚡ 經典深度版`：78+ 條件事件＋檢定擲骰＋副行動，節奏流暢免等待（預設）\n"
+            "  - `🎭 精華劇情版`：日常輕快推進，在 18/32/48 歲關鍵轉折與生命終章展開專屬劇情\n"
+            "  - `🧠 全程故事版`：每個階段即時演繹當地文化事件，隨時可自由輸入行動\n\n"
             "可直接點擊下方 **「🌍 立即投胎出生」**，或點 **「🧵 開專屬串投胎」** 在獨立討論串體驗完整一生！"
         ),
         color=0x2ECC71,
@@ -320,23 +320,23 @@ def create_lifesim_option_selects(era: str, draw_method: str, story_mode: str, s
         discord.SelectOption(
             label=ls.STORY_MODE_LABELS["fast"],
             value="fast",
-            description="78+條件事件・檢定擲骰・副行動與移居（0 Token）",
+            description="78+條件事件・檢定擲骰・副行動與移居（流暢免等待）",
             default=(sm_key == "fast"),
         ),
         discord.SelectOption(
             label=ls.STORY_MODE_LABELS["hybrid"],
             value="hybrid",
-            description="關鍵人生轉折與終局墓誌銘呼叫 Gemini，兼顧省流與沉浸",
+            description="在關鍵人生轉折與生命終章展開專屬劇情",
             default=(sm_key == "hybrid"),
         ),
         discord.SelectOption(
             label=ls.STORY_MODE_LABELS["llm"],
             value="llm",
-            description="全程由 Gemini 編寫文化事件並支援自由行動決定",
+            description="每階段即時演繹文化事件並支援自由輸入行動",
             default=(sm_key == "llm"),
         ),
     ]
-    story_select = discord.ui.Select(placeholder="3️⃣ 選擇故事引擎...", options=story_opts, row=start_row + 2)
+    story_select = discord.ui.Select(placeholder="3️⃣ 選擇玩法模式...", options=story_opts, row=start_row + 2)
     return era_select, method_select, story_select
 
 

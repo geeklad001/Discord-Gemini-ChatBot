@@ -28,7 +28,7 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
                 "`!wiki 目錄 [分類]` — 開啟分類目錄瀏覽（也可直接查 `!wiki 角色`、`!wiki 黑話`）\n"
                 "`!wiki add <關鍵字> | <內容>` — 單筆補充設定或黑話\n"
                 "`!wiki import` — 貼上長文或**夾帶 `.txt`/`.md` 檔**批次擴充資料庫\n"
-                "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫舊條目（熱修補）\n"
+                "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫舊條目（修正舊資料）\n"
                 "`!wiki list` / `!wiki del <編號>` — 查看或刪除群友補充／撤銷覆寫"
             ),
             inline=False,
@@ -62,7 +62,7 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
             name="🎮 遊戲大廳・桌遊與80億分之1 (`!play` / `!life` ＋ 按鈕控制)",
             value=(
                 "`!play` — 開啟遊戲大廳（黑白棋、西洋棋、四子棋、五子棋、🌍 **80億分之1**）\n"
-                "`!life` / `!life top` / `!life atlas` — **80億分之1** 深度版（含特質/檢定/副行動/跨國移居/混合與AI模式）與排行榜"
+                "`!life` / `!life top` / `!life atlas` — **80億分之1** 深度版（含特質/檢定/副行動/跨國移居/多種玩法）與排行榜"
             ),
             inline=False,
         )
@@ -83,9 +83,9 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
             name="🔊 語音朗讀與多聲線 (`!join` / `!voice` / `!botvoice` / `!tts`)",
             value=(
                 "`!join` / `!leave` / `!say <字>` / `!skip` — 進出語音房、即時朗讀與跳過\n"
-                "`!voice` — 個人選聲線（免費 Edge-TTS 16 聲線＋語速音高）｜`!voiceclone` 申請專屬聲線說明\n"
+                "`!voice` — 個人選聲線（內建 16 種標準聲線＋語速音高＋`!voice off/on` 不讀字開關）｜`!voiceclone` 申請專屬聲線說明\n"
                 "`!voice bot [jp]` (`!botvoice`) — 設定機器人自己說話的聲線與語速音高（一般／日語）\n"
-                "`!tts status` / `!tts channel` / `!tts preload` / `!tts keepalive` — 狀態、頻道與主機 F5-TTS 顯存控制"
+                "`!tts status` / `!tts channel` / `!tts bind` — 查看語音狀態與設定代說頻道"
             ),
             inline=False,
         )
@@ -98,7 +98,7 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
             "`!feedback [分類] <內容>` (`!建議`) / `!feedback list` — 提交建議或問題回報（亦支援直接口語回饋）與查看公開進度看板\n"
             "`!reset` — 清除當前頻道／討論串的對話上下文\n"
             "`!reload` — 重新檢查並載入人設提示詞與知識庫設定（管理員）\n"
-            "`!setup` / `!setup check` / `!models` — 擁有者互動設定面板、一鍵環境健檢與模型輪替狀態"
+            "`!setup` / `!models` — 擁有者專用系統設定與狀態診斷"
         ),
         inline=False,
     )
@@ -142,8 +142,8 @@ def build_wiki_help_embed() -> discord.Embed:
     embed.add_field(
         name="🛠️ 勘誤覆寫與管理條目",
         value=(
-            "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫並軟屏蔽舊條目\n"
-            "`!wiki list` — 查看群友補充／熱修補條目與編號\n"
+            "`!wiki replace <ID或詞> | <新內容>` — 改版勘誤覆寫並覆寫隱藏舊條目\n"
+            "`!wiki list` — 查看群友補充與勘誤紀錄編號\n"
             "`!wiki del <編號>` — 刪除補充條目或撤銷覆寫還原舊條目（如 `!wiki del contrib_1`）"
         ),
         inline=False,
@@ -222,7 +222,7 @@ def build_tts_help_embed(settings: BotSettings) -> discord.Embed:
     """Build the detailed !help tts Embed."""
     embed = discord.Embed(
         title="🔊 語音頻道朗讀與多聲線 (`!voice` / `!tts`) 指南",
-        description="預設使用 0 顯存 Edge-TTS，可選配進階特色聲線；進房後自動代說並朗讀日語教學與單字卡。",
+        description="內建多國標準聲線，亦支援特色與個人專屬聲線；進房後可自動朗讀打字、日語教學與單字卡。",
         color=0x38BDF8,
     )
     if settings.enable_user_voice_clone:
@@ -238,8 +238,9 @@ def build_tts_help_embed(settings: BotSettings) -> discord.Embed:
         value=(
             "`!join` / `!leave` (`!dc`) — 加入或退出你所在的語音頻道\n"
             "`!say <文字>` / `!skip` — 立即朗讀指定文字 ／ 跳過目前語音\n"
-            "`!voice` — 開啟互動下拉選單切換個人聲線（內建 16 種免費 Edge-TTS）\n"
+            "`!voice` — 開啟互動下拉選單切換個人聲線（內建 16 種多國標準聲線）\n"
             "`!voice rate <-50..+50>` / `!voice pitch <-30..+30>` / `!voice reset` — 微調個人語速音高或重設\n"
+            "`!voice off` / `!voice on`（`!tts mute` / `unmute` 或 `!voice` 面板按鈕）— 個人開關「不要自動朗讀我打的字」\n"
             "`!voice bot [jp]` (`!botvoice`) — 設定機器人 AI 朗讀的聲線（一般對話／日語共學，支援 `rate` / `pitch` / `reset`）\n"
             + clone_help_line
             + "`!tts status` / `!tts channels` — 查看引擎狀態與目前代說對象頻道"
@@ -264,8 +265,8 @@ def build_tts_help_embed(settings: BotSettings) -> discord.Embed:
     embed.add_field(
         name="👑 機器人擁有者專用（主機資源與克隆審核）",
         value=(
-            "`!tts preload` / `!tts unload` — 立即預載 F5-TTS 到顯存 ／ 手動釋放 VRAM\n"
-            "`!tts keepalive [on|off|<秒>]` / `!tts reloadvoices` — 切換顯存常駐或按需卸載 ／ 重載聲線\n"
+            "`!tts preload` / `!tts unload` / `!tts keepalive` — 管理語音服務資源與駐留模式\n"
+            "`!tts reloadvoices` — 重新載入特色聲線清單\n"
             + owner_clone_line
         ),
         inline=False,
@@ -303,8 +304,8 @@ def build_system_help_embed() -> discord.Embed:
         value=(
             "`!reset` (`!clear`) — 清除當前頻道或討論串的對話上下文（社群模式限管理員／擁有者）\n"
             "`!reload` (`!重載`) — 熱重載人設提示詞、知識庫與設定（管理員／擁有者）\n"
-            "`!setup` / `!setup check` — **擁有者專用**：免改 `.env` 互動設定面板（開關、頻道選擇、模型與一鍵環境健檢）\n"
-            "`!models` (`!模型`) — **擁有者專用**：檢視 Flash-Lite 模型輪替鏈、429 冷卻狀態與 AI Studio 即時可用模型"
+            "`!setup` / `!setup check` — **擁有者專用**：互動設定面板（功能開關、頻道選擇與狀態健檢）\n"
+            "`!models` (`!模型`) — **擁有者專用**：檢視系統運行狀態與可用項目"
         ),
         inline=False,
     )

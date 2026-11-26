@@ -300,6 +300,6 @@ def get_voice_display_label(voice_id: str, f5_voices: Optional[list[dict[str, An
         if f5_voices:
             for fv in f5_voices:
                 if fv.get("id") == vid or fv.get("raw_id") == raw_id:
-                    return f"🎙️ {fv.get('name', raw_id)} (F5-TTS)"
-        return f"🎙️ {raw_id} (F5-TTS)"
+                    return f"🎙️ {fv.get('name', raw_id)}（特色聲線）"
+        return f"🎙️ {raw_id}（特色聲線）"
     return vid

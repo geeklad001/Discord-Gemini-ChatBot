@@ -2,7 +2,7 @@
 
 專為 Discord 好友群、社群跑團與日語共學打造的免費自架 AI 機器人！連接 Google AI Studio 的 **Gemini Flash-Lite（免費額度友善＋多代 Flash-Lite 自動輪替保底）**，免信用卡、不用寫程式，就能一次擁有**多模態聊天、語音頻道朗讀、互動桌遊與 80 億分之 1 人生模擬、TRPG 跑團、日語雙頻道與單字卡、遊戲黑話圖鑑，以及長期記憶與定時提醒**！
 
-> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.2.0)](CHANGELOG.md)
+> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.3.0)](CHANGELOG.md)
 
 ---
 
@@ -37,7 +37,7 @@
 
 ### 2. 🔊 語音頻道原生朗讀（Edge-TTS 免費免顯卡 16 聲線＋選配本地 F5-TTS 與語音克隆）
 * **無須外掛 HornBot，零顯卡免費開聲**：只要輸入 `!join`，機器人就會進入你所在的語音頻道，即時朗讀語音文字區的打字代說，也能自動朗讀日語教學或 AI 回覆！
-* **16 種免費聲線自由換**：一般成員可用 `!voice` 下拉挑選台灣／中國／日本 16 種免費 Edge-TTS 聲線並微調語速、音高，也可用 `!voice bot [jp]`（或 `!botvoice`）設定機器人自己說話的聲音。
+* **16 種免費聲線自由換＋個人靜音不讀字**：一般成員可用 `!voice` 下拉挑選台灣／中國／日本 16 種免費 Edge-TTS 聲線並微調語速、音高，或用 `!voice off/on`（亦可在 `!voice` 面板按按鈕）設定不要自動朗讀自己打的字；也可用 `!voice bot [jp]`（或 `!botvoice`）設定機器人自己說話的聲音。
 * **三層權限控管＋選配本地 F5-TTS 快取直讀／常駐選項**：伺服器管理員可用 `!tts channel` / `!tts bind` 指定代說頻道；主機擁有者可選配本地 **F5-TTS**（優先直讀本機 Hugging Face 快取免重複連網檢查，並可透過 `!tts preload`、`!tts keepalive on/off` 或 `!setup` 依顯卡 VRAM 餘裕切換「啟動預載常駐」或「閒置自動卸載」），也能開啟 `ENABLE_USER_VOICE_CLONE` 讓成員以 `!voiceclone` 建立專屬語音克隆。
 * 💡 *不需要語音朗讀時完全不必裝 FFmpeg，將 `ENABLE_VOICE_TTS=false`（或進 `!setup` 點一下關閉）即可純文字使用。*
 
@@ -119,7 +119,7 @@
 | `!quiz [牌組名] [題數]` | Kotoba 風格多人限時搶答測驗 | `!quiz N5 5` |
 | `!join` / `!leave` | 讓機器人加入或退出你所在的語音頻道（別名 `!dc`） | `!join`、`!dc` |
 | `!say <文字>` / `!skip` | 立即在語音頻道朗讀文字 ／ 跳過目前正在朗讀的語音 | `!say 大家晚上好` |
-| `!voice [參數]` | 開啟個人聲線選單（免費 Edge-TTS 16 聲線＋`rate` / `pitch` / `reset`，全體可用） | `!voice`、`!voice pitch +8` |
+| `!voice [參數]` | 開啟個人聲線選單（免費 16 聲線、`rate`/`pitch`/`reset`，及 `off`/`on` 不自動朗讀個人打字） | `!voice`、`!voice off` |
 | `!voice bot` / `!botvoice` | 設定機器人自己說話的聲線（一般對話／`jp` 日語共學，全體可用） | `!voice bot`、`!botvoice jp rate -15` |
 | `!voiceclone` / `!clone` | 申請／管理專屬語音克隆（啟用後安檢通過即用私人聲線，可加 `public` 申請公開；支援 `list`/`public`/`delete`/`cancel`） | `!voiceclone public 溫柔旁白 \| 你好大家好` |
 | `!tts [子指令]` | 查看狀態；**管理員**設對象頻道與開關；**擁有者**管理 F5-TTS（`preload`、`keepalive [on\|off\|秒]`、`unload`、`reloadvoices`） | `!tts status`、`!tts keepalive on` |

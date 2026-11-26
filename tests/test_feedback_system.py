@@ -317,5 +317,11 @@ class FeedbackSystemTests(unittest.IsolatedAsyncioTestCase):
         p2_emb = build_feedback_list_embed(many, page=1, page_size=8, status_filter="open")
         self.assertIn("第 2 / 2 頁", p2_emb.footer.text)
         self.assertNotIn("LeakedName", p2_emb.description)
-        d_emb = build_feedback_detail_embed(many[0])
+        d_emb = build_feedback_detail_embed(dict(many[0], source="command"))
         self.assertNotIn("LeakedName", d_emb.description)
+        self.assertIn("指令提交", d_emb.footer.text)
+        self.assertNotIn("command", d_emb.footer.text)
+
+        d_ai_emb = build_feedback_detail_embed(dict(many[0], source="ai_tool"))
+        self.assertIn("對話自動收錄", d_ai_emb.footer.text)
+        self.assertNotIn("ai_tool", d_ai_emb.footer.text)

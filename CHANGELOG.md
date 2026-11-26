@@ -4,6 +4,26 @@
 
 ---
 
+## [v2.3.0] - 2026-11-27
+
+本次更新新增 **語音代說個人不讀字開關**、強化 **`!voice` 面板專屬聲線說明**、推動 **Discord 使用者介面去技術化與技術細節隱藏**，並完成 **《殭屍學園》Wiki Phase 4 Wave 4 全量引用取證稽核與勘誤**。
+
+### 🌟 重點新功能與升級
+
+* **🔇 語音代說個人不讀字開關 & `!voice` 面板強化**
+  * **個人靜音代說開關**（[engines/tts/storage.py](engines/tts/storage.py)、[cogs/tts_cog.py](cogs/tts_cog.py)、[cogs/tts/views.py](cogs/tts/views.py)、[cogs/tts/voice_settings.py](cogs/tts/voice_settings.py)、[cogs/tts/admin_commands.py](cogs/tts/admin_commands.py)）：於 `tts_user_prefs` 新增 `proxy_muted` 欄位（支援舊資料庫自動 `ALTER TABLE` 平滑遷移）；所有成員可透過 `!voice` 面板 **`🔇 不要朗讀我的文字`／`🔊 恢復朗讀我的文字`** 按鈕，或 `!voice off/on/toggle`、`!tts mute/unmute` 隨時開關個人自動朗讀，不影響其他群友、明確 `!say` 或 AI 對話。
+  * **`!voice` 面板動態加入 `!voiceclone` 說明**：依 `ENABLE_USER_VOICE_CLONE` 與審核模式自動顯示對應的專屬語音克隆教學或聯絡說明，並同步更新 `!voice list` 頁尾導引。
+* **✨ Discord 使用者介面去技術化與技術細節隱藏**
+  * 全面整理一般成員可見的語音面板、桌遊大廳、《80億分之1》、Wiki、RPG、`!feedback` 詳情頁、`!help` 面板與 [docs/COMMANDS.md](docs/COMMANDS.md)，隱藏底層實作與工程名詞（`Edge-TTS`、`F5-TTS`、`0 顯存/VRAM`、`0-Token`、`Gemini LLM`、`Python/SQLite`、`SRS`、`Token`、`ai_tool`、`熱修補/軟屏蔽` 等），改為更自然生活化的產品文案（同時完整保留擁有者專屬 `!setup` / `!models` / `!tts status` 診斷資訊與既有指令相容別名）。
+  * 於 4 份系統提示詞（[prompts/general_prompt_community.txt](prompts/general_prompt_community.txt)、[prompts/general_prompt_starter.txt](prompts/general_prompt_starter.txt)、[prompts/general_prompt.txt](prompts/general_prompt.txt)、[prompts/system_prompt.txt](prompts/system_prompt.txt)）新增「**隱藏底層技術細節**」原則，要求機器人對話不暴露模型名稱、檢索與資料庫實作細節。
+* **🧟 《殭屍學園》Wiki Phase 4 Wave 4 全量引用取證稽核與勘誤（`62` 卡）**
+  * 完成 Phase 4 全數 `62` 張微知識卡（[data/game_wiki/cafe_namu_glossary.md](data/game_wiki/cafe_namu_glossary.md) `26` 卡、[data/game_wiki/anniv9_magic_high.md](data/game_wiki/anniv9_magic_high.md) `20` 卡、[data/game_wiki/christmas_events.md](data/game_wiki/christmas_events.md) `16` 卡）之「正文 ↔ 原文佐證 ↔ 貼文時間戳」取證勘誤、`resource_links` 導覽連結品質過濾與 11/26 深夜開服實況對照。
+  * 於 [docs/WIKI_IMPLEMENTATION_PLAN.md](docs/WIKI_IMPLEMENTATION_PLAN.md) 增訂永久防幻覺稽核鐵律（零臆測與引用核實、禁止矯枉過正／反推肯定、導覽連結品質篩選門檻）。
+* **✅ 測試與驗證**
+  * 全套件實測通過 **140 項單元與回歸測試**，且全數更新之 Wiki 檔案通過 `wiki_linter` 檢查（`errors=0, warnings=0, unresolved_reviews=0`）。
+
+---
+
 ## [v2.2.0] - 2026-11-26
 
 本次更新新增 **非即時使用者回饋與建議信箱系統**、補強 **社群版問答專業友善語氣規則**，並收錄 **《殭屍學園》Wiki Phase 4.4（Wave 3 速刷攻略與 11/26 開服補遺）**。

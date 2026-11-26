@@ -42,10 +42,10 @@ def build_voice_select_options(
     for fv in f5_voices[:25]:
         if f5_public_only:
             tag = "公開"
-            desc_text = fv.get("description") or "F5-TTS 公開特色聲線"
+            desc_text = fv.get("description") or "公開特色聲線"
         else:
             tag = "公開" if fv.get("public") else "專屬授權"
-            desc_text = fv.get("description") or f"F5-TTS {tag}聲線"
+            desc_text = fv.get("description") or f"{tag}特色聲線"
         f5_options.append(
             discord.SelectOption(
                 label=f"🎙️ {fv['name']}"[:100],
@@ -231,21 +231,41 @@ class VoiceSelectView(_BaseVoiceSelectView):
         cur_label = tts_engine.get_voice_display_label(self.pref["voice_id"], self.f5_voices)
         rate_str = tts_engine.format_edge_rate(self.pref["rate_pct"])
         pitch_str = tts_engine.format_edge_pitch(self.pref["pitch_hz"])
-        mode_note = "自訂設定" if self.pref.get("is_custom") else "預設值（免顯卡 Edge-TTS）"
+        mode_note = "自訂設定" if self.pref.get("is_custom") else "預設聲線"
+        mute_note = (
+            "🔇 已關閉（不會朗讀你在文字區打的字）"
+            if self.pref.get("proxy_muted")
+            else "🔊 開啟中"
+        )
+        if getattr(self.cog.settings, "enable_user_voice_clone", False):
+            if getattr(self.cog.settings, "tts_clone_approval_mode", "auto") == "manual":
+                clone_note = (
+                    "支援 `!voiceclone` 申請專屬克隆聲線"
+                    "（夾帶 3～15 秒清晰音檔＋逐字稿，待擁有者審核通過後啟用；輸入 `!voiceclone` 查看教學）"
+                )
+            else:
+                clone_note = (
+                    "支援 `!voiceclone` 自助建立私人克隆聲線"
+                    "（夾帶 3～15 秒清晰音檔＋逐字稿，安檢通過立即啟用；輸入 `!voiceclone` 查看教學）"
+                )
+        else:
+            clone_note = "想使用自訂角色聲線？可輸入 `!voiceclone` 查看申請與聯絡說明"
 
         embed = discord.Embed(
             title="🎙️ 個人語音聲線設定",
             description=(
                 f"• **目前聲線**：{cur_label}（{mode_note}）\n"
                 f"• **語速 / 音高**：`{rate_str}` / `{pitch_str}`\n"
-                "• **微調指令**：`!voice rate <-50..+50>`、`!voice pitch <-30..+30>`、`!voice reset`"
+                f"• **自動代說朗讀**：{mute_note}\n"
+                f"• **專屬語音克隆**：{clone_note}\n"
+                "• **微調指令**：`!voice rate <-50..+50>`、`!voice pitch <-30..+30>`、`!voice off` / `!voice on`、`!voice reset`"
             ),
             color=0x38BDF8,
         )
         if self.f5_voices:
-            embed.set_footer(text=f"⚡ 上排為 0 顯存 Edge-TTS；下排為目前主機開放的 {len(self.f5_voices)} 組 F5-TTS 聲線")
+            embed.set_footer(text=f"⚡ 上排為內建標準聲線；下排為目前開放的 {len(self.f5_voices)} 組特色聲線")
         else:
-            embed.set_footer(text="⚡ 全部 Edge-TTS 聲線皆為 0 顯存、免費低延遲即時發音")
+            embed.set_footer(text="⚡ 內建多國標準聲線，點選即刻生效")
         return embed
 
     def _rebuild_items(self) -> None:
@@ -253,12 +273,12 @@ class VoiceSelectView(_BaseVoiceSelectView):
         self._attach_voice_dropdowns(
             self.pref["voice_id"],
             self.f5_voices,
-            edge_placeholder="⚡ 選擇輕量免費聲線（Edge-TTS・0 顯存）",
-            f5_placeholder="🎙️ 選擇特色聲線（F5-TTS，由主機管理員提供）",
+            edge_placeholder="⚡ 選擇內建標準聲線",
+            f5_placeholder="🎙️ 選擇特色／專屬聲線",
         )
 
         btn_reset = discord.ui.Button(
-            label="🔄 恢復預設（台灣女聲・0 顯存）",
+            label="🔄 恢復預設聲線",
             style=discord.ButtonStyle.secondary,
             row=2,
         )
@@ -272,6 +292,25 @@ class VoiceSelectView(_BaseVoiceSelectView):
         )
         btn_preview.callback = self.on_preview
         self.add_item(btn_preview)
+
+        is_muted = bool(self.pref.get("proxy_muted"))
+        btn_toggle_mute = discord.ui.Button(
+            label="🔊 恢復朗讀我的文字" if is_muted else "🔇 不要朗讀我的文字",
+            style=discord.ButtonStyle.success if is_muted else discord.ButtonStyle.danger,
+            row=2,
+        )
+        btn_toggle_mute.callback = self.on_toggle_mute
+        self.add_item(btn_toggle_mute)
+
+    async def on_toggle_mute(self, interaction: discord.Interaction) -> None:
+        self.pref = await asyncio.to_thread(
+            tts_engine.set_user_voice_pref,
+            self.owner_id,
+            proxy_muted=not bool(self.pref.get("proxy_muted")),
+            default_voice=self.cog.settings.tts_default_voice,
+        )
+        self._rebuild_items()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _apply_voice_choice(self, interaction: discord.Interaction, voice_id: str) -> None:
         self.pref = await asyncio.to_thread(
@@ -373,25 +412,25 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
         )
         if self.public_f5_voices:
             embed.set_footer(
-                text=f"⚡ 上排為 0 顯存 Edge-TTS；下排為 {len(self.public_f5_voices)} 組公開 F5-TTS 聲線（不包含私人克隆）"
+                text=f"⚡ 上排為內建標準聲線；下排為 {len(self.public_f5_voices)} 組公開特色聲線（不包含私人聲線）"
             )
         else:
-            embed.set_footer(text="⚡ 目前使用 0 顯存 Edge-TTS 聲線（全體成員皆可切換機器人說話風格）")
+            embed.set_footer(text="⚡ 全體成員皆可隨時切換機器人的說話風格")
         return embed
 
     def _rebuild_items(self) -> None:
         self.clear_items()
         cur_vid = self.g_cfg["ai_jp_voice_id"] if self.mode == "jp" else self.g_cfg["ai_voice_id"]
         edge_ph = (
-            "🌸 設定機器人「日語共學」聲線（Edge-TTS）"
+            "🌸 設定機器人「日語共學」標準聲線"
             if self.mode == "jp"
-            else "🤖 設定機器人「一般對話」聲線（Edge-TTS）"
+            else "🤖 設定機器人「一般對話」標準聲線"
         )
         self._attach_voice_dropdowns(
             cur_vid,
             self.public_f5_voices,
             edge_placeholder=edge_ph,
-            f5_placeholder="🎙️ 設定機器人公開特色聲線（F5-TTS）",
+            f5_placeholder="🎙️ 設定機器人公開特色聲線",
             prefer_japanese=(self.mode == "jp"),
             f5_public_only=True,
         )

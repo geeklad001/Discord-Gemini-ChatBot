@@ -1112,7 +1112,7 @@ def format_lifesim_status_for_llm(channel_id: int, user_id: Optional[int] = None
         pct_txt = f" (檢定成功率 {ch['success_pct']}%)" if ch.get("success_pct") is not None else ""
         choice_lines.append(f"  - [{letter}] {lbl}{pct_txt}")
     unlocked = len(get_user_country_dex(run["user_id"]))
-    story_mode_lbl = STORY_MODE_LABELS.get(run.get("story_mode", "fast"), "⚡ 0-Token 深度本地版")
+    story_mode_lbl = STORY_MODE_LABELS.get(run.get("story_mode", "fast"), "⚡ 經典深度版")
     cur_country = run.get("current_country_name") or run["country_name"]
     cur_city = run.get("current_city") or run["city"]
     loc_txt = f"{cur_country}・{cur_city}"

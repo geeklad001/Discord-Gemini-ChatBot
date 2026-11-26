@@ -48,10 +48,10 @@ class CloneServiceMixin:
     def _build_voice_clone_notice_embed(self) -> discord.Embed:
         owner_contact = self._format_owner_contact()
         embed = discord.Embed(
-            title="🔒 專屬語音克隆（Voice Clone）申請說明",
+            title="🔒 專屬角色聲線申請說明",
             description=(
-                "本機 F5-TTS 語音克隆目前**不開放線上自助上傳或註冊**。\n"
-                f"如欲新增專屬角色音色或個人聲音克隆，請直接聯絡 {owner_contact} 協助於本機伺服器設定。"
+                "專屬語音克隆目前**不開放線上自助上傳或註冊**。\n"
+                f"如欲新增專屬角色音色或個人聲音克隆，請直接聯絡 {owner_contact} 協助設定。"
             ),
             color=0xF59E0B,
         )
@@ -66,7 +66,7 @@ class CloneServiceMixin:
         embed.add_field(
             name="⚡ 現在就能立刻使用的免費聲線",
             value=(
-                "• 輸入 `!voice` 可直接切換內建 16 種免費 Edge-TTS 聲線並微調語速／音高\n"
+                "• 輸入 `!voice` 可直接切換內建 16 種標準聲線並微調語速／音高\n"
                 "• 輸入 `!voice bot` 可設定機器人自己的說話聲音"
             ),
             inline=False,
@@ -165,7 +165,7 @@ class CloneServiceMixin:
         )
 
         embed = discord.Embed(
-            title="🎙️ 專屬語音克隆（F5-TTS 自助申請）" if is_auto else "🎙️ 專屬語音克隆（F5-TTS 審核申請）",
+            title="🎙️ 專屬語音克隆（自助建立）" if is_auto else "🎙️ 專屬語音克隆（申請審核）",
             description=(
                 f"目前你的專屬槽位：**{len(clones)} / {max_slots}**｜"
                 f"伺服器總額度：**{total_clones} / {self.settings.tts_clone_max_total}**\n"

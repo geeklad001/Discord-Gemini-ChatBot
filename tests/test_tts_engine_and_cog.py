@@ -4,6 +4,7 @@ import ast
 import asyncio
 import io
 import json
+import logging
 import os
 import sqlite3
 import subprocess
@@ -1063,7 +1064,7 @@ print("CATALOG_PRIVACY_OK")
         regular_ctx.send.reset_mock()
         await cog.tts_command.callback(cog, regular_ctx, action="clone")
         tts_embed = regular_ctx.send.call_args.kwargs["embed"]
-        self.assertIn("語音克隆", tts_embed.title)
+        self.assertIn("專屬角色聲線申請說明", tts_embed.title)
         self.assertIn("<@9000>", tts_embed.description)
 
         # 3. Fallback neutral label when bot_owner_ids is empty
@@ -2018,6 +2019,154 @@ finally:
                 await cog.voiceclone_command.callback(cog, user_ctx, _arg=None)
                 guide_embed = user_ctx.send.call_args.kwargs["embed"]
                 self.assertIn("專屬槽位", guide_embed.description)
+
+    async def test_user_proxy_mute_migration_commands_view_and_skips_only_muted_user(self):
+        # 1. Verify legacy tts_user_prefs table without proxy_muted smoothly migrates via ALTER TABLE
+        conn = sqlite3.connect(tts_engine.get_db_path())
+        try:
+            conn.execute("DROP TABLE IF EXISTS tts_user_prefs")
+            conn.execute(
+                """
+                CREATE TABLE tts_user_prefs (
+                    user_id INTEGER PRIMARY KEY,
+                    voice_id TEXT NOT NULL,
+                    rate_pct INTEGER NOT NULL DEFAULT 0,
+                    pitch_hz INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO tts_user_prefs (user_id, voice_id, rate_pct, pitch_hz, updated_at) VALUES (111, ?, 10, -5, '2026-01-01 00:00:00')",
+                ("edge:zh-TW-YunJheNeural",),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        tts_engine._initialized_tts_dbs.clear()
+        migrated = tts_engine.get_user_voice_pref(111)
+        self.assertFalse(migrated["proxy_muted"])
+        self.assertEqual(migrated["voice_id"], "edge:zh-TW-YunJheNeural")
+
+        # 2. Muting preserves voice/rate/pitch, and reset clears mute back to False
+        saved = tts_engine.set_user_voice_pref(111, proxy_muted=True)
+        self.assertTrue(saved["proxy_muted"])
+        self.assertEqual(saved["voice_id"], "edge:zh-TW-YunJheNeural")
+        self.assertEqual(saved["rate_pct"], 10)
+        self.assertEqual(saved["pitch_hz"], -5)
+        tts_engine.reset_user_voice_pref(111)
+        self.assertFalse(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+
+        # 3. Cog proxy routing: muted user skipped, unmuted user read; !voice off/on & !tts mute/unmute & VoiceSelectView toggle work
+        bot = MagicMock()
+        bot.is_owner = AsyncMock(return_value=False)
+        bot.voice_clients = []
+        settings = _make_settings()
+        cog = TtsCog(bot, settings, logging.getLogger("test_tts_mute"))
+        cog.synthesizer.fetch_f5_voices = AsyncMock(return_value=[])
+        try:
+            vc_channel = SimpleNamespace(id=3001, name="語音聊天", members=[])
+            vc = MagicMock()
+            vc.channel = vc_channel
+            vc.is_connected.return_value = True
+
+            guild = MagicMock()
+            guild.id = 500
+            guild.voice_client = vc
+            tts_engine.update_guild_tts_settings(
+                500,
+                require_in_vc=False,
+                proxy_enabled=True,
+                allowed_channels=[1001],
+            )
+
+            muted_author = SimpleNamespace(
+                id=111,
+                display_name="MutedUser",
+                bot=False,
+                guild_permissions=SimpleNamespace(administrator=False),
+                voice=None,
+            )
+            other_author = SimpleNamespace(
+                id=222,
+                display_name="NormalUser",
+                bot=False,
+                guild_permissions=SimpleNamespace(administrator=False),
+                voice=None,
+            )
+            text_ch = SimpleNamespace(id=1001, name="chat")
+
+            muted_ctx = _make_ctx(user_id=111, guild_id=500, channel_id=1001, channels=[text_ch])
+            await cog.voice_command.callback(cog, muted_ctx, sub="off", arg=None)
+            self.assertTrue(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+            self.assertIn("不要自動朗讀你打的文字", muted_ctx.send.call_args.args[0])
+
+            mock_pipeline = MagicMock()
+            mock_pipeline.enqueue.return_value = True
+            with patch.object(cog, "_get_or_create_pipeline", return_value=mock_pipeline):
+                msg_muted = SimpleNamespace(
+                    author=muted_author,
+                    guild=guild,
+                    channel=text_ch,
+                    clean_content="不要念這句話",
+                    content="不要念這句話",
+                )
+                msg_other = SimpleNamespace(
+                    author=other_author,
+                    guild=guild,
+                    channel=text_ch,
+                    clean_content="這句要正常朗讀",
+                    content="這句要正常朗讀",
+                )
+                self.assertFalse(await cog.handle_proxy_message(msg_muted))
+                mock_pipeline.enqueue.assert_not_called()
+
+                self.assertTrue(await cog.handle_proxy_message(msg_other))
+                mock_pipeline.enqueue.assert_called_once()
+
+                # Unmute via !tts unmute -> resumes reading
+                await cog.tts_command.callback(cog, muted_ctx, action="unmute", arg=None)
+                self.assertFalse(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+                mock_pipeline.enqueue.reset_mock()
+                self.assertTrue(await cog.handle_proxy_message(msg_muted))
+                mock_pipeline.enqueue.assert_called_once()
+
+            # 4. !tts mute, !voice toggle, and VoiceSelectView mute toggle button
+            await cog.tts_command.callback(cog, muted_ctx, action="mute", arg=None)
+            self.assertTrue(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+            await cog.voice_command.callback(cog, muted_ctx, sub="toggle", arg=None)
+            self.assertFalse(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+
+            pref = tts_engine.get_user_voice_pref(111, settings.tts_default_voice)
+            view = VoiceSelectView(cog, 111, pref, [])
+            default_embed = view.build_embed()
+            desc_default = default_embed.description
+            footer_default = default_embed.footer.text or ""
+            for jargon in ("Edge-TTS", "F5-TTS", "0 顯存"):
+                self.assertNotIn(jargon, desc_default)
+                self.assertNotIn(jargon, footer_default)
+            self.assertIn("開啟中", desc_default)
+            self.assertIn("!voiceclone", desc_default)
+            self.assertIn("申請與聯絡說明", desc_default)
+            settings.enable_user_voice_clone = True
+            settings.tts_clone_approval_mode = "auto"
+            self.assertIn("自助建立私人克隆聲線", view.build_embed().description)
+            settings.tts_clone_approval_mode = "manual"
+            self.assertIn("待擁有者審核通過後啟用", view.build_embed().description)
+            btn_labels = [getattr(c, "label", "") for c in view.children]
+            self.assertTrue(any("不要朗讀我的文字" in lbl for lbl in btn_labels))
+
+            inter = MagicMock()
+            inter.response = MagicMock()
+            inter.response.edit_message = AsyncMock()
+            await view.on_toggle_mute(inter)
+            self.assertTrue(tts_engine.get_user_voice_pref(111)["proxy_muted"])
+            edited_emb = inter.response.edit_message.call_args.kwargs["embed"]
+            self.assertIn("已關閉", edited_emb.description)
+            btn_labels_after = [getattr(c, "label", "") for c in view.children]
+            self.assertTrue(any("恢復朗讀我的文字" in lbl for lbl in btn_labels_after))
+        finally:
+            await cog.synthesizer.close()
 
 
 if __name__ == "__main__":

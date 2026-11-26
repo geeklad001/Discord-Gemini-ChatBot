@@ -4,6 +4,21 @@
 
 ---
 
+## [v2.3.1] - 2026-11-27
+
+本次更新為 Discord 介面體驗優化：全面導入 **動態伺服器機器人名稱（`guild.me.display_name`）**，讓桌遊對戰、語音設定、`!help` 與互動小遊戲自然以機器人在各伺服器的實際暱稱稱呼本體。
+
+### 🌟 重點新功能與升級
+
+* **🏷️ 動態伺服器機器人名稱（`guild.me.display_name`）**
+  * **共用名稱解析工具**（[core/config.py](core/config.py)）：新增 `resolve_bot_display_name()`，依序解析伺服器暱稱（`guild.me.display_name`）➔ 全域顯示名稱（`bot.user.display_name`）➔ 實例設定名稱（`bot_instance_name`）➔ 預設詞，內建長度上限防截斷保護。
+  * **桌遊大廳與對戰介面**（[engines/boardgame_engine.py](engines/boardgame_engine.py)、[cogs/boardgame_views.py](cogs/boardgame_views.py)、[cogs/boardgame_cog.py](cogs/boardgame_cog.py)、[engines/assistant_tools.py](engines/assistant_tools.py)）：大廳對手模式選單（`與 <暱稱> 對戰（會陪聊互動 🧠）`）、等待中快速切換按鈕（`改與 <暱稱> 對戰`）、對局卡片標題、對手名稱（`p2_name`）、自然語言開局與操作提示全面自動套用伺服器暱稱。
+  * **語音設定、指令說明與《80億分之1》**（[cogs/tts/views.py](cogs/tts/views.py)、[cogs/tts/voice_settings.py](cogs/tts/voice_settings.py)、[cogs/tts/admin_commands.py](cogs/tts/admin_commands.py)、[core/help_embeds.py](core/help_embeds.py)、[cogs/assistant_cog.py](cogs/assistant_cog.py)、[cogs/lifesim_cog.py](cogs/lifesim_cog.py)）：`!voice bot` / `!botvoice` 選單與試聽按鈕、`!tts status` 機器人語音設定行、`!help` 總覽標題與《80億分之1》自由行動提示皆動態顯示機器人在該伺服器的暱稱。
+* **✅ 測試與驗證**
+  * 全套件實測通過 **142 項單元與回歸測試**（含新增 [tests/test_config_and_flags.py](tests/test_config_and_flags.py) `test_resolve_bot_display_name`、[tests/test_boardgames.py](tests/test_boardgames.py) `test_bot_display_name_in_boardgames_and_lobby`，以及 [tests/test_tts_engine_and_cog.py](tests/test_tts_engine_and_cog.py) 動態暱稱測試）。
+
+---
+
 ## [v2.3.0] - 2026-11-27
 
 本次更新新增 **語音代說個人不讀字開關**、強化 **`!voice` 面板專屬聲線說明**、推動 **Discord 使用者介面去技術化與技術細節隱藏**，並完成 **《殭屍學園》Wiki Phase 4 Wave 4 全量引用取證稽核與勘誤**。

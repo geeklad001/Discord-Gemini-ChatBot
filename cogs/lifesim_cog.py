@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types
 
 from core.chat_pipeline import is_target_channel
-from core.config import BotSettings, truncate_embed_text
+from core.config import BotSettings, resolve_bot_display_name, truncate_embed_text
 from core.llm_client import generate_with_fallback, get_safety_settings
 from engines import lifesim_engine as ls
 
@@ -166,6 +166,7 @@ def build_life_embed(
     unlocked_count: int = 1,
     include_birth_cert: bool = False,
     llm_epitaph: str = "",
+    bot_name: str = "機器人",
 ) -> discord.Embed:
     """建立《80億分之1》人生狀態卡片或終局謝幕紀念卡片 Embed。"""
     era_lbl = ls.ERA_CONFIG.get(run["era"], {}).get("label", run["era"])
@@ -247,7 +248,8 @@ def build_life_embed(
     ev_title = f"⏳ {pe.get('stage', '人生轉折')}｜{pe.get('title', '命運的十字路口')}"
     ev_body = f"{pe.get('story', '')}\n\n" + "\n".join(choice_lines)
     if story_mode in ("llm", "hybrid"):
-        ev_body += "\n\n💬 *可點下方 `[A]/[B]/[C]`、按 `✍️ 自訂行動`，或直接對 Bot 打字說出你的決定！*"
+        display_bot_name = (bot_name or "").strip()[:24] or "機器人"
+        ev_body += f"\n\n💬 *可點下方 `[A]/[B]/[C]`、按 `✍️ 自訂行動`，或直接對 {display_bot_name} 打字說出你的決定！*"
     embed.add_field(name=ev_title[:250], value=truncate_embed_text(ev_body, max_len=1000), inline=False)
     if include_birth_cert:
         embed.set_image(url="attachment://birth_cert.png")
@@ -637,7 +639,13 @@ class LifeSimActiveView(discord.ui.View):
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
                 return
             unlocked = len(await asyncio.to_thread(ls.get_user_country_dex, updated["user_id"]))
-            embed = build_life_embed(updated, note=action_note, unlocked_count=unlocked)
+            bot_name = resolve_bot_display_name(
+                self.cog.bot,
+                guild=getattr(interaction.channel, "guild", None) or interaction.guild,
+                channel=interaction.channel,
+                settings=self.cog.settings,
+            )
+            embed = build_life_embed(updated, note=action_note, unlocked_count=unlocked, bot_name=bot_name)
             new_view = LifeSimActiveView(self.cog, updated)
             new_view.message = self.message or interaction.message
             await interaction.response.edit_message(embed=embed, view=new_view, attachments=[])
@@ -660,7 +668,18 @@ class LifeSimActiveView(discord.ui.View):
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
                 return
             unlocked = len(await asyncio.to_thread(ls.get_user_country_dex, updated["user_id"]))
-            embed = build_life_embed(updated, note=f"已將人生重心調整為：{ls.FOCUS_LABELS[focus_val]}", unlocked_count=unlocked)
+            bot_name = resolve_bot_display_name(
+                self.cog.bot,
+                guild=getattr(interaction.channel, "guild", None) or interaction.guild,
+                channel=interaction.channel,
+                settings=self.cog.settings,
+            )
+            embed = build_life_embed(
+                updated,
+                note=f"已將人生重心調整為：{ls.FOCUS_LABELS[focus_val]}",
+                unlocked_count=unlocked,
+                bot_name=bot_name,
+            )
             new_view = LifeSimActiveView(self.cog, updated)
             new_view.message = self.message or interaction.message
             await interaction.response.edit_message(embed=embed, view=new_view, attachments=[])
@@ -891,12 +910,19 @@ class LifeSimCog(commands.Cog):
         llm_epitaph = ""
         if run["status"] == "finished" and not skip_llm_epitaph and run.get("story_mode") in ("hybrid", "llm"):
             llm_epitaph = await self.generate_llm_epitaph(run)
+        bot_name = resolve_bot_display_name(
+            self.bot,
+            guild=getattr(channel, "guild", None),
+            channel=channel,
+            settings=self.settings,
+        )
         embed = build_life_embed(
             run,
             note=note,
             unlocked_count=unlocked,
             include_birth_cert=include_birth_cert,
             llm_epitaph=llm_epitaph,
+            bot_name=bot_name,
         )
         view = LifeSimActiveView(self, run) if run["status"] == "active" else LifeSimFinishedView(self, run)
         clean_content = (content_text or "").strip() or None

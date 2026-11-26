@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional
 import discord
 
 from cogs.tts.pipeline import TtsJob
+from core.config import resolve_bot_display_name
 from engines import tts_engine
 
 if TYPE_CHECKING:
@@ -370,11 +371,18 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
         g_cfg: dict,
         public_f5_voices: list[dict],
         mode: str = "general",
+        bot_name: Optional[str] = None,
     ):
         self.guild_id = guild_id
         self.g_cfg = dict(g_cfg)
         self.public_f5_voices = [fv for fv in public_f5_voices if fv.get("public")]
         self.mode = "jp" if mode == "jp" else "general"
+        guild_obj = cog.bot.get_guild(guild_id) if hasattr(getattr(cog, "bot", None), "get_guild") else None
+        self.bot_name = (bot_name or "").strip()[:24] or resolve_bot_display_name(
+            getattr(cog, "bot", None),
+            guild=guild_obj,
+            settings=getattr(cog, "settings", None),
+        )
         super().__init__(cog, owner_id)
         self._rebuild_items()
 
@@ -406,7 +414,7 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
             "• **微調指令**：`!voice bot rate <-50..+50>`、`!voice bot pitch <-30..+30>`、`!voice bot jp ...`、`!voice bot reset`"
         )
         embed = discord.Embed(
-            title="🤖 機器人 AI 朗讀聲線設定",
+            title=f"🤖 {self.bot_name} 的語音聲線設定"[:250],
             description="\n".join(lines),
             color=0xA855F7,
         )
@@ -415,22 +423,22 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
                 text=f"⚡ 上排為內建標準聲線；下排為 {len(self.public_f5_voices)} 組公開特色聲線（不包含私人聲線）"
             )
         else:
-            embed.set_footer(text="⚡ 全體成員皆可隨時切換機器人的說話風格")
+            embed.set_footer(text=f"⚡ 全體成員皆可隨時切換 {self.bot_name} 的說話風格")
         return embed
 
     def _rebuild_items(self) -> None:
         self.clear_items()
         cur_vid = self.g_cfg["ai_jp_voice_id"] if self.mode == "jp" else self.g_cfg["ai_voice_id"]
         edge_ph = (
-            "🌸 設定機器人「日語共學」標準聲線"
+            f"🌸 設定 {self.bot_name}「日語共學」標準聲線"[:100]
             if self.mode == "jp"
-            else "🤖 設定機器人「一般對話」標準聲線"
+            else f"🤖 設定 {self.bot_name}「一般對話」標準聲線"[:100]
         )
         self._attach_voice_dropdowns(
             cur_vid,
             self.public_f5_voices,
             edge_placeholder=edge_ph,
-            f5_placeholder="🎙️ 設定機器人公開特色聲線",
+            f5_placeholder=f"🎙️ 設定 {self.bot_name} 公開特色聲線"[:100],
             prefer_japanese=(self.mode == "jp"),
             f5_public_only=True,
         )
@@ -454,7 +462,7 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
         self.add_item(btn_reset)
 
         btn_preview = discord.ui.Button(
-            label="🔊 試聽機器人聲線",
+            label=f"🔊 試聽 {self.bot_name} 聲線"[:80],
             style=discord.ButtonStyle.primary,
             row=2,
         )
@@ -513,9 +521,9 @@ class BotVoiceSelectView(_BaseVoiceSelectView):
             rate_pct=rate_pct,
             pitch_hz=pitch_hz,
             fallback_voice=fallback,
-            job_label="試聽:機器人",
-            vc_queued_msg="🔊 已將機器人聲線試聽加入語音頻道佇列！",
-            followup_prefix=f"🔊 機器人目前聲線（**{label_str}**）試聽：",
+            job_label=f"試聽:{self.bot_name}",
+            vc_queued_msg=f"🔊 已將 {self.bot_name} 聲線試聽加入語音頻道佇列！",
+            followup_prefix=f"🔊 {self.bot_name} 目前聲線（**{label_str}**）試聽：",
             filename_prefix="bot_voice_preview",
             log_context=f"機器人聲線 (guild={self.guild_id}) ",
         )

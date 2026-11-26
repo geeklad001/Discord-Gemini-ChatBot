@@ -318,6 +318,26 @@ class TestBoardGames(unittest.TestCase):
         self.assertIn("將軍", check_note)
         self._verify_png(bg.render_board_image(g))
 
+    def test_bot_display_name_in_boardgames_and_lobby(self):
+        import asyncio
+        from cogs.boardgame_views import GameLobbyView, _build_board_embed
+
+        g_llm = bg.create_game(299, "othello", "pve", 1, "Alice", "llm", bot_name="革命群專屬機器人")
+        self.assertEqual(g_llm["p2_name"], "革命群專屬機器人")
+
+        emb = _build_board_embed(g_llm, bot_name="革命群專屬機器人")
+        self.assertIn("與 革命群專屬機器人 對戰", emb.title)
+
+        async def _create_lobby_view():
+            return GameLobbyView(None, bot_name="革命群專屬機器人")
+
+        lobby_view = asyncio.run(_create_lobby_view())
+        mode_labels = [opt.label for opt in lobby_view.mode_select.options]
+        self.assertTrue(any("與 革命群專屬機器人 對戰" in lbl for lbl in mode_labels))
+
+        g_norm = bg.create_game(300, "othello", "pve", 1, "Alice", "normal", bot_name="革命群專屬機器人")
+        self.assertTrue(g_norm["p2_name"].startswith("革命群專屬機器人（"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.3.1"
 
 MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 圖片上限 10 MB
 MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024    # 文字設定檔上限 2 MB
@@ -402,3 +402,38 @@ async def is_bot_owner(bot: Any, settings: BotSettings, user: Any) -> bool:
     except Exception:
         return False
     return False
+
+
+def resolve_bot_display_name(
+    bot: Any = None,
+    *,
+    guild: Any = None,
+    channel: Any = None,
+    settings: Optional[BotSettings] = None,
+    fallback: str = "機器人",
+    max_len: int = 24,
+) -> str:
+    """Resolve the bot's display name in a guild (server nickname > global display name > instance name > fallback)."""
+    resolved_guild = guild if guild is not None else getattr(channel, "guild", None)
+    candidates: list[Any] = []
+    if resolved_guild is not None:
+        me = getattr(resolved_guild, "me", None)
+        if me is not None:
+            candidates.append(getattr(me, "display_name", None))
+            candidates.append(getattr(me, "nick", None))
+            candidates.append(getattr(me, "name", None))
+    if bot is not None:
+        user = getattr(bot, "user", None)
+        if user is not None:
+            candidates.append(getattr(user, "display_name", None))
+            candidates.append(getattr(user, "name", None))
+    if settings is not None:
+        candidates.append(getattr(settings, "bot_instance_name", None))
+    candidates.append(fallback)
+
+    for raw in candidates:
+        if isinstance(raw, str):
+            clean = " ".join(raw.split()).strip()
+            if clean:
+                return clean[:max_len] if max_len > 0 else clean
+    return fallback

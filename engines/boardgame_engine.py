@@ -342,6 +342,14 @@ from engines.boardgames.renderer import (
 # =============================================================
 # 5. 統一對局生命週期介面 (Create / Join / Move / Resign / Draw / Hint)
 # =============================================================
+def _format_pve_opponent_name(diff: str, bot_name: str = "") -> str:
+    clean_name = " ".join((bot_name or "").split()).strip()[:24]
+    if diff == "llm":
+        return clean_name if clean_name else "機器人"
+    label = DIFFICULTY_LABELS.get(diff, diff)
+    return f"{clean_name}（{label}）" if clean_name else f"電腦對手（{label}）"
+
+
 def create_game(
     channel_id: int,
     game_type: str,
@@ -351,6 +359,7 @@ def create_game(
     difficulty: str = "normal",
     invited_id: int = 0,
     invited_name: str = "",
+    bot_name: str = "",
 ) -> dict:
     """在指定頻道建立一局新桌遊（若有尚未結束的舊對局則回傳錯誤）。"""
     init_boardgame_tables()
@@ -376,7 +385,7 @@ def create_game(
     if mode == "pve":
         status = "active"
         p2_id = 0
-        p2_name = f"Bot AI ({DIFFICULTY_LABELS[diff]})"
+        p2_name = _format_pve_opponent_name(diff, bot_name)
     else:
         status = "waiting"
         p2_id = 0
@@ -406,7 +415,7 @@ def join_pvp_game(game_id: int, user_id: int, user_name: str) -> dict:
     if game["status"] != "waiting":
         raise ValueError("這場對局已經開始或結束了。")
     if game["p1_id"] == user_id:
-        raise ValueError("不能自己跟自己進行 PvP 對戰喔（若要練習請開 PvE 或點「改與 Bot AI 對戰」）！")
+        raise ValueError("不能自己跟自己進行 PvP 對戰喔（若要練習請開 PvE 或點「改為單人對戰」）！")
     if game.get("invited_id") and game["invited_id"] != user_id:
         raise ValueError(f"這場對戰是專屬向 <@{game['invited_id']}> 發出的邀請！")
     game["p2_id"] = user_id
@@ -415,16 +424,17 @@ def join_pvp_game(game_id: int, user_id: int, user_name: str) -> dict:
     return _save_game_state(game)
 
 
-def switch_waiting_to_pve(game_id: int, user_id: int) -> dict:
+def switch_waiting_to_pve(game_id: int, user_id: int, bot_name: str = "") -> dict:
     game = get_game_by_id(game_id)
     if not game or game["status"] != "waiting":
         raise ValueError("目前沒有可切換模式的等待棋局。")
     if game["p1_id"] != user_id:
         raise ValueError("只有開局發起人才能切換模式。")
+    p2_name = _format_pve_opponent_name(game["difficulty"], bot_name)
     with get_conn() as conn:
         conn.execute(
             "UPDATE board_games SET mode = 'pve', status = 'active', p2_id = 0, p2_name = ?, invited_id = 0 WHERE id = ?",
-            (f"Bot AI ({DIFFICULTY_LABELS[game['difficulty']]})", game_id),
+            (p2_name, game_id),
         )
         conn.commit()
     return get_game_by_id(game_id)

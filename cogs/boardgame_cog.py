@@ -22,7 +22,7 @@ from cogs.boardgame_views import (
 )
 from cogs.lifesim_cog import LifeSimSetupView, build_atlas_embed
 from core.chat_pipeline import is_target_channel
-from core.config import BotSettings
+from core.config import BotSettings, resolve_bot_display_name
 from core.llm_client import generate_with_fallback, get_safety_settings
 from engines import boardgame_engine as bg
 from engines import lifesim_engine as ls
@@ -53,9 +53,17 @@ class BoardGameCog(commands.Cog):
             prev.stop()
         self._active_views[game_id] = view
 
-    def _build_view_for_game(self, game: dict, selected_sq: Optional[str] = None) -> discord.ui.View:
+    def _resolve_bot_name(self, *, guild=None, channel=None) -> str:
+        return resolve_bot_display_name(self.bot, guild=guild, channel=channel, settings=self.settings)
+
+    def _build_view_for_game(
+        self,
+        game: dict,
+        selected_sq: Optional[str] = None,
+        bot_name: str = "機器人",
+    ) -> discord.ui.View:
         if game["status"] == "waiting":
-            return LobbyChallengeView(self, game["id"])
+            return LobbyChallengeView(self, game["id"], bot_name=bot_name)
         if game["status"] == "active":
             return ActiveBoardView(self, game, selected_sq=selected_sq)
         return FinishedBoardView(self, game)
@@ -68,8 +76,9 @@ class BoardGameCog(commands.Cog):
         selected_sq: Optional[str] = None,
         content_text: Optional[str] = None,
     ) -> discord.Message:
-        embed = _build_board_embed(game, last_note=last_note, selected_sq=selected_sq)
-        view = self._build_view_for_game(game, selected_sq=selected_sq)
+        bot_name = self._resolve_bot_name(guild=getattr(channel, "guild", None), channel=channel)
+        embed = _build_board_embed(game, last_note=last_note, selected_sq=selected_sq, bot_name=bot_name)
+        view = self._build_view_for_game(game, selected_sq=selected_sq, bot_name=bot_name)
         self._track_view(game["id"], view)
         clean_content = (content_text or "").strip() or None
         if clean_content and len(clean_content) > 1900:
@@ -119,8 +128,9 @@ class BoardGameCog(commands.Cog):
         if old_view is not None:
             old_view.message = None
             old_view.stop()
-        embed = _build_board_embed(game, last_note=last_note, selected_sq=selected_sq)
-        view = self._build_view_for_game(game, selected_sq=selected_sq)
+        bot_name = self._resolve_bot_name(guild=interaction.guild, channel=interaction.channel)
+        embed = _build_board_embed(game, last_note=last_note, selected_sq=selected_sq, bot_name=bot_name)
+        view = self._build_view_for_game(game, selected_sq=selected_sq, bot_name=bot_name)
         self._track_view(game["id"], view)
         view.message = interaction.message
         if game["status"] == "waiting":
@@ -222,8 +232,14 @@ class BoardGameCog(commands.Cog):
 
     async def show_lobby_from_interaction(self, interaction: discord.Interaction, edit: bool = True) -> None:
         """從其他按鈕互動返回或開啟遊戲大廳。"""
-        embed = await asyncio.to_thread(_build_game_lobby_embed, interaction.channel.id, interaction.user.id)
-        view = GameLobbyView(self, owner_id=interaction.user.id)
+        bot_name = self._resolve_bot_name(guild=interaction.guild, channel=interaction.channel)
+        embed = await asyncio.to_thread(
+            _build_game_lobby_embed,
+            interaction.channel.id,
+            interaction.user.id,
+            bot_name=bot_name,
+        )
+        view = GameLobbyView(self, owner_id=interaction.user.id, bot_name=bot_name)
         if edit:
             await interaction.response.edit_message(embed=embed, view=view)
             view.message = interaction.message
@@ -243,10 +259,16 @@ class BoardGameCog(commands.Cog):
         if not is_target_channel(ctx.channel, self.settings):
             return
 
+        bot_name = self._resolve_bot_name(guild=ctx.guild, channel=ctx.channel)
         raw = (args or "").strip()
         if not raw or raw.lower() in ("list", "lobby", "menu", "清單", "大廳"):
-            embed = await asyncio.to_thread(_build_game_lobby_embed, ctx.channel.id, ctx.author.id)
-            lobby_view = GameLobbyView(self, owner_id=ctx.author.id)
+            embed = await asyncio.to_thread(
+                _build_game_lobby_embed,
+                ctx.channel.id,
+                ctx.author.id,
+                bot_name=bot_name,
+            )
+            lobby_view = GameLobbyView(self, owner_id=ctx.author.id, bot_name=bot_name)
             sent_lobby = await ctx.send(embed=embed, view=lobby_view)
             lobby_view.message = sent_lobby
             return
@@ -381,6 +403,7 @@ class BoardGameCog(commands.Cog):
                 difficulty,
                 invited_id,
                 invited_name,
+                bot_name=bot_name,
             )
         except ValueError as e:
             await ctx.send(f"⚠️ {e}（可直接說「重貼棋盤」或輸入 `!play board` 叫回面板）")
@@ -394,7 +417,8 @@ class BoardGameCog(commands.Cog):
         if not is_target_channel(ctx.channel, self.settings):
             return
         if not move_text or not move_text.strip():
-            await ctx.send("❓ 請輸入座標或欄號（如 `!m d3`、`!m e2e4`），或直接點擊棋盤卡片按鈕／用口語請 Bot 下棋！")
+            bot_name = self._resolve_bot_name(guild=ctx.guild, channel=ctx.channel)
+            await ctx.send(f"❓ 請輸入座標或欄號（如 `!m d3`、`!m e2e4`），或直接點擊棋盤卡片按鈕／用口語請 {bot_name} 下棋！")
             return
         active = await asyncio.to_thread(bg.get_active_game, ctx.channel.id)
         if not active or active["status"] != "active":

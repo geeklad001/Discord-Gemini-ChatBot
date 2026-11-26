@@ -10,6 +10,7 @@ import discord
 from discord.ext import commands
 
 from cogs.tts.views import BotVoiceSelectView, VoiceSelectView
+from core.config import resolve_bot_display_name
 from engines import tts_engine
 
 
@@ -290,6 +291,9 @@ class VoiceSettingsMixin:
             await ctx.send("❌ 此指令僅限在伺服器中使用。")
             return
 
+        bot_name = resolve_bot_display_name(
+            self.bot, guild=ctx.guild, channel=ctx.channel, settings=self.settings
+        )
         g_cfg = await asyncio.to_thread(self._get_guild_settings, ctx.guild.id)
         public_f5_voices = [
             fv for fv in await self.synthesizer.fetch_f5_voices(user_id=None) if fv.get("public")
@@ -304,7 +308,15 @@ class VoiceSettingsMixin:
             rest = tokens[1].strip() if len(tokens) > 1 else ""
 
         if not rest:
-            view = BotVoiceSelectView(self, ctx.author.id, ctx.guild.id, g_cfg, public_f5_voices, mode=mode)
+            view = BotVoiceSelectView(
+                self,
+                ctx.author.id,
+                ctx.guild.id,
+                g_cfg,
+                public_f5_voices,
+                mode=mode,
+                bot_name=bot_name,
+            )
             view.message = await ctx.send(embed=view.build_embed(), view=view)
             return
 
@@ -330,7 +342,7 @@ class VoiceSettingsMixin:
             )
             default_vid = updated[voice_key]
             return (
-                f"🔄 已將機器人**{mode_label}**聲線恢復為預設："
+                f"🔄 已將 {bot_name} **{mode_label}**聲線恢復為預設："
                 f"**{tts_engine.get_voice_display_label(default_vid)}**（語速 `+0%` / 音高 `+0Hz`）。"
             )
 
@@ -356,20 +368,20 @@ class VoiceSettingsMixin:
             voice_key=voice_key,
             rate_key=rate_key,
             pitch_key=pitch_key,
-            list_title=f"🤖 機器人可用聲線清單（{mode_label}）",
+            list_title=f"🤖 {bot_name} 可用聲線清單（{mode_label}）"[:250],
             list_f5_header="\n**🎙️ 公開特色聲線**",
             list_color=0xA855F7,
             list_footer="輸入 !voice bot 開啟下拉選單，或 !voice bot [jp] <關鍵字> 直接切換",
             pitch_invalid_msg="❌ 音高請輸入整數，例如 `!voice bot pitch +8` 或 `!voice bot jp pitch -5`。",
             rate_invalid_msg="❌ 語速請輸入整數百分比，例如 `!voice bot rate +15` 或 `!voice bot jp rate -15`。",
-            pitch_info_prefix=f"ℹ️ 機器人**{mode_label}**目前的音高為",
-            rate_info_prefix=f"ℹ️ 機器人**{mode_label}**目前的語速為",
-            pitch_updated_prefix=f"✅ 已設定機器人**{mode_label}**音高為",
-            rate_updated_prefix=f"✅ 已設定機器人**{mode_label}**語速為",
-            switched_prefix=f"✅ 已設定機器人**{mode_label}**聲線為：",
+            pitch_info_prefix=f"ℹ️ {bot_name} **{mode_label}**目前的音高為",
+            rate_info_prefix=f"ℹ️ {bot_name} **{mode_label}**目前的語速為",
+            pitch_updated_prefix=f"✅ 已設定 {bot_name} **{mode_label}**音高為",
+            rate_updated_prefix=f"✅ 已設定 {bot_name} **{mode_label}**語速為",
+            switched_prefix=f"✅ 已設定 {bot_name} **{mode_label}**聲線為：",
             not_found_hint="公開聲線，請輸入 `!voice bot` 開啟選單或 `!voice bot list` 查看清單。",
             clone_reject_msg=(
-                "🔒 機器人聲線僅可使用內建標準聲線或已公開的特色聲線。"
+                f"🔒 {bot_name} 聲線僅可使用內建標準聲線或已公開的特色聲線。"
             ),
             reset_fn=_reset_bot,
             save_fn=_save_bot,

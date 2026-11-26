@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
 from cogs.assistant_cog import AssistantCog
 from cogs.flashcard_cog import FlashcardStudyView
 from cogs.rpg_cog import RpgCog
-from cogs.tts_cog import CloneAuditView, CloneReviewView, GuildVoicePipeline, TtsCog, TtsJob, VoiceSelectView
+from cogs.tts_cog import BotVoiceSelectView, CloneAuditView, CloneReviewView, GuildVoicePipeline, TtsCog, TtsJob, VoiceSelectView
 
 
 def _make_wav_bytes(duration_sec: float, samplerate: int = 24000) -> bytes:
@@ -610,6 +610,12 @@ class TestTtsEngineAndCog(unittest.IsolatedAsyncioTestCase):
         cfg_after = tts_engine.get_guild_tts_settings(500)
         self.assertFalse(cfg_after["ai_voice_is_custom"])
         self.assertFalse(cfg_after["ai_jp_voice_is_custom"])
+
+        # 6. BotVoiceSelectView renders resolved bot_name in embed title and preview button label
+        bot_voice_view = BotVoiceSelectView(cog, 111, 500, cfg_after, [], bot_name="革命群專屬機器人")
+        self.assertIn("革命群專屬機器人", bot_voice_view.build_embed().title)
+        btn_labels = [getattr(c, "label", "") or "" for c in bot_voice_view.children]
+        self.assertTrue(any("試聽" in lbl and "革命群專屬機器人" in lbl for lbl in btn_labels))
 
     async def test_simultaneous_proxy_tts_and_ai_target_channel(self):
         vc_channel = SimpleNamespace(id=3001, name="語音房")

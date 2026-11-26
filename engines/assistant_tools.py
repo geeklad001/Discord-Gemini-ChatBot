@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 import discord
 
-from core.config import _parse_bool, _parse_optional_channel_id
+from core.config import _parse_bool, _parse_optional_channel_id, resolve_bot_display_name
 from engines import (
     assistant_db,
     boardgame_engine,
@@ -267,6 +267,7 @@ def boardgame_start(
         return f"❓ 找不到遊戲 `{game_type}`。目前支援：黑白棋 (othello)、西洋棋 (chess)、四子棋 (connect4)、五子棋 (gomoku)。"
     clean_mode = "pvp" if (mode or "").strip().lower() in ("pvp", "雙人", "對戰") else "pve"
     clean_diff = boardgame_engine.resolve_difficulty(difficulty)
+    bot_name = resolve_bot_display_name(guild=getattr(msg, "guild", None), channel=getattr(msg, "channel", None))
     try:
         game = boardgame_engine.create_game(
             channel_id=channel_id,
@@ -275,6 +276,7 @@ def boardgame_start(
             p1_id=msg.author.id,
             p1_name=msg.author.display_name,
             difficulty=clean_diff,
+            bot_name=bot_name,
         )
     except ValueError as e:
         return f"⚠️ 開局失敗：{e}"

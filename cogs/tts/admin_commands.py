@@ -9,6 +9,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from core.config import resolve_bot_display_name
 from engines import tts_engine
 
 _ON_TOKENS = ("on", "true", "開啟")
@@ -437,6 +438,9 @@ class TtsAdminMixin:
         )
 
         if ctx.guild and g_cfg is not None:
+            bot_name = resolve_bot_display_name(
+                self.bot, guild=ctx.guild, channel=ctx.channel, settings=self.settings
+            )
             public_f5 = [fv for fv in user_f5 if fv.get("public")]
             target_str = self._format_channel_list(
                 ctx.guild, g_cfg["allowed_channels"], "預設：僅語音頻道內建文字區"
@@ -446,13 +450,13 @@ class TtsAdminMixin:
                 f"{tts_engine.get_voice_display_label(g_cfg['ai_voice_id'], public_f5)} "
                 f"(`{tts_engine.format_edge_rate(g_cfg['ai_rate_pct'])}` / `{tts_engine.format_edge_pitch(g_cfg['ai_pitch_hz'])}`)"
             )
-            bot_voice_lines = [f"• 機器人一般聲線：{ai_gen_str}"]
+            bot_voice_lines = [f"• {bot_name} 一般聲線：{ai_gen_str}"]
             if self.settings.enable_japanese_mode:
                 ai_jp_str = (
                     f"{tts_engine.get_voice_display_label(g_cfg['ai_jp_voice_id'], public_f5)} "
                     f"(`{tts_engine.format_edge_rate(g_cfg['ai_jp_rate_pct'])}` / `{tts_engine.format_edge_pitch(g_cfg['ai_jp_pitch_hz'])}`)"
                 )
-                bot_voice_lines.append(f"• 機器人日語聲線：{ai_jp_str}")
+                bot_voice_lines.append(f"• {bot_name} 日語聲線：{ai_jp_str}")
             ai_gen_state = (
                 "開啟"
                 if g_cfg["ai_read_general"]
@@ -460,7 +464,7 @@ class TtsAdminMixin:
             )
             vconly_state = "開啟（僅限同房成員）" if g_cfg["require_in_vc"] else "關閉（未進房也可讀）"
             embed.add_field(
-                name="伺服器策略（管理員設定頻道／全體可自訂機器人聲線）",
+                name=f"伺服器策略（管理員設定頻道／全體可自訂 {bot_name} 聲線）"[:256],
                 value=(
                     f"• 真人代說：**{'開啟' if g_cfg['proxy_enabled'] else '關閉'}** | "
                     f"同語音房限制：**{vconly_state}**\n"

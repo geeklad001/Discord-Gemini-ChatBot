@@ -7,15 +7,20 @@ import discord
 from core.config import BotSettings
 
 
-def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
+def build_help_overview_embed(
+    settings: BotSettings,
+    *,
+    bot_name: Optional[str] = None,
+) -> discord.Embed:
     """Build the main !help Embed dynamically according to enabled feature flags."""
     if settings.enable_japanese_mode:
         desc = "平時可直接聊天、傳圖片/貼圖互動或進行日語共學。常用指令如下："
     else:
         desc = "平時可直接聊天、傳圖片/貼圖/短影片互動，或隨時開啟 TRPG 跑團。常用指令如下："
 
+    display_name = (bot_name or "").strip()[:24] or settings.bot_instance_name
     embed = discord.Embed(
-        title=f"📖 {settings.bot_instance_name} 指令速查表",
+        title=f"📖 {display_name} 指令速查表"[:250],
         description=desc,
         color=0x5865F2,
     )
@@ -315,6 +320,8 @@ def build_system_help_embed() -> discord.Embed:
 def build_help_topic_embed(
     settings: BotSettings,
     topic: Optional[str] = None,
+    *,
+    bot_name: Optional[str] = None,
 ) -> tuple[Optional[discord.Embed], Optional[str]]:
     """Return `(embed, disabled_notice)` for `!help [topic]`."""
     sub = (topic or "").strip().lower()
@@ -338,4 +345,4 @@ def build_help_topic_embed(
     if sub in ("system", "sys", "owner", "models", "model", "setup", "config", "健檢", "面板", "todo", "remind", "admin", "系統", "擁有者", "模型", "管理", "feedback", "fb", "回報", "建議", "意見"):
         return build_system_help_embed(), None
 
-    return build_help_overview_embed(settings), None
+    return build_help_overview_embed(settings, bot_name=bot_name), None

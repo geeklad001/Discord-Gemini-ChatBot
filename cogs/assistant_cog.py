@@ -24,6 +24,7 @@ from core.config import (
     init_runtime_env,
     is_bot_owner,
     load_settings,
+    resolve_bot_display_name,
     resolve_prompt_path,
     truncate_embed_text,
 )
@@ -858,7 +859,10 @@ class AssistantCog(commands.Cog):
         ):
             return
 
-        embed, notice = build_help_topic_embed(self.settings, topic)
+        bot_name = resolve_bot_display_name(
+            self.bot, guild=ctx.guild, channel=ctx.channel, settings=self.settings
+        )
+        embed, notice = build_help_topic_embed(self.settings, topic, bot_name=bot_name)
         if notice:
             await ctx.send(notice)
             return

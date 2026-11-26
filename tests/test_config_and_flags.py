@@ -27,6 +27,7 @@ from core.config import (
     is_bot_owner,
     is_configured_owner,
     load_settings,
+    resolve_bot_display_name,
     resolve_env_file,
     resolve_prompt_path,
     truncate_embed_text,
@@ -187,6 +188,9 @@ class TestConfigAndFlags(unittest.TestCase):
         self.assertTrue(any("桌遊" in n for n in field_names_full))
         self.assertTrue(any("語音朗讀" in n for n in field_names_full))
 
+        emb_custom_name = build_help_overview_embed(full, bot_name="革命群專屬機器人")
+        self.assertIn("革命群專屬機器人", emb_custom_name.title)
+
         fb_emb, fb_notice = build_help_topic_embed(full, "feedback")
         self.assertIsNone(fb_notice)
         self.assertIsNotNone(fb_emb)
@@ -215,6 +219,44 @@ class TestConfigAndFlags(unittest.TestCase):
         self.assertTrue(asyncio.run(is_bot_owner(bot, settings, SimpleNamespace(id=124225918267817984))))
         self.assertTrue(asyncio.run(is_bot_owner(bot, settings, SimpleNamespace(id=888))))
         self.assertFalse(asyncio.run(is_bot_owner(bot, settings, SimpleNamespace(id=999))))
+
+    def test_resolve_bot_display_name(self):
+        settings = BotSettings(
+            env_file=".env",
+            bot_instance_name="InstanceBot",
+            discord_bot_token="t",
+            gemini_api_key="k",
+            target_channel_id=1,
+        )
+        guild = SimpleNamespace(
+            me=SimpleNamespace(display_name="革命群專屬機器人", nick="NickIgnored", name="NameIgnored")
+        )
+        bot = SimpleNamespace(user=SimpleNamespace(display_name="GlobalDisplayBot", name="GlobalUser"))
+
+        # 1. Prefers guild.me.display_name (direct guild or via channel.guild)
+        self.assertEqual(resolve_bot_display_name(bot, guild=guild, settings=settings), "革命群專屬機器人")
+        self.assertEqual(
+            resolve_bot_display_name(bot, channel=SimpleNamespace(guild=guild), settings=settings),
+            "革命群專屬機器人",
+        )
+
+        # 2. Falls back to bot.user.display_name, then settings.bot_instance_name, then fallback
+        self.assertEqual(resolve_bot_display_name(bot, settings=settings), "GlobalDisplayBot")
+        self.assertEqual(resolve_bot_display_name(settings=settings), "InstanceBot")
+        self.assertEqual(resolve_bot_display_name(), "機器人")
+        self.assertEqual(resolve_bot_display_name(fallback="自訂預設"), "自訂預設")
+
+        # 3. Safely ignores non-str MagicMock attributes
+        mock_guild = MagicMock()
+        mock_bot = MagicMock()
+        self.assertEqual(resolve_bot_display_name(mock_bot, guild=mock_guild, settings=settings), "InstanceBot")
+        self.assertEqual(resolve_bot_display_name(mock_bot, guild=mock_guild), "機器人")
+
+        # 4. Truncates to max_len
+        long_guild = SimpleNamespace(me=SimpleNamespace(display_name="超長機器人暱稱" * 10))
+        truncated = resolve_bot_display_name(guild=long_guild, max_len=8)
+        self.assertEqual(len(truncated), 8)
+        self.assertEqual(truncated, ("超長機器人暱稱" * 10)[:8])
 
     def test_flash_lite_only_defaults_and_final_fallback_parsing(self):
         self.assertEqual(DEFAULT_PRIMARY_MODEL, "gemini-flash-lite-latest")

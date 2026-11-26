@@ -2,7 +2,7 @@
 
 專為 Discord 好友群、社群跑團與日語共學打造的免費自架 AI 機器人！連接 Google AI Studio 的 **Gemini Flash-Lite（免費額度友善＋多代 Flash-Lite 自動輪替保底）**，免信用卡、不用寫程式，就能一次擁有**多模態聊天、語音頻道朗讀、互動桌遊與 80 億分之 1 人生模擬、TRPG 跑團、日語雙頻道與單字卡、遊戲黑話圖鑑，以及長期記憶與定時提醒**！
 
-> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.3.0)](CHANGELOG.md)
+> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.3.1)](CHANGELOG.md)
 
 ---
 

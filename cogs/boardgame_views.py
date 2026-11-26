@@ -11,7 +11,7 @@ from cogs.lifesim_cog import (
     build_lifesim_setup_embed,
     create_lifesim_option_selects,
 )
-from core.config import truncate_embed_text
+from core.config import resolve_bot_display_name, truncate_embed_text
 from engines import boardgame_engine as bg
 from engines import lifesim_engine as ls
 
@@ -52,14 +52,23 @@ def _build_board_embed(
     game: dict,
     last_note: str = "",
     selected_sq: Optional[str] = None,
+    bot_name: str = "機器人",
 ) -> discord.Embed:
     """Build the Discord Embed representing a waiting, active, or finished board game."""
+    clean_bot = (bot_name or "機器人").strip()[:24] or "機器人"
     gtype = game["game_type"]
     meta = bg.GAME_CATALOG[gtype]
     status = game["status"]
     p1_label = meta["p1_label"]
     p2_label = meta["p2_label"]
-    mode_tag = f"PvE ({bg.DIFFICULTY_LABELS.get(game['difficulty'], '普通')})" if game["mode"] == "pve" else "PvP 雙人對戰"
+    if game["mode"] == "pve":
+        mode_tag = (
+            f"與 {clean_bot} 對戰"
+            if game["difficulty"] == "llm"
+            else f"PvE ({bg.DIFFICULTY_LABELS.get(game['difficulty'], '普通')})"
+        )
+    else:
+        mode_tag = "PvP 雙人對戰"
 
     if status == "waiting":
         invite_txt = f"指定挑戰 <@{game['invited_id']}>" if game.get("invited_id") else "公開挑戰（任何人皆可加入）"
@@ -68,7 +77,7 @@ def _build_board_embed(
             description=truncate_embed_text(
                 f"發起人 **{game['p1_name']}** ({p1_label}) 開了一局新對戰！\n"
                 f"📣 **對戰形式**：{invite_txt}\n\n"
-                f"點擊下方 **「⚔️ 加入對戰」** 即可立刻開打，或由發起人改為與 Bot AI 對戰。",
+                f"點擊下方 **「⚔️ 加入對戰」** 即可立刻開打，或由發起人改與 {clean_bot} 對戰。",
                 max_len=3800,
             ),
             color=0xFEE75C,
@@ -148,18 +157,18 @@ def _build_board_embed(
     embed.set_image(url="attachment://board.png")
 
     if status == "active":
-        coord_hint = "可點擊下方按鈕/選單，或直接用自然語言請 Bot 幫忙下棋（輔助：!m <座標>）"
+        coord_hint = f"可點擊下方按鈕/選單，或直接用自然語言請 {clean_bot} 幫忙下棋（輔助：!m <座標>）"
         if gtype == "othello":
-            coord_hint = "用下方選單點選綠點，或直接對 Bot 說想下哪裡（亦支援 !m d3）"
+            coord_hint = f"用下方選單點選綠點，或直接對 {clean_bot} 說想下哪裡（亦支援 !m d3）"
         elif gtype == "chess":
-            coord_hint = "用下方選單選子→選格，或口語指揮 Bot（亦支援 !m e2e4 / Nf3）"
+            coord_hint = f"用下方選單選子→選格，或口語指揮 {clean_bot}（亦支援 !m e2e4 / Nf3）"
         elif gtype == "connect4":
-            coord_hint = "點擊下方 1️⃣~7️⃣ 按鈕投子，或對 Bot 說投第幾欄"
+            coord_hint = f"點擊下方 1️⃣~7️⃣ 按鈕投子，或對 {clean_bot} 說投第幾欄"
         elif gtype == "gomoku":
-            coord_hint = "用推薦熱點選單、對 Bot 口述座標，或輸入 !m g7"
+            coord_hint = f"用推薦熱點選單、對 {clean_bot} 口述座標，或輸入 !m g7"
         embed.set_footer(text=f"棋局 #{game['id']} | {coord_hint}")
     else:
-        embed.set_footer(text=f"棋局 #{game['id']} 已結束 | 可點「🏆 我的戰績」或對 Bot 說「查看桌遊戰績」")
+        embed.set_footer(text=f"棋局 #{game['id']} 已結束 | 可點「🏆 我的戰績」或對 {clean_bot} 說「查看桌遊戰績」")
     return embed
 
 
@@ -169,8 +178,13 @@ async def _render_board_file(game: dict, highlight_from: Optional[str] = None) -
     return discord.File(io.BytesIO(png_bytes), filename="board.png")
 
 
-def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> discord.Embed:
+def _build_game_lobby_embed(
+    channel_id: int,
+    user_id: Optional[int] = None,
+    bot_name: str = "機器人",
+) -> discord.Embed:
     """Build the unified Discord game lobby Embed for board games and 1in8B."""
+    clean_bot = (bot_name or "機器人").strip()[:24] or "機器人"
     active = bg.get_active_game(channel_id)
     active_life = ls.get_active_life_run(channel_id, user_id=user_id) if user_id else None
     lines = []
@@ -204,8 +218,8 @@ def _build_game_lobby_embed(channel_id: int, user_id: Optional[int] = None) -> d
     embed.add_field(
         name="🚀 極簡玩法（按鈕選單 ＋ 自然語言都能玩）",
         value=(
-            "• **用選的**：下拉選遊戲與模式（棋盤支援 **對戰電腦 / 🧠 機器人親下 / 雙人對戰**；`80億分之1` 可選 **⚡經典深度版 / 🎭精華劇情版 / 🧠全程故事版 / 🧵開專屬串**）\n"
-            "• **用說的**：直接打「我想跟你玩黑白棋」、「幫我下 C4」、「我想玩80億分之1」、「這題選A / 我決定去考公職」\n"
+            f"• **用選的**：下拉選遊戲與模式（棋盤支援 **對戰電腦 / 🧠 {clean_bot} / 雙人對戰**；`80億分之1` 可選 **⚡經典深度版 / 🎭精華劇情版 / 🧠全程故事版 / 🧵開專屬串**）\n"
+            f"• **用說的**：直接打「我想跟 {clean_bot} 玩黑白棋」、「幫我下 C4」、「我想玩80億分之1」、「這題選A / 我決定去考公職」\n"
             "• **用指令**：`!play 黑白棋` / `!play 西洋棋 ai` / `!play 1in8b` / `!play 圖鑑`"
         ),
         inline=False,
@@ -239,10 +253,12 @@ class GameLobbyView(discord.ui.View):
         cog: Optional["BoardGameCog"],
         initial_game: str = "othello",
         owner_id: Optional[int] = None,
+        bot_name: str = "機器人",
     ):
         super().__init__(timeout=600)
         self.cog = cog
         self.owner_id = owner_id
+        self.bot_name = (bot_name or "機器人").strip()[:24] or "機器人"
         self.message: Optional[discord.Message] = None
         self.selected_game = initial_game
         self.selected_mode = "pve:normal"
@@ -298,11 +314,12 @@ class GameLobbyView(discord.ui.View):
         return sel
 
     def _make_mode_select(self) -> discord.ui.Select:
+        llm_label = f"與 {self.bot_name} 對戰（會陪聊互動 🧠）"[:100]
         mode_opts = [
             discord.SelectOption(label="對戰電腦（簡單 🌱）", value="pve:easy", default=(self.selected_mode == "pve:easy")),
             discord.SelectOption(label="對戰電腦（普通 ⚔️）", value="pve:normal", default=(self.selected_mode == "pve:normal")),
             discord.SelectOption(label="對戰電腦（困難 🔥）", value="pve:hard", default=(self.selected_mode == "pve:hard")),
-            discord.SelectOption(label="對戰機器人本人（會陪聊互動 🧠）", value="pve:llm", default=(self.selected_mode == "pve:llm")),
+            discord.SelectOption(label=llm_label, value="pve:llm", default=(self.selected_mode == "pve:llm")),
             discord.SelectOption(label="PvP 雙人公開對戰（等待群友加入 👥）", value="pvp:open", default=(self.selected_mode == "pvp:open")),
         ]
         sel = discord.ui.Select(placeholder="2️⃣ 選擇 PvE 難度或 PvP 對戰...", options=mode_opts, row=1)
@@ -338,12 +355,12 @@ class GameLobbyView(discord.ui.View):
     def _current_embed(self, channel_id: int, user_id: Optional[int] = None) -> discord.Embed:
         if self.selected_game == "1in8b":
             return build_lifesim_setup_embed(self.era, self.draw_method, self.story_mode)
-        return _build_game_lobby_embed(channel_id, user_id=user_id)
+        return _build_game_lobby_embed(channel_id, user_id=user_id, bot_name=self.bot_name)
 
     async def _current_embed_async(self, channel_id: int, user_id: Optional[int] = None) -> discord.Embed:
         if self.selected_game == "1in8b":
             return build_lifesim_setup_embed(self.era, self.draw_method, self.story_mode)
-        return await asyncio.to_thread(_build_game_lobby_embed, channel_id, user_id)
+        return await asyncio.to_thread(_build_game_lobby_embed, channel_id, user_id, self.bot_name)
 
     async def _check_owner(self, interaction: discord.Interaction) -> bool:
         if self.owner_id is not None and interaction.user.id != self.owner_id:
@@ -411,6 +428,16 @@ class GameLobbyView(discord.ui.View):
         mode_kind, sub = self.selected_mode.split(":", 1)
         mode = "pve" if mode_kind == "pve" else "pvp"
         diff = sub if mode == "pve" else "normal"
+        bname = (
+            resolve_bot_display_name(
+                self.cog.bot,
+                guild=interaction.guild,
+                channel=interaction.channel,
+                settings=self.cog.settings,
+            )
+            if self.cog
+            else self.bot_name
+        )
         try:
             game = await asyncio.to_thread(
                 bg.create_game,
@@ -420,6 +447,7 @@ class GameLobbyView(discord.ui.View):
                 interaction.user.id,
                 interaction.user.display_name,
                 diff,
+                bot_name=bname,
             )
         except ValueError as e:
             await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
@@ -495,11 +523,13 @@ class GameLobbyView(discord.ui.View):
 class LobbyChallengeView(discord.ui.View):
     """PvP 等待對手加入卡片按鈕。"""
 
-    def __init__(self, cog: "BoardGameCog", game_id: int):
+    def __init__(self, cog: "BoardGameCog", game_id: int, bot_name: str = "機器人"):
         super().__init__(timeout=1800)
         self.cog = cog
         self.game_id = game_id
+        self.bot_name = (bot_name or "機器人").strip()[:24] or "機器人"
         self.message: Optional[discord.Message] = None
+        self.switch_pve_btn.label = f"改與 {self.bot_name} 對戰"[:80]
 
     async def on_timeout(self) -> None:
         await _disable_view_on_timeout(self)
@@ -523,14 +553,29 @@ class LobbyChallengeView(discord.ui.View):
                 old_view=self,
             )
 
-    @discord.ui.button(label="改與 Bot AI 對戰", emoji="🤖", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="改為單人對戰", emoji="🤖", style=discord.ButtonStyle.primary)
     async def switch_pve_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         lock = await _try_acquire_game_lock(self.cog, self.game_id, interaction)
         if lock is None:
             return
         async with lock:
+            bname = (
+                resolve_bot_display_name(
+                    self.cog.bot,
+                    guild=interaction.guild,
+                    channel=interaction.channel,
+                    settings=self.cog.settings,
+                )
+                if self.cog
+                else self.bot_name
+            )
             try:
-                game = await asyncio.to_thread(bg.switch_waiting_to_pve, self.game_id, interaction.user.id)
+                game = await asyncio.to_thread(
+                    bg.switch_waiting_to_pve,
+                    self.game_id,
+                    interaction.user.id,
+                    bot_name=bname,
+                )
             except ValueError as e:
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
                 return
@@ -538,7 +583,7 @@ class LobbyChallengeView(discord.ui.View):
             await self.cog.edit_interaction_game_card(
                 interaction,
                 game,
-                last_note="已切換為 PvE 人機對戰，開局！",
+                last_note="已切換為單人對戰，開局！",
                 old_view=self,
             )
 
@@ -553,7 +598,7 @@ class LobbyChallengeView(discord.ui.View):
             except ValueError as e:
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
                 return
-            embed = _build_board_embed(game, last_note="發起人已取消開局。")
+            embed = _build_board_embed(game, last_note="發起人已取消開局。", bot_name=self.bot_name)
             await interaction.response.edit_message(embed=embed, view=None, attachments=[])
             self.message = None
             self.stop()
@@ -596,6 +641,16 @@ class FinishedBoardView(discord.ui.View):
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
                 return
         else:
+            bname = (
+                resolve_bot_display_name(
+                    self.cog.bot,
+                    guild=interaction.guild,
+                    channel=interaction.channel,
+                    settings=self.cog.settings,
+                )
+                if self.cog
+                else "機器人"
+            )
             try:
                 new_game = await asyncio.to_thread(
                     bg.create_game,
@@ -605,6 +660,7 @@ class FinishedBoardView(discord.ui.View):
                     interaction.user.id,
                     interaction.user.display_name,
                     g["difficulty"],
+                    bot_name=bname,
                 )
             except ValueError as e:
                 await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
@@ -632,8 +688,23 @@ class FinishedBoardView(discord.ui.View):
 
     @discord.ui.button(label="回遊戲大廳", emoji="🎮", style=discord.ButtonStyle.secondary)
     async def lobby_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = await asyncio.to_thread(_build_game_lobby_embed, interaction.channel.id, interaction.user.id)
-        view = GameLobbyView(self.cog, owner_id=interaction.user.id)
+        bname = (
+            resolve_bot_display_name(
+                self.cog.bot,
+                guild=interaction.guild,
+                channel=interaction.channel,
+                settings=self.cog.settings,
+            )
+            if self.cog
+            else "機器人"
+        )
+        embed = await asyncio.to_thread(
+            _build_game_lobby_embed,
+            interaction.channel.id,
+            interaction.user.id,
+            bot_name=bname,
+        )
+        view = GameLobbyView(self.cog, owner_id=interaction.user.id, bot_name=bname)
         await interaction.response.send_message(embed=embed, view=view)
         try:
             view.message = await interaction.original_response()

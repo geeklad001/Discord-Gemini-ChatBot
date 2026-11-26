@@ -36,6 +36,54 @@ RUNTIME_CONFIG_ALLOWED_KEYS: frozenset[str] = frozenset({
     "tts_ai_auto_read_general",
 })
 
+FEEDBACK_CATEGORIES: tuple[str, ...] = ("wiki", "bug", "feature", "ux", "other")
+FEEDBACK_CATEGORY_LABELS: dict[str, str] = {
+    "wiki": "📚 Wiki 勘誤/補充",
+    "bug": "🐛 功能異常/Bug",
+    "feature": "💡 功能建議/許願",
+    "ux": "🎨 體驗/排版改善",
+    "other": "📝 其他回饋",
+}
+FEEDBACK_STATUSES: tuple[str, ...] = ("open", "triaged", "resolved", "wontfix")
+FEEDBACK_STATUS_LABELS: dict[str, str] = {
+    "open": "🟡 待處理",
+    "triaged": "🔵 已確認/排程中",
+    "resolved": "✅ 已解決",
+    "wontfix": "⚪ 暫不處理/關閉",
+}
+FEEDBACK_CATEGORY_ALIASES: dict[str, str] = {
+    "wiki": "wiki",
+    "圖鑑": "wiki",
+    "黑話": "wiki",
+    "資料": "wiki",
+    "勘誤": "wiki",
+    "知識庫": "wiki",
+    "bug": "bug",
+    "error": "bug",
+    "錯誤": "bug",
+    "異常": "bug",
+    "故障": "bug",
+    "壞掉": "bug",
+    "feature": "feature",
+    "feat": "feature",
+    "suggest": "feature",
+    "suggestion": "feature",
+    "建議": "feature",
+    "許願": "feature",
+    "新增": "feature",
+    "功能": "feature",
+    "ux": "ux",
+    "ui": "ux",
+    "體驗": "ux",
+    "排版": "ux",
+    "互動": "ux",
+    "語氣": "ux",
+    "提示": "ux",
+    "other": "other",
+    "misc": "other",
+    "其他": "other",
+}
+
 
 def get_db_path() -> Path:
     """依環境變數 DB_NAME 動態取得資料庫路徑，預設為 assistant.db (支援不同社群/實例資料隔離)"""
@@ -47,6 +95,8 @@ def get_db_path() -> Path:
 
 # 透過 ContextVar 傳遞當前觸發的 Discord 訊息上下文 (執行緒與非同步安全)
 current_discord_msg: contextvars.ContextVar[Optional[discord.Message]] = contextvars.ContextVar("current_discord_msg", default=None)
+# 透過 ContextVar 傳遞當前回合被回覆訊息／近況摘錄（供非即時回饋工具自動附帶現場脈絡）
+current_feedback_context: contextvars.ContextVar[str] = contextvars.ContextVar("current_feedback_context", default="")
 
 
 @contextlib.contextmanager
@@ -124,6 +174,25 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS bot_runtime_config (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            # 6. 非即時使用者回饋與建議信箱（永不注入聊天 System Prompt，避免干擾模型效能）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS feedback_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL DEFAULT 'other',
+                    summary TEXT NOT NULL,
+                    detail TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    source TEXT NOT NULL DEFAULT 'command',
+                    reporter_id INTEGER DEFAULT 0,
+                    reporter_name TEXT DEFAULT '',
+                    channel_id INTEGER DEFAULT 0,
+                    message_jump_url TEXT DEFAULT '',
+                    context_excerpt TEXT DEFAULT '',
+                    resolution_note TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
             """)
@@ -426,3 +495,300 @@ def clear_runtime_config_overrides() -> int:
         cursor.execute("DELETE FROM bot_runtime_config")
         conn.commit()
         return max(0, int(cursor.rowcount or 0))
+
+
+# -------------------------------------------------------------
+# 非即時使用者回饋與建議信箱 (Asynchronous User Feedback Reports)
+# -------------------------------------------------------------
+def normalize_feedback_category(raw: Optional[str], fallback_text: str = "") -> str:
+    """將使用者或 AI 傳入的分類正規化為合法回饋分類，必要時依內容關鍵字推斷。"""
+    key = (raw or "").strip().lower()
+    if key in FEEDBACK_CATEGORY_ALIASES:
+        return FEEDBACK_CATEGORY_ALIASES[key]
+
+    combined = f"{key} {(fallback_text or '').strip().lower()}".strip()
+    if any(k in combined for k in ("wiki", "圖鑑", "黑話", "知識庫", "殭屍學園", "譯名", "條目")):
+        return "wiki"
+    if any(k in combined for k in ("bug", "報錯", "沒反應", "壞掉", "卡住", "閃退", "失敗", "算錯", "亂碼", "當機")):
+        return "bug"
+    if any(k in combined for k in ("建議", "希望", "許願", "可以加", "要不要加", "新增", "改成", "能不能")):
+        return "feature"
+    if any(k in combined for k in ("排版", "太長", "字太小", "按鈕", "介面", "語氣")):
+        return "ux"
+    return "other"
+
+
+def _sanitize_feedback_jump_url(raw_url: str) -> str:
+    url = str(raw_url or "").strip()
+    if not url or len(url) > 300 or any(ch.isspace() for ch in url):
+        return ""
+    if not url.startswith(("http://", "https://")):
+        return ""
+    return url
+
+
+def add_feedback_report(
+    summary: str,
+    detail: str = "",
+    *,
+    category: str = "other",
+    source: str = "command",
+    reporter_id: int = 0,
+    reporter_name: str = "",
+    channel_id: int = 0,
+    message_jump_url: str = "",
+    context_excerpt: str = "",
+    cooldown_seconds: int = 0,
+) -> tuple[Optional[int], str]:
+    """寫入非即時回饋／建議工單（永不注入聊天 System Prompt），含 10 分鐘去重與冷卻節流。"""
+    clean_summary = " ".join(str(summary or "").split()).strip()
+    clean_detail = str(detail or "").strip()
+    if not clean_summary and not clean_detail:
+        return None, "empty"
+    if not clean_summary:
+        clean_summary = " ".join(clean_detail.split())[:100]
+    if not clean_detail:
+        clean_detail = clean_summary
+
+    clean_summary = clean_summary[:120]
+    clean_detail = clean_detail[:1200]
+    clean_context = str(context_excerpt or "").strip()[:600]
+    clean_url = _sanitize_feedback_jump_url(message_jump_url)
+    clean_source = str(source or "command").strip()[:32] or "command"
+    clean_reporter_name = str(reporter_name or "").strip()[:80]
+    norm_cat = normalize_feedback_category(category, f"{clean_summary} {clean_detail}")
+
+    init_db()
+    now_dt = datetime.now(TZ_TAIPEI)
+    now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    dup_cutoff = (now_dt - timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        # 1. 同摘要 10 分鐘內去重（僅限未結案工單）
+        cursor.execute(
+            """
+            SELECT id, summary FROM feedback_reports
+            WHERE status IN ('open', 'triaged') AND created_at >= ?
+            ORDER BY id DESC LIMIT 30
+            """,
+            (dup_cutoff,),
+        )
+        norm_summary = clean_summary.lower()
+        for row in cursor.fetchall():
+            if str(row["summary"] or "").strip().lower() == norm_summary:
+                return int(row["id"]), "duplicate"
+
+        # 2. 同使用者冷卻保護（避免短時間洗單或誤觸）
+        if cooldown_seconds > 0 and reporter_id > 0:
+            cd_cutoff = (now_dt - timedelta(seconds=cooldown_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+            recent_row = cursor.execute(
+                """
+                SELECT id FROM feedback_reports
+                WHERE reporter_id = ? AND created_at > ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (int(reporter_id), cd_cutoff),
+            ).fetchone()
+            if recent_row:
+                return None, "rate_limited"
+
+        cursor.execute(
+            """
+            INSERT INTO feedback_reports (
+                category, summary, detail, status, source,
+                reporter_id, reporter_name, channel_id,
+                message_jump_url, context_excerpt, resolution_note,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, '', ?, ?)
+            """,
+            (
+                norm_cat,
+                clean_summary,
+                clean_detail,
+                clean_source,
+                int(reporter_id or 0),
+                clean_reporter_name,
+                int(channel_id or 0),
+                clean_url,
+                clean_context,
+                now_str,
+                now_str,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid), "created"
+
+
+def list_feedback_reports(
+    *,
+    status: Optional[str] = "open",
+    category: Optional[str] = None,
+    limit: int = 100,
+) -> list[dict]:
+    """依狀態與分類查詢回饋／建議工單（最新在前）。"""
+    init_db()
+    where_clauses: list[str] = []
+    params: list = []
+
+    st = (status or "").strip().lower()
+    if st == "open":
+        where_clauses.append("status IN ('open', 'triaged')")
+    elif st in ("triaged", "resolved", "wontfix"):
+        where_clauses.append("status = ?")
+        params.append(st)
+    # st in ("", "all") -> no status filter
+
+    cat = (category or "").strip().lower()
+    if cat in FEEDBACK_CATEGORIES:
+        where_clauses.append("category = ?")
+        params.append(cat)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    safe_limit = max(1, min(int(limit or 100), 500))
+    sql = f"""
+        SELECT id, category, summary, detail, status, source,
+               reporter_id, reporter_name, channel_id,
+               message_jump_url, context_excerpt, resolution_note,
+               created_at, updated_at
+        FROM feedback_reports
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    params.append(safe_limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_feedback_report(report_id: int) -> Optional[dict]:
+    """依編號取得單筆回饋／建議工單。"""
+    init_db()
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT id, category, summary, detail, status, source,
+                   reporter_id, reporter_name, channel_id,
+                   message_jump_url, context_excerpt, resolution_note,
+                   created_at, updated_at
+            FROM feedback_reports
+            WHERE id = ?
+            """,
+            (int(report_id),),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_feedback_counts() -> dict[str, int]:
+    """統計各狀態回饋數量。"""
+    init_db()
+    counts = {st: 0 for st in FEEDBACK_STATUSES}
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS cnt FROM feedback_reports GROUP BY status"
+        ).fetchall()
+    for row in rows:
+        st = str(row["status"] or "")
+        if st in counts:
+            counts[st] = int(row["cnt"] or 0)
+    counts["active"] = counts["open"] + counts["triaged"]
+    counts["total"] = sum(counts[st] for st in FEEDBACK_STATUSES)
+    return counts
+
+
+def update_feedback_status(
+    report_id: int,
+    status: str,
+    resolution_note: str = "",
+) -> Optional[dict]:
+    """更新回饋工單狀態與處理備註，回傳更新後的資料列（找不到則回傳 None）。"""
+    st = (status or "").strip().lower()
+    if st not in FEEDBACK_STATUSES:
+        raise ValueError(f"不允許的回饋狀態：{status!r}")
+    note = str(resolution_note or "").strip()[:500]
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    init_db()
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE feedback_reports
+            SET status = ?, resolution_note = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (st, note, now_str, int(report_id)),
+        )
+        conn.commit()
+        if cursor.rowcount <= 0:
+            return None
+    return get_feedback_report(report_id)
+
+
+def delete_feedback_report(report_id: int) -> bool:
+    """刪除指定編號的回饋工單。"""
+    init_db()
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM feedback_reports WHERE id = ?", (int(report_id),))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def format_feedback_markdown(
+    reports: list[dict],
+    *,
+    include_reporter: bool = False,
+    title: str = "使用者回饋與建議清單",
+) -> str:
+    """將回饋工單列表匯出為易讀的 Markdown 文件（預設隱藏回報者身分）。"""
+    now_str = datetime.now(TZ_TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    status_counts = {st: 0 for st in FEEDBACK_STATUSES}
+    for r in reports:
+        st = r.get("status", "open")
+        if st in status_counts:
+            status_counts[st] += 1
+
+    lines = [
+        f"# 📮 {title}",
+        f"- 匯出時間：{now_str} (UTC+8) ｜ 筆數：{len(reports)}",
+        (
+            f"- 統計：🟡 待處理 {status_counts['open']} ｜ "
+            f"🔵 已確認/排程中 {status_counts['triaged']} ｜ "
+            f"✅ 已解決 {status_counts['resolved']} ｜ "
+            f"⚪ 暫不處理 {status_counts['wontfix']}"
+        ),
+        "",
+    ]
+    if not reports:
+        lines.append("目前沒有符合條件的回饋紀錄。")
+        return "\n".join(lines)
+
+    for r in reports:
+        cat_label = FEEDBACK_CATEGORY_LABELS.get(r.get("category", "other"), r.get("category", "other"))
+        st_label = FEEDBACK_STATUS_LABELS.get(r.get("status", "open"), r.get("status", "open"))
+        lines.append(f"## #{r['id']}｜{r.get('summary', '')}")
+        meta_parts = [
+            f"狀態：{st_label}",
+            f"分類：{cat_label}",
+            f"建立：{r.get('created_at', '')}",
+            f"來源：{r.get('source', 'command')}",
+        ]
+        if include_reporter and (r.get("reporter_name") or r.get("reporter_id")):
+            meta_parts.append(f"回報者：{r.get('reporter_name', '')} (`{r.get('reporter_id', 0)}`)")
+        lines.append(f"- {' ｜ '.join(meta_parts)}")
+        detail = str(r.get("detail") or "").strip()
+        if detail and detail != str(r.get("summary") or "").strip():
+            lines.append(f"- **詳細說明**：\n  {detail.replace(chr(10), chr(10) + '  ')}")
+        excerpt = str(r.get("context_excerpt") or "").strip()
+        if excerpt:
+            quoted = "\n".join(f"  > {ln}" for ln in excerpt.splitlines())
+            lines.append(f"- **現場脈絡摘錄**：\n{quoted}")
+        jump_url = str(r.get("message_jump_url") or "").strip()
+        if jump_url:
+            lines.append(f"- **原訊息連結**：{jump_url}")
+        note = str(r.get("resolution_note") or "").strip()
+        if note:
+            lines.append(f"- **處理備註**：{note}")
+        lines.append("")
+    return "\n".join(lines)

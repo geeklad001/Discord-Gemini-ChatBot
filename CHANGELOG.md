@@ -4,6 +4,27 @@
 
 ---
 
+## [v2.2.0] - 2026-11-26
+
+本次更新新增 **非即時使用者回饋與建議信箱系統**、補強 **社群版問答專業友善語氣規則**，並收錄 **《殭屍學園》Wiki Phase 4.4（Wave 3 速刷攻略與 11/26 開服補遺）**。
+
+### 🌟 重點新功能與升級
+
+* **📮 非即時使用者回饋與建議系統（`!feedback` / `!建議` ＋ 自然語言自動收錄）**
+  * **隔離式 SQLite 回饋庫**（[engines/assistant_db.py](engines/assistant_db.py)）：新增獨立 `feedback_reports` 資料表，**永不注入聊天 System Prompt**，支援 5 分類自動推斷（`wiki`/`bug`/`feature`/`ux`/`other`）、10 分鐘去重與冷卻保護。
+  * **口語自然收錄＋現場脈絡擷取**（[engines/assistant_tools.py](engines/assistant_tools.py)、[core/chat_pipeline.py](core/chat_pipeline.py)）：新增 `submit_user_feedback` 工具，當使用者指出錯誤或提出明確建議（如「建議...」、「希望...」）時自動收錄並附帶被回覆訊息脈絡。
+  * **公開匿名看板與離線匯出**（[cogs/feedback_views.py](cogs/feedback_views.py)、[cogs/assistant_cog.py](cogs/assistant_cog.py)、[scripts/export_feedback.py](scripts/export_feedback.py)）：`!feedback list`／`view` 全群公開可查、`done`/`triage`/`close`/`reopen`/`export`/`del` 由管理員／擁有者控管；全程隱藏回報者身分並套用 `AllowedMentions.none()` 不提及回報者。同步更新 4 份提示詞、`!help`、[README.md](README.md) 與 [docs/COMMANDS.md](docs/COMMANDS.md)。
+* **🤝 社群版問答與互助專業友善語氣規則**
+  * 更新 [prompts/general_prompt_community.txt](prompts/general_prompt_community.txt)，於最高優先層級明確規範「使用者詢問訊息或群內有人幫忙回答問題時，立即切換為專業友善的工具人語氣，嚴禁嘲諷」。
+* **🧟 《殭屍學園》Wiki Phase 4.4（Wave 3 速刷攻略與 11/26 開服補遺，新增 `11` 卡，全庫達 `153` 張）**
+  * [data/game_wiki/anniv9_magic_high.md](data/game_wiki/anniv9_magic_high.md)（`15` ➔ `20` 卡）：補齊 2026-11-26《龍與魔法師的約定》開服補遺（延長維護、劇情跳過、黑龍撒母爾通關獎勵）、魔力券總量（日誌 130 張）與首日避雷／速通路線。
+  * [data/game_wiki/christmas_events.md](data/game_wiki/christmas_events.md)（`10` ➔ `16` 卡）：補齊《聖誕快車 2》26 關變體／24 公仔配方、2026 前夜祭 100 公仔速刷與歷代聖誕新舊 `코노` 刷幣對照。
+  * 同步更新 [docs/WIKI_IMPLEMENTATION_PLAN.md](docs/WIKI_IMPLEMENTATION_PLAN.md) 速刷覆核規範與 Phase 4.4 進度。
+* **✅ 測試與驗證**
+  * 全套件實測通過 **139 項單元與回歸測試**，並通過 `wiki_linter` 結構／連結檢查。
+
+---
+
 ## [v2.1.0] - 2026-11-26
 
 本次更新涵蓋 **Flash / Gemini 4 Hydrogen 高峰備援模型輪替與 404 冷卻避讓**，以及 **《殭屍學園》知識庫 Phase 4 擴充（Schema V2.1 多連結導覽、Cafe 用語集、9 週年《魔法高中》、聖誕節活動）**。

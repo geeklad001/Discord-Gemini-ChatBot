@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from engines import assistant_tools
 from cogs.assistant_cog import build_help_overview_embed
+from core.help_embeds import build_help_topic_embed
 import core.config as config_mod
 from core.config import (
     DEFAULT_FALLBACK_MODELS,
@@ -141,7 +142,10 @@ class TestConfigAndFlags(unittest.TestCase):
         self.assertNotIn("rpg_roll_check", names_starter)
         self.assertNotIn("boardgame_play_move", names_starter)
         self.assertNotIn("lifesim_start", names_starter)
-        self.assertEqual(names_starter, {"record_memory", "create_todo", "finish_todo", "query_todos", "set_reminder"})
+        self.assertEqual(
+            names_starter,
+            {"record_memory", "create_todo", "finish_todo", "query_todos", "set_reminder", "submit_user_feedback"},
+        )
 
     def test_help_embed_dynamic_sections(self):
         starter = BotSettings(
@@ -182,6 +186,11 @@ class TestConfigAndFlags(unittest.TestCase):
         self.assertTrue(any("單字" in n for n in field_names_full))
         self.assertTrue(any("桌遊" in n for n in field_names_full))
         self.assertTrue(any("語音朗讀" in n for n in field_names_full))
+
+        fb_emb, fb_notice = build_help_topic_embed(full, "feedback")
+        self.assertIsNone(fb_notice)
+        self.assertIsNotNone(fb_emb)
+        self.assertTrue(any("!feedback" in f.value for f in fb_emb.fields))
 
     def test_truncate_embed_text(self):
         long_str = "a" * 4000

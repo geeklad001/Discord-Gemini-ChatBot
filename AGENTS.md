@@ -44,7 +44,7 @@
 - 本專案主程式已模組化拆分並由 `bot.py` 統一載入：
   - `core/`：`config.py`、`llm_client.py`、`media.py`、`chat_pipeline.py`、`rendering.py`、`help_embeds.py`（動態 `!help` 與主題說明 Embed 建構器）
   - `engines/`：`assistant_db.py`、`assistant_tools.py`、`rpg_engine.py`、`flashcard_engine.py`、`lifesim_engine.py`、`safety_guardrail.py`、`video_engine.py`，以及分拆子套件與 Facade：`boardgame_engine.py`（+ `engines/boardgames/`）、`game_wiki_engine.py`（+ `engines/game_wiki/`）、`tts_engine.py`（+ `engines/tts/`）
-  - `cogs/`：`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`lifesim_cog.py`、`flashcard_cog.py`、`wiki_cog.py`、`tts_cog.py`（+ `cogs/tts/`），以及獨立 Discord UI 互動視圖模組 `cogs/*_views.py`（`boardgame_views.py`、`flashcard_views.py`、`wiki_views.py`）
+  - `cogs/`：`assistant_cog.py`、`rpg_cog.py`、`boardgame_cog.py`、`lifesim_cog.py`、`flashcard_cog.py`、`wiki_cog.py`、`tts_cog.py`（+ `cogs/tts/`），以及獨立 Discord UI 互動視圖模組 `cogs/*_views.py`（`boardgame_views.py`、`feedback_views.py`、`flashcard_views.py`、`wiki_views.py`）
 - 凡是掛載進 `GenerateContentConfig(tools=...)` 的工具，其使用時機與限制必須在該頻道對應的 System Prompt 中有明確定義；該頻道或該實例未啟用的工具或功能（例如停用 `ENABLE_FLASHCARD_MODE` 時的 `add_flashcard_card`、停用 `ENABLE_GAME_WIKI` 時的 `lookup_game_wiki` 與 Pass-1 OCR、停用 `ENABLE_BOARD_GAMES` 時的 `boardgame_*` / `lifesim_*`、停用 `ENABLE_VOICE_TTS` 時的 `TtsCog`），應從 `tools` 清單中移除並停用對應 Cog，避免模型亂呼叫做白工。
 - **語音頻道與 `TTS_CHANNEL_ID` 防護**：在日語雙頻道模式下，必須確保只有純日語區段 (`[JP]`) 會送往語音頻道與 `TTS_CHANNEL_ID`。若模型因呼叫工具而未輸出 `[ZH]` 分隔標籤，必須有防呆機制避免將整段中文工具回報直接丟進 TTS 頻道朗讀。
 

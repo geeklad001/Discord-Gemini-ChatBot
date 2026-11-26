@@ -1,6 +1,7 @@
 """Assistant Cog: !reset, !reload, !todo, !remind, !memory, !help, and reminder loop."""
 
 import asyncio
+import io
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,11 @@ from typing import Optional
 import discord
 from discord.ext import commands, tasks
 
+from cogs.feedback_views import (
+    FeedbackListView,
+    build_feedback_detail_embed,
+    build_feedback_list_embed,
+)
 from engines import assistant_db, assistant_tools, game_wiki_engine, safety_guardrail
 from core.chat_pipeline import is_target_channel, record_channel_reset_timestamp
 from core.config import (
@@ -582,6 +588,260 @@ class AssistantCog(commands.Cog):
     async def forget_shortcut(self, ctx: commands.Context, memory_id: Optional[str] = None):
         """快速刪除長期記憶：!forget <編號>"""
         await self.memory_command(ctx, action="del", arg=str(memory_id) if memory_id is not None else None)
+
+    async def _extract_reply_context_for_feedback(self, message: discord.Message) -> str:
+        """從使用者回覆的訊息截取現場脈絡摘錄（不顯示任何回報者身分）。"""
+        ref = getattr(message, "reference", None)
+        if ref is None:
+            return ""
+        ref_msg = getattr(ref, "resolved", None)
+        if not isinstance(ref_msg, discord.Message) and not (
+            hasattr(ref_msg, "content") or hasattr(ref_msg, "embeds")
+        ):
+            ref_msg = None
+            ref_id = getattr(ref, "message_id", None)
+            if ref_id and hasattr(message.channel, "fetch_message"):
+                try:
+                    ref_msg = await message.channel.fetch_message(ref_id)
+                except Exception:
+                    ref_msg = None
+        if ref_msg is None:
+            return ""
+        parts: list[str] = []
+        raw_clean = getattr(ref_msg, "clean_content", None)
+        raw_plain = getattr(ref_msg, "content", None)
+        text_body = (
+            raw_clean if isinstance(raw_clean, str) and raw_clean.strip()
+            else (raw_plain if isinstance(raw_plain, str) else "")
+        ).strip()
+        if text_body:
+            parts.append(text_body[:350])
+        embeds = getattr(ref_msg, "embeds", None)
+        if isinstance(embeds, (list, tuple)) and embeds:
+            emb = embeds[0]
+            emb_title = getattr(emb, "title", None)
+            emb_desc = getattr(emb, "description", None)
+            emb_joined = "｜".join(
+                x for x in (
+                    emb_title.strip() if isinstance(emb_title, str) else "",
+                    emb_desc.strip() if isinstance(emb_desc, str) else "",
+                ) if x
+            )
+            if emb_joined:
+                parts.append(emb_joined[:250])
+        excerpt = "\n".join(parts).strip()
+        if not excerpt:
+            return ""
+        raw_url = getattr(ref_msg, "jump_url", None)
+        ref_url = raw_url.strip() if isinstance(raw_url, str) else ""
+        header = f"[被回覆訊息] ({ref_url})" if ref_url else "[被回覆訊息]"
+        return f"{header}\n{excerpt}"[:550]
+
+    @commands.command(name="feedback", aliases=["fb", "回報", "建議"])
+    async def feedback_command(self, ctx: commands.Context, action: str = None, *, arg: str = None):
+        """非即時回饋／建議信箱與公開看板（嚴格隱藏回報者身分且永不提及回報者）。"""
+        if not is_target_channel(ctx.channel, self.settings) and not await is_bot_owner(
+            self.bot, self.settings, ctx.author
+        ):
+            return
+
+        no_mention = discord.AllowedMentions.none()
+        act_raw = (action or "").strip()
+        act = act_raw.lower()
+
+        # 1. 公開看板：!feedback / !feedback list [status/category]
+        if not act_raw or act in ("list", "ls", "show", "清單", "列表"):
+            status_filter = "open"
+            category_filter: Optional[str] = None
+            status_token_map = {
+                "open": "open",
+                "active": "open",
+                "pending": "open",
+                "待處理": "open",
+                "triaged": "triaged",
+                "排程": "triaged",
+                "已確認": "triaged",
+                "resolved": "resolved",
+                "done": "resolved",
+                "fixed": "resolved",
+                "已解決": "resolved",
+                "已完成": "resolved",
+                "wontfix": "wontfix",
+                "closed": "wontfix",
+                "暫不處理": "wontfix",
+                "已關閉": "wontfix",
+                "all": "all",
+                "全部": "all",
+            }
+            for tok in (arg or "").split():
+                low = tok.strip().lower()
+                if low in status_token_map:
+                    status_filter = status_token_map[low]
+                elif low in assistant_db.FEEDBACK_CATEGORY_ALIASES:
+                    category_filter = assistant_db.FEEDBACK_CATEGORY_ALIASES[low]
+
+            view = FeedbackListView(status_filter=status_filter, category_filter=category_filter)
+            embed = await view.reload_data()
+            sent = await ctx.send(embed=embed, view=view, allowed_mentions=no_mention)
+            view.message = sent
+            return
+
+        # 2. 公開詳情：!feedback view <編號> 或 !feedback #<編號>
+        if act in ("view", "detail", "查看", "詳情") or (act_raw.lstrip("#").isdigit() and not (arg or "").strip()):
+            id_token = (arg or "").strip().lstrip("#") if act in ("view", "detail", "查看", "詳情") else act_raw.lstrip("#")
+            if not id_token.isdigit():
+                await ctx.send("❓ 請輸入要查看的回饋編號，例如：`!feedback view 3`", allowed_mentions=no_mention)
+                return
+            fid = int(id_token)
+            report = await asyncio.to_thread(assistant_db.get_feedback_report, fid)
+            if not report:
+                await ctx.send(f"❌ 找不到回饋編號 **#{fid}**。", allowed_mentions=no_mention)
+                return
+            await ctx.send(embed=build_feedback_detail_embed(report), allowed_mentions=no_mention)
+            return
+
+        # 3. 狀態管理（管理員或機器人擁有者）：done / triage / close / reopen
+        status_action_map = {
+            "done": ("resolved", "✅ 已解決"),
+            "resolve": ("resolved", "✅ 已解決"),
+            "resolved": ("resolved", "✅ 已解決"),
+            "fixed": ("resolved", "✅ 已解決"),
+            "完成": ("resolved", "✅ 已解決"),
+            "已修": ("resolved", "✅ 已解決"),
+            "triage": ("triaged", "🔵 已確認／排程中"),
+            "confirm": ("triaged", "🔵 已確認／排程中"),
+            "accept": ("triaged", "🔵 已確認／排程中"),
+            "確認": ("triaged", "🔵 已確認／排程中"),
+            "排程": ("triaged", "🔵 已確認／排程中"),
+            "close": ("wontfix", "⚪ 暫不處理／關閉"),
+            "wontfix": ("wontfix", "⚪ 暫不處理／關閉"),
+            "reject": ("wontfix", "⚪ 暫不處理／關閉"),
+            "關閉": ("wontfix", "⚪ 暫不處理／關閉"),
+            "reopen": ("open", "🟡 重新開啟"),
+            "重開": ("open", "🟡 重新開啟"),
+        }
+        if act in status_action_map:
+            if not await self._has_community_mod_or_owner(ctx):
+                await ctx.send("🔒 僅限伺服器管理員或機器人擁有者可更新回饋處理狀態。", allowed_mentions=no_mention)
+                return
+            parts = (arg or "").strip().split(None, 1)
+            if not parts or not parts[0].lstrip("#").isdigit():
+                await ctx.send(f"❓ 請輸入回饋編號，例如：`!feedback {act} 3 已修正`", allowed_mentions=no_mention)
+                return
+            fid = int(parts[0].lstrip("#"))
+            note = parts[1].strip() if len(parts) > 1 else ""
+            target_status, label = status_action_map[act]
+            updated = await asyncio.to_thread(assistant_db.update_feedback_status, fid, target_status, note)
+            if not updated:
+                await ctx.send(f"❌ 找不到回饋編號 **#{fid}**。", allowed_mentions=no_mention)
+                return
+            note_part = f"\n└ 備註：{str(updated['resolution_note'])[:400]}" if updated.get("resolution_note") else ""
+            await ctx.send(
+                f"{label} 回饋 **#{fid}**（{str(updated['summary'])[:120]}）{note_part}",
+                allowed_mentions=no_mention,
+            )
+            return
+
+        # 4. 刪除回饋（管理員或擁有者）
+        if act in ("del", "delete", "rm", "刪除"):
+            if not await self._has_admin_or_owner(ctx):
+                await ctx.send("🔒 僅限伺服器管理員（管理訊息/管理伺服器權限）或機器人擁有者可刪除回饋紀錄。", allowed_mentions=no_mention)
+                return
+            id_token = (arg or "").strip().lstrip("#")
+            if not id_token.isdigit():
+                await ctx.send("❓ 請輸入要刪除的回饋編號，例如：`!feedback del 3`", allowed_mentions=no_mention)
+                return
+            fid = int(id_token)
+            if await asyncio.to_thread(assistant_db.delete_feedback_report, fid):
+                await ctx.send(f"🗑️ 已刪除回饋紀錄 **#{fid}**。", allowed_mentions=no_mention)
+            else:
+                await ctx.send(f"❌ 找不到回饋編號 **#{fid}**。", allowed_mentions=no_mention)
+            return
+
+        # 5. 匯出 Markdown（管理員或擁有者，隱藏回報者身分）
+        if act in ("export", "匯出"):
+            if not await self._has_admin_or_owner(ctx):
+                await ctx.send("🔒 僅限伺服器管理員或機器人擁有者可匯出回饋清單。", allowed_mentions=no_mention)
+                return
+            exp_status = "open"
+            exp_cat: Optional[str] = None
+            for tok in (arg or "").split():
+                low = tok.strip().lower()
+                if low in ("all", "open", "triaged", "resolved", "wontfix"):
+                    exp_status = low
+                elif low in assistant_db.FEEDBACK_CATEGORY_ALIASES:
+                    exp_cat = assistant_db.FEEDBACK_CATEGORY_ALIASES[low]
+            reports = await asyncio.to_thread(
+                assistant_db.list_feedback_reports, status=exp_status, category=exp_cat, limit=300
+            )
+            md = assistant_db.format_feedback_markdown(reports, include_reporter=False)
+            fp = io.BytesIO(md.encode("utf-8"))
+            await ctx.send(
+                content=f"📤 已匯出 {len(reports)} 筆回饋（狀態：`{exp_status}`）。",
+                file=discord.File(fp, filename="feedback_export.md"),
+                allowed_mentions=no_mention,
+            )
+            return
+
+        # 6. 提交新回饋 / 建議（全體成員可用）
+        category_hint = "feature" if (getattr(ctx, "invoked_with", "") or "").lower() == "建議" else ""
+        if act in ("add", "new", "+"):
+            raw_body = (arg or "").strip()
+            if not raw_body:
+                await ctx.send("❓ 請輸入想回報的問題或建議內容，例如：`!feedback wiki 聖誕工坊資料有誤` 或 `!建議 新增自動計算功能`", allowed_mentions=no_mention)
+                return
+            first_tok, *rest_toks = raw_body.split(None, 1)
+            if rest_toks and first_tok.lower() in assistant_db.FEEDBACK_CATEGORY_ALIASES:
+                category_hint = assistant_db.FEEDBACK_CATEGORY_ALIASES[first_tok.lower()]
+                body = rest_toks[0].strip()
+            else:
+                body = raw_body
+        else:
+            if (arg or "").strip() and act in assistant_db.FEEDBACK_CATEGORY_ALIASES:
+                category_hint = assistant_db.FEEDBACK_CATEGORY_ALIASES[act]
+                body = arg.strip()
+            else:
+                body = f"{act_raw} {arg}".strip() if arg else act_raw
+
+        if not body:
+            await ctx.send("❓ 請輸入要回饋或建議的內容。", allowed_mentions=no_mention)
+            return
+
+        if len(body) > 1200:
+            await ctx.send("⚠️ 回饋內容請控制在 1200 字元以內。", allowed_mentions=no_mention)
+            return
+
+        excerpt = await self._extract_reply_context_for_feedback(ctx.message)
+        summary = " ".join(body.split())[:80]
+        norm_cat = assistant_db.normalize_feedback_category(category_hint, body)
+        fid, status = await asyncio.to_thread(
+            assistant_db.add_feedback_report,
+            summary=summary,
+            detail=body,
+            category=norm_cat,
+            source="command",
+            reporter_id=getattr(ctx.author, "id", 0),
+            reporter_name=getattr(ctx.author, "display_name", ""),
+            channel_id=getattr(ctx.channel, "id", 0),
+            message_jump_url=str(getattr(ctx.message, "jump_url", "") or ""),
+            context_excerpt=excerpt,
+            cooldown_seconds=15,
+        )
+        cat_label = assistant_db.FEEDBACK_CATEGORY_LABELS.get(norm_cat, norm_cat)
+        if status == "created" and fid:
+            await ctx.send(
+                f"📮 已收錄非即時回饋 **#{fid}**（{cat_label}），後續將由開發者離線審核處理。可隨時用 `!feedback list` 查看處理進度。",
+                allowed_mentions=no_mention,
+            )
+        elif status == "duplicate" and fid:
+            await ctx.send(
+                f"📮 已整合至既有尚待處理回饋 **#{fid}**，無需重複提交。可隨時用 `!feedback list` 查看進度。",
+                allowed_mentions=no_mention,
+            )
+        elif status == "rate_limited":
+            await ctx.send("⏳ 剛剛才剛提交過一筆回饋，請稍候片刻再試。", allowed_mentions=no_mention)
+        else:
+            await ctx.send("❓ 請輸入有效的回饋內容。", allowed_mentions=no_mention)
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
         if isinstance(error, (commands.MissingRequiredArgument, commands.BadArgument)):

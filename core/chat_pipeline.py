@@ -616,6 +616,59 @@ def _extract_recent_context_text(contents: list[types.Content], max_turns: int =
     return "\n".join(snippets)
 
 
+async def _extract_feedback_context_excerpt(message: discord.Message, recent_text: str = "") -> str:
+    """萃取被回覆訊息或近期對話脈絡作為回饋現場摘錄（不顯示任何回報者身分）。"""
+    ref = getattr(message, "reference", None)
+    if ref is not None:
+        ref_msg = getattr(ref, "resolved", None)
+        if not isinstance(ref_msg, discord.Message) and not (
+            hasattr(ref_msg, "content") or hasattr(ref_msg, "embeds")
+        ):
+            ref_msg = None
+            ref_id = getattr(ref, "message_id", None)
+            ch = getattr(message, "channel", None)
+            if ref_id and ch and hasattr(ch, "fetch_message"):
+                try:
+                    ref_msg = await ch.fetch_message(ref_id)
+                except Exception:
+                    ref_msg = None
+        if ref_msg is not None:
+            parts: list[str] = []
+            raw_clean = getattr(ref_msg, "clean_content", None)
+            raw_plain = getattr(ref_msg, "content", None)
+            text_body = (
+                raw_clean if isinstance(raw_clean, str) and raw_clean.strip()
+                else (raw_plain if isinstance(raw_plain, str) else "")
+            ).strip()
+            if text_body:
+                parts.append(text_body[:350])
+            embeds = getattr(ref_msg, "embeds", None)
+            if isinstance(embeds, (list, tuple)) and embeds:
+                emb = embeds[0]
+                emb_title = getattr(emb, "title", None)
+                emb_desc = getattr(emb, "description", None)
+                emb_bits = [
+                    emb_title.strip() if isinstance(emb_title, str) else "",
+                    emb_desc.strip() if isinstance(emb_desc, str) else "",
+                ]
+                emb_joined = "｜".join(x for x in emb_bits if x)
+                if emb_joined:
+                    parts.append(emb_joined[:250])
+            raw_url = getattr(ref_msg, "jump_url", None)
+            ref_url = raw_url.strip() if isinstance(raw_url, str) else ""
+            excerpt = "\n".join(parts).strip()
+            if excerpt:
+                header = "[被回覆訊息]"
+                if ref_url:
+                    return f"{header} ({ref_url})\n{excerpt}"[:550]
+                return f"{header}\n{excerpt}"[:550]
+
+    tail = (recent_text or "").strip()
+    if tail:
+        return tail[-400:]
+    return ""
+
+
 async def prepare_and_generate_chat_response(
     gemini_client: genai.Client,
     settings: BotSettings,
@@ -695,7 +748,9 @@ async def prepare_and_generate_chat_response(
         safety_settings=get_safety_settings(settings.disable_safety_settings),
     )
 
+    fb_context = await _extract_feedback_context_excerpt(message, recent_text)
     token = assistant_tools.current_discord_msg.set(message)
+    fb_token = assistant_db.current_feedback_context.set(fb_context)
     try:
         response, used_model = await generate_with_fallback(
             client=gemini_client,
@@ -708,6 +763,7 @@ async def prepare_and_generate_chat_response(
             final_fallback_model=settings.final_fallback_model,
         )
     finally:
+        assistant_db.current_feedback_context.reset(fb_token)
         assistant_tools.current_discord_msg.reset(token)
 
     if response and has_visible_text(response.text):

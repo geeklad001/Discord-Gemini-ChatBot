@@ -2,7 +2,7 @@
 
 專為 Discord 好友群、社群跑團與日語共學打造的免費自架 AI 機器人！連接 Google AI Studio 的 **Gemini Flash-Lite（免費額度友善＋多代 Flash-Lite 自動輪替保底）**，免信用卡、不用寫程式，就能一次擁有**多模態聊天、語音頻道朗讀、互動桌遊與 80 億分之 1 人生模擬、TRPG 跑團、日語雙頻道與單字卡、遊戲黑話圖鑑，以及長期記憶與定時提醒**！
 
-> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.1.0)](CHANGELOG.md)
+> 📖 **相關文件**：[🍼 零基礎小白保母級架設教學](docs/COMMUNITY_SETUP_GUIDE.md) ｜ [📋 Discord 指令簡表 (< 2000 字)](docs/COMMANDS.md) ｜ [🗡️ TRPG 跑團指南](docs/RPG_GUIDE.md) ｜ [📝 更新日誌 (v2.2.0)](CHANGELOG.md)
 
 ---
 
@@ -59,10 +59,11 @@
 * **專為輕量模型打造的防幻覺檢索**：內建韓服黑話、Cafe 攻略用語集、9 週年《魔法高中》、聖誕節活動、進擊／進化感染／越獄模式術語與台服角色譯名對照表，支援 `resource_links` 多連結攻略導覽；文字或圖片提問時會先由 Python 自動預檢索並注入精準事實（圖片支援兩階段 OCR 提取韓文與初聲縮寫如 `ㄷㅋㅈ`、`클모`），徹底避免模型亂猜。
 * **互動圖鑑＋群友即時共編**：輸入 `!wiki <關鍵字>` 或 `!wiki 目錄` 即可分頁瀏覽；群友可用 `!wiki add` / `!wiki import`（貼文或傳 `.txt`/`.md`）擴充資料，或用 `!wiki replace` 勘誤熱修補，免重啟立即生效。
 
-### 7. 🧠 長期記憶、待辦清單、定時提醒（`!memory` / `!todo` / `!remind`）
+### 7. 🧠 長期記憶、待辦清單、定時提醒與非即時回饋信箱（`!memory` / `!todo` / `!remind` / `!feedback`）
 * **長期記憶庫（`!memory`）**：跨重啟與 `!reset` 永久保存喜好、群規、紀念日或固定團時間，聊天時 AI 會自然記在心裡。
 * **待辦清單（`!todo`）**：直接口語說「幫我把買牛奶加進待辦」、「牛奶買好了」，或用指令快速管理。
 * **準時背景提醒（`!remind`）**：支援相對時間（「10 分鐘後提醒我關火」）與絕對時間（「今天 18:30 提醒倒垃圾」），背景每 10 秒檢查一次，時間到準時 **`@提及`** 提醒你！
+* **非即時回饋與建議信箱（`!feedback` / `!建議`）**：群友直接在對話裡提出錯誤回報或明確建議（如「建議...」、「這裡 Wiki 有錯」）即自動收錄，亦可回覆該訊息搭配 `!feedback` 抓取現場脈絡；**完全不寫入聊天 Prompt、不影響線上回答品質，且公開看板 (`!feedback list`) 與結案回覆皆不點名回報者**。開發者可用 `!feedback export` 或 `scripts/export_feedback.py` 離線檢視處理。
 
 ---
 
@@ -101,6 +102,7 @@
 | `!todo` | 查看目前未完成的待辦事項（支援 `add` / `done` / `del` / `all`） | `!todo add 訂週六燒肉`、`!todo done 1` |
 | `!remind <時間> <內容>` | 設定定時提醒（另可 `!reminds` 查清單、`!remind del <編號>` 取消） | `!remind 10m 關火`、`!remind 18:30 倒垃圾` |
 | `!memory` | 查看所有保存的長期記憶清單（`!remember <事實>` 新增、`!forget <編號>` 刪除） | `!memory`、`!remember 喜歡抹茶拿鐵` |
+| `!feedback` / `!建議` | 非即時錯誤回報與功能建議信箱（亦支援口語自然觸發；`list` 公開查看看板、`view <編號>`、`done`/`triage`/`close`/`export`） | `!feedback list`、`!建議 新增某功能` |
 | `!play` / `!life` | 開啟桌遊大廳或 **80億分之1** 深度版（支援 `!life top` 排行榜、`!life atlas` 圖鑑、混合與 AI 模式） | `!play`、`!play chess llm`、`!life top` |
 | `!m <棋步>` | （輔助捷徑）落子座標；遊戲中皆可用卡片按鈕與口語下棋、悔棋、做人生抉擇與查戰績/圖鑑 | `!m d3`、`!m e2e4` |
 | `!rpg start [主題]` | 自動建立專屬獨立討論串開啟 TRPG 冒險（遇到檢定會貼 **🎲 互動按鈕**，點擊即由 DM 續寫） | `!rpg start 迷霧森林遺跡` |

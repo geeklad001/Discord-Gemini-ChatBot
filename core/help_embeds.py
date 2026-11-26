@@ -91,10 +91,11 @@ def build_help_overview_embed(settings: BotSettings) -> discord.Embed:
         )
 
     embed.add_field(
-        name="🛠️ 待辦、提醒與系統管理 (`!todo` / `!remind` / `!setup` / `!reset`)",
+        name="🛠️ 待辦、提醒、回饋與系統管理 (`!todo` / `!remind` / `!feedback` / `!setup`)",
         value=(
             "`!todo` / `!todo add <事項>` / `!todo done <編號>` — 待辦清單\n"
             "`!remind 10m <事項>` / `!reminds` — 定時提醒與清單\n"
+            "`!feedback [分類] <內容>` (`!建議`) / `!feedback list` — 提交建議或問題回報（亦支援直接口語回饋）與查看公開進度看板\n"
             "`!reset` — 清除當前頻道／討論串的對話上下文\n"
             "`!reload` — 重新檢查並載入人設提示詞與知識庫設定（管理員）\n"
             "`!setup` / `!setup check` / `!models` — 擁有者互動設定面板、一鍵環境健檢與模型輪替狀態"
@@ -273,9 +274,9 @@ def build_tts_help_embed(settings: BotSettings) -> discord.Embed:
 
 
 def build_system_help_embed() -> discord.Embed:
-    """Build the !help system / owner diagnostics Embed."""
+    """Build the !help system / feedback / owner diagnostics Embed."""
     embed = discord.Embed(
-        title="🛠️ 待辦、提醒與系統管理 (`!todo` / `!remind` / `!models`) 指南",
+        title="🛠️ 待辦、提醒、回饋信箱與系統管理 (`!todo` / `!feedback` / `!models`) 指南",
         color=0x95A5A6,
     )
     embed.add_field(
@@ -284,6 +285,16 @@ def build_system_help_embed() -> discord.Embed:
             "`!todo` / `!todo add <事項>` / `!todo done <編號>` — 管理待辦清單（`!todo all` 查看歷史）\n"
             "`!remind <時間> <事項>` — 設定提醒（支援 `10m`、`2h`、`18:30`、`2026-10-31 15:00`）\n"
             "`!reminds` / `!remind del <編號>` — 查看或取消預約中的提醒"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="📮 非即時回饋與建議信箱 (`!feedback` / `!fb` / `!回報` / `!建議`)",
+        value=(
+            "💬 **口語自然回饋**：在聊天時直接說「建議...」、「希望能新增...」或「這裡 Wiki／功能有錯」即自動收錄（不注入聊天記憶、不點名回報者）。\n"
+            "`!feedback [wiki|bug|feature|ux] <內容>` / `!建議 <內容>` — 提交回饋（若以**回覆**訊息方式提交會自動截取原訊息脈絡）\n"
+            "`!feedback list [open|all|分類]` / `!feedback view <編號>` — **全體公開**查看處理看板與詳情\n"
+            "`!feedback done/triage/close/reopen <編號> [備註]` / `export` / `del` — **管理員／擁有者**管理與匯出"
         ),
         inline=False,
     )
@@ -323,7 +334,7 @@ def build_help_topic_embed(
             return None, "ℹ️ 此伺服器目前未啟用語音頻道 TTS 模組。"
         return build_tts_help_embed(settings), None
 
-    if sub in ("system", "sys", "owner", "models", "model", "setup", "config", "健檢", "面板", "todo", "remind", "admin", "系統", "擁有者", "模型", "管理"):
+    if sub in ("system", "sys", "owner", "models", "model", "setup", "config", "健檢", "面板", "todo", "remind", "admin", "系統", "擁有者", "模型", "管理", "feedback", "fb", "回報", "建議", "意見"):
         return build_system_help_embed(), None
 
     return build_help_overview_embed(settings), None

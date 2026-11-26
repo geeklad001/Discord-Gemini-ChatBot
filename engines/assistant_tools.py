@@ -555,6 +555,52 @@ def lifesim_atlas() -> str:
     return f"🗺️ {msg.author.display_name} 的《80億分之1》世界國家圖鑑：已解鎖 **{len(entries)} / 197** 國（{top}{more}）。"
 
 
+def submit_user_feedback(
+    category: str,
+    summary: str,
+    detail: str = "",
+) -> str:
+    """
+    將使用者對機器人功能、知識庫資料、介面互動的錯誤回報或明確改進建議寫入非即時回饋信箱（供開發者離線處理，不會干擾系統記憶）。
+    僅在使用者明確指出問題（如「Wiki 資料有誤/過時」、「某功能壞掉/異常」、「翻譯翻錯」）或提出明確建議/許願（如「建議...」、「希望能新增...」、「這個地方建議改成...」、「可以優化...」、「幫我記一下跟開發者說...」）時呼叫。
+    一般日常閒聊、情緒抱怨或單純知識問答請勿呼叫此工具。
+    參數:
+      category: 回饋分類，可填 'wiki'（知識庫資料錯誤或缺失）、'bug'（功能異常/報錯）、'feature'（功能建議或新點子許願）、'ux'（體驗/排版/語氣改善）、'other'（其他）。
+      summary: 一句話簡短標題摘要（80 字內，例如「聖誕工坊 R6 配額與實測不符」或「建議新增某某功能」）。
+      detail: 完整問題說明、修正依據或具體建議內容。
+    """
+    msg = current_discord_msg.get()
+    ctx_excerpt = assistant_db.current_feedback_context.get()
+    fid, status = assistant_db.add_feedback_report(
+        summary=summary,
+        detail=detail or summary,
+        category=category,
+        source="ai_tool",
+        reporter_id=getattr(msg.author, "id", 0) if msg else 0,
+        reporter_name=getattr(msg.author, "display_name", "") if msg else "",
+        channel_id=getattr(msg.channel, "id", 0) if msg else 0,
+        message_jump_url=str(getattr(msg, "jump_url", "") or "") if msg else "",
+        context_excerpt=ctx_excerpt,
+        cooldown_seconds=45,
+    )
+    if status == "created" and fid:
+        norm_cat = assistant_db.normalize_feedback_category(category, f"{summary} {detail}")
+        cat_label = assistant_db.FEEDBACK_CATEGORY_LABELS.get(norm_cat, norm_cat)
+        clean_summary = " ".join(str(summary or detail).split())[:80]
+        return (
+            f"已將此回饋收錄至非即時回饋信箱（編號 #{fid}｜分類：{cat_label}｜摘要：{clean_summary}），"
+            "後續將由開發者離線檢視處理。回覆時請簡短確認已收下紀錄即可，不要 @提及或點名回報者。"
+        )
+    if status == "duplicate" and fid:
+        return (
+            f"此回饋與近期尚待處理的編號 #{fid} 內容相同，已沿用原編號，無需重複建立。"
+            "回覆時請簡短確認即可，不要 @提及或點名回報者。"
+        )
+    if status == "rate_limited":
+        return "剛剛才剛記錄過一筆回饋，請稍候片刻再記錄下一筆（或直接使用 !feedback 指令）。"
+    return "回饋內容為空，無法記錄。"
+
+
 def get_scoped_tools(
     enable_flashcards: bool = True,
     include_rpg: bool = False,
@@ -573,6 +619,7 @@ def get_scoped_tools(
         finish_todo,
         query_todos,
         set_reminder,
+        submit_user_feedback,
     ]
     if enable_game_wiki:
         tools.insert(0, lookup_game_wiki)

@@ -19,6 +19,10 @@
 3. **有界權威與時效透明（Bounded Provenance）**：
    * 採純文字來源（Namuwiki 條目、Naver Cafe 貼文、FB 社團／Discord 實測文字）為知識骨幹；影片類攻略**不進行高 Token 消耗的逐幀或全文轉錄解析**，改由 oEmbed 標題／描述摘要與 `resource_links` 建立導覽索引。
    * 每張卡片標記 `source`（資料來源）與 `updated_at`（整理基準年月，如 `2026-11`），以及 `freshness`（`stable` 固定設定 / `volatile` 隨版本變動之戰術）。
+4. **速刷優先、新舊刷法隔離與限定條件保全（永久通用標準）**：
+   * **速刷攻略與資源效率優先（適用於可農資源模式）**：**並非所有模式皆有資源可刷**（例如《進化感染》、越獄模式等競技／純 PvP 模式仍以核心機制、地圖點位、對策與版本 Meta 為主，不強求硬湊速刷攻略）。凡**具備重複農資源機制**之模式與活動（活動幣／盧恩／魔力券／礦物／點數／經驗／任務捷徑），未來採集與建檔時必須優先萃取「**速刷攻略與資源效率指南**」（實戰打法、時薪或單局收益比較與對應影片／貼文導覽）。
+   * **嚴格區分改版前後之「新舊刷法差異」**：凡經官方平衡調整、潛在暗改（Submarine Patch）或歷代復刻規則變動之模式（例如：魔法高中 2025 `빛궁` 暗改使 `60사이클` 失效改採 `40사이클`、2026-11-26 擴充與法杖刻印分歧；聖誕活動 2022.12.16 家庭派對修補前後之時限／幣量／減速差異與歷代復刻機制變動），必須明確標記各刷法的**適用年份／版本區間**與**失效／取代原因**，**嚴禁將已失效舊刷法混寫為現行推薦打法**。
+   * **限定條件與適用範圍不可截斷**：為適配 `gemini-flash-lite-latest` 壓縮微卡片（上限 `450` 字）時，若某技巧、路線或排序僅適用於特定關卡、特定地圖、特定人數或特定條件（例如 `[僅限第 9 關圖貳]`、`[僅限 1 人單刷]`、`[僅限 4 人固排]`、`[僅限雙倍熱時]`），**必須在句子開頭保留適用範圍前綴**，嚴禁為了省字數而抽掉前提，防止小模型誤當成全模式通用規則。
 
 ---
 
@@ -69,19 +73,22 @@ related_ids: [關聯條目id]
 
 ## 三、 離線整理隔離區與 Gemini 4 Hydrogen SOP（`data/wiki_staging/`）
 
-為徹底避免過去「一次寫入正式庫卻充滿幻覺」的問題，所有新資料採 **三階段隔離流水線**：
+為徹底避免過去「一次寫入正式庫卻充滿幻覺」的問題，所有新資料採 **三階段隔離流水線**，並強制貫徹「速刷優先 × 新舊版本隔離 × 限定條件不截斷」永久標準：
 
 1. **Step 1：原文放入 `data/wiki_staging/01_raw/`**
-   * 將從 Namuwiki 或 Naver Cafe 複製的原始韓文文本存入對應檔案（例如 `evolution_namu_raw.txt`、`evolution_cafe_raw.txt`）。
+   * 將從 Namuwiki、Naver Cafe、FB 社團或 Discord 攻略區複製／匯出的原始文本存入對應資料夾（例如 `evolution_namu_raw.txt`、`cafe_deep_raw.txt`）。
+   * **速刷與改版資料必收清單（適用具備可刷資源之模式）**：每個模式／活動除規則公告外，Step 1 必須優先補齊（a）歷年平衡與熱修補公告（供對照新舊差異）；（b）針對可農資源／點數／票券／經驗之模式，補齊高頻實用速刷攻略與效率比較表（如《進化感染》、越獄等無可農刷幣機制之競技／純 PvP 模式則不在此限）；（c）對應 YouTube 速刷與高難實戰影片標題及連結。僅列入 `cafe_index_raw.txt` 而未深抓全文之高價值速刷文（含聊天區貼過卻未解出片名之 YouTube 連結），須於稽核時列為待補缺口。
 2. **Step 2：Gemini 4 Hydrogen 閉卷萃取至 `data/wiki_staging/02_review/*.review.md`**
    * **強制鎖定譯名**：角色名稱與俗稱必須查閱並對齊 [character_translations_tw.csv](../data/game_wiki/character_translations_tw.csv)。
-   * **強制除草規則**：凡原文提及「改版後已移除/失效」的舊數值或舊 Bug 技巧，不可寫入現行建議；若具代表性則須標註 `【⚠️ 歷史舊制】`。
+   * **速刷專卡優先建置**：凡存在重複農資源機制之模式／活動（盧恩、活動幣、礦物、點數、雙倍熱時、任務捷徑），必須獨立拆出或置頂「速刷策略與效率比較」微卡（含人數／時間／收益比較與 `resource_links` 影片導覽）；無可農資源機制之純 PvP／競技模式則維持核心玩法與實戰 Meta 導向。
+   * **強制除草與新舊刷法隔離規則**：凡原文提及「改版後已移除／失效」的舊數值、舊 Bug 技巧或舊代刷法，**嚴禁混寫為現行推薦打法**。若需保留作為版本對照或解釋為何被淘汰，必須獨立標註 `【⚠️ 歷史舊制（YYYY.MM 改版失效）】`，並寫明**適用年份／版本區間**與**官方改動／暗改原因**（如 2025 `빛궁` 暗改使 `60사이클` 失效改採 `40사이클`；2022.12.16 `13351862` 修補前後差異；2026-11-26 擴充異動）。
+   * **強制保留限定條件前綴**：壓縮為 `<= 450` 字微卡時，任何具限定前提的攻略（特定關卡／特定地圖編號／單人 vs 雙人 vs 4 人固排／僅限雙倍熱時）**必須保留適用範圍前綴**（如 `[僅限 R9 圖貳]`、`[僅限 1 人單刷]`、`[僅限 4 人固排]`），嚴禁為壓縮字數而刪去前提。
    * **強制附上原文佐證**：每筆草稿條目內必須附帶：
-     * `> 🔍 [原文佐證]：...`（摘錄對應韓文原句，無原句不得寫入設定）
-     * `> ⚠️ [待人工確認]：...`（凡 CSV 尚未收錄的新譯名、台服未知俗稱或民間分歧打法，一律標註等待人工定奪）
+     * `> 🔍 [原文佐證]：...`（摘錄對應韓文／中文原句與來源 ID，無原句不得寫入設定）
+     * `> ⚠️ [待人工確認]：...`（凡 CSV 尚未收錄的新譯名、台服未知俗稱、改版後尚未驗證之舊攻略效度、或民間分歧打法，一律標註等待人工定奪；若某模式缺漏逐關地圖／速刷或改版後實測，應於正式卡 `⚠️ 防誤判提醒` 誠實界定未收錄邊界）
 3. **Step 3：Linter 自動檢查 ＋ 人工校正 ＋ 一鍵發布 (`scripts/wiki_linter.py`)**
    * 執行 `.venv\Scripts\python.exe scripts/wiki_linter.py check data/wiki_staging/02_review/<檔名>.review.md` 檢查字數、YAML 欄位、泛用詞污染與未結案的 `> ⚠️` 標記。
-   * 人工確認與修訂完成後，執行 `.venv\Scripts\python.exe scripts/wiki_linter.py promote data/wiki_staging/02_review/<檔名>.review.md --target <目標檔>.md`，自動剝除審核輔助行並正式入庫。
+   * 人工確認與修訂完成後，額外覆核三項永久檢核：① 具備可刷資源之模式是否已優先涵蓋速刷效率與影片導覽（無資源可刷之純競技／PvP 模式例外）；② 改版前後新舊刷法是否已隔離標記年份與失效原因；③ 關卡／地圖／人數限定前綴是否未遭截斷。確認零未結案 `> ⚠️` 後，方得執行 `.venv\Scripts\python.exe scripts/wiki_linter.py promote data/wiki_staging/02_review/<檔名>.review.md --target <目標檔>.md`，自動剝除審核輔助行並正式入庫。
 
 ---
 
@@ -103,11 +110,15 @@ related_ids: [關聯條目id]
   * **巴哈姆特舊台服成就系統圖鑑**：已完整歸檔至 [tw_legacy_bahamut_ref.txt](../data/wiki_staging/01_raw/tw_legacy_bahamut_ref.txt)（`bsn=30876&snA=54`，含 001–105 編號成就、無編號專區、站內影片連結、編者註記與 B1 回覆，保存「劇情模式」＝進擊的殭屍 2 等早期台服譯名）。
 
 ### 📚 Phase 5 ~ 9（Priority 3 ~ 7 後續擴充順序）
+
+> [!IMPORTANT]
+> **全模式永久適用標準（含 Phase 4 續補與 Phase 5～9）**：針對**具備重複農資源／幣／票／點數／經驗機制**之模式與活動，後續採集與建檔一律強制套用本文件 **一.4 與 三** 之「**速刷攻略優先 × 新舊改版差異隔離 × 限定條件不截斷**」規範（例如：Phase 6《Reboot》三部之改版前後機制／刷資源效率、Phase 7《Division》D1～D3 速刷礦物／強化組隊打法、Phase 8 第一季進擊／Heroes／APO 歷年改版速刷與武器定位、Phase 9 精靈高／銀河高／魔法高／像素高之刷幣與歷代活動差異）；無可農資源機制之競技／純 PvP 模式（如《進化感染》、越獄模式等）則仍以核心機制、點位與版本 Meta 為主。
+
 * **Phase 5（Priority 3）**：🧭 世界觀與主線劇情（經典總覽、核心勢力、經典進擊與人物關係骨架）
-* **Phase 6（Priority 4）**：🔁 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與攻略導覽）
-* **Phase 7（Priority 5）**：⚔️ 《Division》系列（D1～D3 副本攻略、劇情與既有黑話串聯）
-* **Phase 8（Priority 6）**：🛡️ 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本攻略（Heroes / JinJom Classic / APO）
-* **Phase 9（Priority 7）**：🌌 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服生態 Q&A
+* **Phase 6（Priority 4）**：🔁 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與速刷／攻略導覽）
+* **Phase 7（Priority 5）**：⚔️ 《Division》系列（D1～D3 副本攻略、速刷效率、劇情與既有黑話串聯）
+* **Phase 8（Priority 6）**：🛡️ 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本速刷攻略（Heroes / JinJom Classic / APO）
+* **Phase 9（Priority 7）**：🌌 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服速刷／生態 Q&A
 
 ---
 
@@ -120,13 +131,13 @@ related_ids: [關聯條目id]
    * 彙整各批次 Linter 檢驗結果與待人工確認清單呈報人類；**必須取得人類明確核准**並確認已清除 `> ⚠️` 標記後，始得執行 `promote` 正式合併入庫。
 2. **Subagent 1 — Raw Chunker（原文切塊前置員）**
    * **專屬所有權**：僅操作 `data/wiki_staging/01_raw/`（依批次產出如 `evolution_b1_rules_*.txt` ~ `evolution_b4_maps_*.txt`）。
-   * **職責**：清理 Namuwiki／Naver Cafe 複製文本之版面雜訊、補齊來源 URL 與擷取日期標頭，並依「一主題一區塊」切分段落；**嚴禁在此階段進行翻譯或改寫**。
+   * **職責**：清理 Namuwiki／Naver Cafe 複製文本之版面雜訊、補齊來源 URL 與擷取日期標頭，並依「一主題一區塊」切分段落；針對具可農資源機制之模式優先完整保留**速刷收益數據（幣／盧恩／時間／人數）、改版前後公告差異、以及 YouTube 速刷片名／連結**；**嚴禁在此階段進行翻譯或改寫**。
 3. **Subagent 2 — Hydrogen Grounded Extractor（閉卷萃取與譯名對齊員）**
    * **專屬所有權**：唯讀 `01_raw/` 與 [character_translations_tw.csv](../data/game_wiki/character_translations_tw.csv)，僅寫入對應批次之 `data/wiki_staging/02_review/<batch>.review.md`。
-   * **職責**：嚴格閉卷萃取為 YAML V2 微卡片（潔淨內文 `150~380` 字、硬性上限 `450` 字），強制補齊 Contextual Header、`⚠️ 防誤判提醒`、`> 🔍 [原文佐證]：...`；凡遇 CSV 未收錄譯名、舊制差異或民間爭議打法，一律掛上 `> ⚠️ [待人工確認]：...`。
+   * **職責**：嚴格閉卷萃取為 YAML V2.1 微卡片（潔淨內文 `150~380` 字、硬性上限 `450` 字）；於具備重複農資源機制之模式優先產出**速刷攻略與資源效率微卡**（無資源可刷之競技／PvP 模式則維持核心機制與 Meta 導向），強制補齊 Contextual Header、`⚠️ 防誤判提醒`、`> 🔍 [原文佐證]：...`。壓縮微卡時**必須保留關卡／地圖／人數限定前綴**（嚴禁省字數抽掉前提），且**必須明確標記新舊刷法適用年份與改版失效原因**（嚴禁將已失效舊刷法混寫為現行推薦）。凡遇 CSV 未收錄譯名、舊制差異、缺漏改版後實測或民間爭議打法，一律掛上 `> ⚠️ [待人工確認]：...`。
 4. **Subagent 3 — Linter & Reviewer（規範驗證與待審彙總員）**
    * **專屬所有權**：唯讀 `02_review/*.review.md` 與對照表，執行 [scripts/wiki_linter.py](../scripts/wiki_linter.py) `check`。
-   * **職責**：自動把關必填欄位、重複 ID、字數上限、泛用詞／孤立章節詞污染、中韓黏連錯字與台服譯名一致度，並統計 `unresolved_reviews` 回報 Orchestrator；待人類確認修正且 `check` 零 Error、零未決 `> ⚠️` 後，方由 Orchestrator 核准執行 `scripts/wiki_linter.py promote <review_file> --target <目標檔>.md`。
+   * **職責**：自動把關必填欄位、重複 ID、字數上限、泛用詞／孤立章節詞污染、中韓黏連錯字與台服譯名一致度；並人工覆核**「具可刷資源模式之速刷覆蓋度」「新舊刷法年份與改版原因隔離」「關卡／地圖／人數限定前提完整度」**以及「已索引未深抓貼文／缺漏影片連結」，統計 `unresolved_reviews` 回報 Orchestrator；待人類確認修正且 `check` 零 Error、零未決 `> ⚠️` 後，方由 Orchestrator 核准執行 `scripts/wiki_linter.py promote <review_file> --target <目標檔>.md`。
 
 ---
 
@@ -160,8 +171,11 @@ related_ids: [關聯條目id]
   - [x] **Phase 4.2**：9 週年專區 —— 共 `15` 張微知識卡（`anniv9_b1_overview_versions.review.md` 7 卡 ＋ `anniv9_b2_quests_bosses_nav.review.md` 8 卡）已完成人工核對並對齊 Notion 成就譯名，正式透過 `scripts/wiki_linter.py promote`（未使用 `--force`）入庫至 [anniv9_magic_high.md](../data/game_wiki/anniv9_magic_high.md)（`entries=15, unresolved_reviews=0, errors=0, warnings=0`）
   - [x] **Phase 4.3**：聖誕節活動專區 —— 共 `10` 張微知識卡（`christmas_b1_recent_2024_2026.review.md` 5 卡 ＋ `christmas_b2_classic_2014_2023.review.md` 5 卡）已完成人工核對並對齊 Notion 成就譯名，正式透過 `scripts/wiki_linter.py promote`（未使用 `--force`）入庫至 [christmas_events.md](../data/game_wiki/christmas_events.md)（`entries=10, unresolved_reviews=0, errors=0, warnings=0`）
   - [x] **外部參考來源歸檔與溯源規範**：Notion 成就／徽章參考頁（`2171322382528044bd90d628960fcc35` / `2121322382528009a5b4e5e78119c77d`，757 筆唯一成就）已歸檔於 [emblems_notion_ref.txt](../data/wiki_staging/01_raw/emblems_notion_ref.txt)（特殊成就自訂 `編號` 不可靠，一律改採 `加入日期`/`新增日期`，且上游來自 Namuwiki 須交叉比對）；巴哈姆特舊台服圖鑑（`bsn=30876&snA=54`）已歸檔於 [tw_legacy_bahamut_ref.txt](../data/wiki_staging/01_raw/tw_legacy_bahamut_ref.txt)
+- [ ] **Phase 4.4（2026-11-26 擴充／前夜祭與速刷攻略補遺）**
+  - [x] **Wave 3 速刷攻略與 11/26 首日補遺正式入庫**：新增 [anniv9_b3_2026_update_and_farming.review.md](../data/wiki_staging/02_review/anniv9_b3_2026_update_and_farming.review.md)（5 卡併入 [anniv9_magic_high.md](../data/game_wiki/anniv9_magic_high.md) 計 `20` 卡）與 [christmas_b3_express2_and_farming.review.md](../data/wiki_staging/02_review/christmas_b3_express2_and_farming.review.md)（6 卡併入 [christmas_events.md](../data/game_wiki/christmas_events.md) 計 `16` 卡，含《聖誕快車 2》26 關變體／24 公仔配方／前夜祭 100 公仔速刷與歷代聖誕新舊 `코노` 對照）
+  - [ ] **後續追蹤**：待首週韓服玩家通關開荒後，補齊 `2026-11-26` 新終局實測細節（防禦戰、原初魔法、極限覺醒、`블랙 해츨링` 確切盧恩定價、全刻印 `60사이클` 與火大招 `지옥봉우리` 實戰計時、`타오르는 분노`／紅晶道具效果，以及 12/10 聖誕商店殘幣熱修動向）
 - [ ] **Phase 5：Priority 3 —— 世界觀與主線劇情（經典總覽、核心勢力、經典進擊與人物關係骨架）**
-- [ ] **Phase 6：Priority 4 —— 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與攻略導覽）**
-- [ ] **Phase 7：Priority 5 —— 《Division》系列（D1～D3 副本攻略、劇情與既有黑話串聯）**
-- [ ] **Phase 8：Priority 6 —— 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本攻略（Heroes / JinJom Classic / APO）**
-- [ ] **Phase 9：Priority 7 —— 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服生態 Q&A**
+- [ ] **Phase 6：Priority 4 —— 《Reboot（重製版）》專區（1部《破滅的裂隙》/ 2部《絕望的種子》/ 3部《鬥志的火種》機制、劇情變更與速刷／攻略導覽）**
+- [ ] **Phase 7：Priority 5 —— 《Division》系列（D1～D3 副本攻略、速刷效率、劇情與既有黑話串聯）**
+- [ ] **Phase 8：Priority 6 —— 第一季（S1）武器技能定位（拆解 S1/S2 武器總表）與 PVE 副本速刷攻略（Heroes / JinJom Classic / APO）**
+- [ ] **Phase 9：Priority 7 —— 其他平行世界（精靈高／銀河高／魔法高／像素高）與其餘韓服速刷／生態 Q&A**
